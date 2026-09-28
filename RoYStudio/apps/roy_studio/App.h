@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <future>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -154,6 +155,7 @@ private:
     void updateLiveMidiTarget();
     void finishMidiRecording();
     uint32_t diskErrorsSeen_ = 0;
+    std::set<std::string> invalidWarned_;
     void pollAudioDevice();
     WaveformStore waveforms_;
     json lastResult_ = json::object();

@@ -408,6 +408,12 @@ void App::tick() {
             message(0, std::format("take recorded: {:.1f} s", static_cast<double>(take.frames) / engine_.sampleRate()));
         }
     }
+    // plugins that output NaN/Inf (silenced by the sandbox): tell the user once per plugin
+    if (runtime_)
+        for (auto& [slotId, proc] : runtime_->allProcessors())
+            if (auto* sp = dynamic_cast<SandboxedPluginProcessor*>(proc.get()); sp && sp->invalidSamples() > 0 && invalidWarned_.insert(slotId).second)
+                message(2, "PLUGIN OUTPUT INVALID: " + sp->displayName() + " produced NaN/Inf samples - RoY replaced them with silence. "
+                               "The plugin has a bug; consider disabling or replacing it.");
     // plugin crash events
     for (auto& e : plugins::takeCrashEvents()) {
         message(2, "PLUGIN CRASHED: " + e.pluginName + " - " + e.reason + " (bypassed, project continues; restart it in PLUGINS)");

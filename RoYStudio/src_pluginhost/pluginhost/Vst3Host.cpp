@@ -36,10 +36,83 @@ namespace pipc = roy::pluginipc;
 namespace {
 std::string utf8(const TChar* s) { return StringConvert::convert(std::u16string(reinterpret_cast<const char16_t*>(s))); }
 
+// One plugin instance per RoYPluginHost process: its GUI timers / file descriptors live in one
+// process-wide run loop, pumped by Instance::idle() on the main thread.
+pluginhost::RunLoop& hostRunLoop() {
+    static pluginhost::RunLoop loop;
+    return loop;
+}
+
+#ifndef _WIN32
+// Linux::IRunLoop on top of the host run loop. Since VST SDK 3.7 VSTGUI takes its run loop from the
+// HOST CONTEXT (IPluginFactory3::setHostContext), older plugins from the IPlugFrame - RoY offers both.
+class RunLoopAdapter {
+public:
+    tresult registerEventHandler(Linux::IEventHandler* h, Linux::FileDescriptor fd) {
+        if (!h) return kInvalidArgument;
+        const int id = hostRunLoop().addFd(fd, [h, fd] { h->onFDIsSet(fd); });
+        fds_.push_back({h, id});
+        return kResultTrue;
+    }
+    tresult unregisterEventHandler(Linux::IEventHandler* h) {
+        for (auto it = fds_.begin(); it != fds_.end();)
+            if (it->first == h) {
+                hostRunLoop().removeFd(it->second);
+                it = fds_.erase(it);
+            } else {
+                ++it;
+            }
+        return kResultTrue;
+    }
+    tresult registerTimer(Linux::ITimerHandler* h, Linux::TimerInterval ms) {
+        if (!h) return kInvalidArgument;
+        const int id = hostRunLoop().addTimer(static_cast<int>(ms), [h] { h->onTimer(); });
+        timers_.push_back({h, id});
+        return kResultTrue;
+    }
+    tresult unregisterTimer(Linux::ITimerHandler* h) {
+        for (auto it = timers_.begin(); it != timers_.end();)
+            if (it->first == h) {
+                hostRunLoop().removeTimer(it->second);
+                it = timers_.erase(it);
+            } else {
+                ++it;
+            }
+        return kResultTrue;
+    }
+    size_t registrations() const { return fds_.size() + timers_.size(); }
+
+private:
+    std::vector<std::pair<Linux::IEventHandler*, int>> fds_;
+    std::vector<std::pair<Linux::ITimerHandler*, int>> timers_;
+};
+
+class RoyHostApplication : public HostApplication, public Linux::IRunLoop {
+public:
+    tresult PLUGIN_API registerEventHandler(Linux::IEventHandler* h, Linux::FileDescriptor fd) override { return loop_.registerEventHandler(h, fd); }
+    tresult PLUGIN_API unregisterEventHandler(Linux::IEventHandler* h) override { return loop_.unregisterEventHandler(h); }
+    tresult PLUGIN_API registerTimer(Linux::ITimerHandler* h, Linux::TimerInterval ms) override { return loop_.registerTimer(h, ms); }
+    tresult PLUGIN_API unregisterTimer(Linux::ITimerHandler* h) override { return loop_.unregisterTimer(h); }
+    RunLoopAdapter loop_;
+    tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override {
+        if (FUnknownPrivate::iidEqual(iid, Linux::IRunLoop::iid)) {
+            HostApplication::addRef();
+            *obj = static_cast<Linux::IRunLoop*>(this);
+            return kResultOk;
+        }
+        return HostApplication::queryInterface(iid, obj);
+    }
+    uint32 PLUGIN_API addRef() override { return HostApplication::addRef(); }
+    uint32 PLUGIN_API release() override { return HostApplication::release(); }
+};
+#else
+using RoyHostApplication = HostApplication;
+#endif
+
 HostApplication& hostContext() {
-    static HostApplication* h = [] {
-        auto* app = new HostApplication();
-        PluginContextFactory::instance().setPluginContext(app);
+    static RoyHostApplication* h = [] {
+        auto* app = new RoyHostApplication();
+        PluginContextFactory::instance().setPluginContext(static_cast<HostApplication*>(app));
         return app;
     }();
     return *h;
@@ -61,6 +134,7 @@ public:
             return false;
         }
         const auto& factory = module_->getFactory();
+        factory.setHostContext(&hostContext()); // IPluginFactory3: VSTGUI (Linux) gets the run loop from here
         for (auto& ci : factory.classInfos())
             if (ci.category() == kVstAudioEffectClass && (classId.empty() || ci.ID().toString() == classId)) {
                 info_ = ci;
@@ -210,8 +284,12 @@ public:
         const uint64_t kl = get64(16 + cl);
         if (24 + cl + kl > in.size()) return false;
         MemoryStream cs(const_cast<uint8_t*>(in.data()) + 16, static_cast<TSize>(cl));
-        if (component_->setState(&cs) != kResultOk) return false;
-        if (controller_) {
+        // A plugin without state (getState -> kNotImplemented, empty chunk) is not a rejection.
+        if (cl > 0) {
+            const tresult r = component_->setState(&cs);
+            if (r != kResultOk && r != kNotImplemented) return false;
+        }
+        if (controller_ && cl > 0) {
             cs.seek(0, IBStream::kIBSeekSet, nullptr);
             controller_->setComponentState(&cs);
             if (kl > 0 && separateController_) {
@@ -332,7 +410,7 @@ public:
                 for (size_t i = 0; i < syncCount_; ++i) controller_->setParamNormalized(syncBuf_[i].id, syncBuf_[i].value);
             syncCount_ = 0;
         }
-        runLoop_.run();
+        hostRunLoop().run();
         if (window_.isOpen()) window_.pump();
         if (closeRequested_) {
             closeRequested_ = false;
@@ -407,7 +485,7 @@ public:
 
     json editorState() override {
         return {{"open", window_.isOpen()}, {"width", window_.width()}, {"height", window_.height()}, {"supported", editorSupported()},
-                {"api", window_.isOpen() ? window_.platformType() : ""}, {"resizeRequests", resizeRequests_}, {"timers", runLoop_.timerCount()}};
+                {"api", window_.isOpen() ? window_.platformType() : ""}, {"resizeRequests", resizeRequests_}, {"timers", hostRunLoop().timerCount()}};
     }
 
     void shutdown() override {
@@ -471,38 +549,11 @@ public:
             return kResultTrue;
         }
 #ifndef _WIN32
-        tresult PLUGIN_API registerEventHandler(Linux::IEventHandler* h, Linux::FileDescriptor fd) override {
-            const int id = owner->runLoop_.addFd(fd, [h, fd] { h->onFDIsSet(fd); });
-            fds_.push_back({h, id});
-            return kResultTrue;
-        }
-        tresult PLUGIN_API unregisterEventHandler(Linux::IEventHandler* h) override {
-            for (auto it = fds_.begin(); it != fds_.end();)
-                if (it->first == h) {
-                    owner->runLoop_.removeFd(it->second);
-                    it = fds_.erase(it);
-                } else {
-                    ++it;
-                }
-            return kResultTrue;
-        }
-        tresult PLUGIN_API registerTimer(Linux::ITimerHandler* h, Linux::TimerInterval ms) override {
-            const int id = owner->runLoop_.addTimer(static_cast<int>(ms), [h] { h->onTimer(); });
-            timers_.push_back({h, id});
-            return kResultTrue;
-        }
-        tresult PLUGIN_API unregisterTimer(Linux::ITimerHandler* h) override {
-            for (auto it = timers_.begin(); it != timers_.end();)
-                if (it->first == h) {
-                    owner->runLoop_.removeTimer(it->second);
-                    it = timers_.erase(it);
-                } else {
-                    ++it;
-                }
-            return kResultTrue;
-        }
-        std::vector<std::pair<Linux::IEventHandler*, int>> fds_;
-        std::vector<std::pair<Linux::ITimerHandler*, int>> timers_;
+        tresult PLUGIN_API registerEventHandler(Linux::IEventHandler* h, Linux::FileDescriptor fd) override { return loop_.registerEventHandler(h, fd); }
+        tresult PLUGIN_API unregisterEventHandler(Linux::IEventHandler* h) override { return loop_.unregisterEventHandler(h); }
+        tresult PLUGIN_API registerTimer(Linux::ITimerHandler* h, Linux::TimerInterval ms) override { return loop_.registerTimer(h, ms); }
+        tresult PLUGIN_API unregisterTimer(Linux::ITimerHandler* h) override { return loop_.unregisterTimer(h); }
+        RunLoopAdapter loop_;
 #endif
         tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override {
             QUERY_INTERFACE(iid, obj, FUnknown::iid, IPlugFrame)
@@ -557,7 +608,6 @@ private:
     bool closeRequested_ = false;
     int resizeRequests_ = 0;
     pluginhost::EditorWindow window_;
-    pluginhost::RunLoop runLoop_;
 };
 
 std::unique_ptr<pluginhost::HostedPlugin> createInstance(const std::string& path, const std::string& classId, std::string* error) {

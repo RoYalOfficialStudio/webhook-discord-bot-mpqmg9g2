@@ -15,8 +15,8 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 ## Verification run of this report
 | Check | Result |
 |---|---|
-| Linux full suite | PASS – 196 tests, 0 failed, 101 291 checks (after the live-MIDI block) |
-| Windows full suite under Wine 9.0 | PASS – 194 tests, 0 failed, 101 298 checks (SIGSTOP + FIFO tests are POSIX-only) |
+| Linux full suite | PASS – 197 tests, 0 failed, 101 335 checks (after the plugin-compatibility block) |
+| Windows full suite under Wine 9.0 | PASS – 195 tests, 0 failed, 101 312 checks (SIGSTOP + FIFO tests are POSIX-only) |
 | Windows GUI self-test (roy_studio.exe --selftest, Wine, null audio) | PASS – 17/17 steps |
 | Windows + Linux CLI self-test (roy_cli selftest) | PASS |
 | ASan/UBSan full suite | PASS – 190 tests; only findings are the deliberate crash test plugins. One test expectation failed first (scanner error text when ASan turns the crash into exit code 1) → message fixed, plugin suite re-run under ASan: 8/8 PASS |
@@ -72,8 +72,8 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | SAMPLER | PASS | zones, loops, slicing, auto root on drop |
 | MIXER | PASS | busses, sends pre/post (switch live), send UI, sidechain, solo / solo safe, mute, PDC, loop refusal across outputs+sends+sidechains, delete bus with re-routing, random graph tests |
 | CLAP | PASS | |
-| VST3 | PASS | see gate; third-party plugins UNTESTED |
-| PLUGIN SANDBOX | PASS | one RoYPluginHost per instance; crash/hang/exit-without-result quarantined |
+| VST3 | PASS | see gate; **third-party compatibility pass: 53/55 official Steinberg SDK plugins PASS** (the 2 failures are plugin bugs RoY now contains) – 2 real host bugs found and fixed (VSTGUI Linux run loop via host context, 0 × 0 editor size / fatal X errors), see PLUGIN_REPORTS/PLUGIN_COMPAT_2026-09-28_VST3SDK.md; commercial plugins UNTESTED |
+| PLUGIN SANDBOX | PASS | one RoYPluginHost per instance; crash/hang/exit-without-result quarantined; NaN/Inf plugin output silenced + reported; X11 errors of plugins non-fatal |
 | PLUGIN GUI | PASS | see gate |
 | BROWSER | PASS | categories, search, preview, drag & drop to playlist / sampler / drum pad / channel / mixer slot |
 | AUDIO PREVIEW | PASS | |
@@ -101,5 +101,5 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 1. Windows-native validation package (installer/zip, first-run checks, crash-report collection).
 2. Live MIDI: sub-block timestamps (driver time stamps), MIDI learn for plugin/mixer parameters, hot-plug rescan.
 3. Real-recording vocal material in the regression suite (needs user-provided takes).
-4. Third-party plugin compatibility pass (free CLAP/VST3 plugins from official sources).
+4. Third-party plugin compatibility: VST3 SDK sample plugins done (53/55); next: free CLAP plugins built from official sources (e.g. clap-plugins), and the user's own plugins via `roy_cli plugin-compat` on Windows.
 5. Long-session soak test (multi-hour playback/record cycles), memory growth check.

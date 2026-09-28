@@ -10,6 +10,7 @@
 #include "core/Files.h"
 #include "core/Log.h"
 #include "export/Mp3Encoder.h"
+#include "plugins/Compat.h"
 #include "plugins/Sandbox.h"
 #include "plugins/Scanner.h"
 #include "project/ProjectIO.h"
@@ -17,6 +18,7 @@
 #include "midi/Scale.h"
 
 #include <cstdio>
+#include <format>
 #include <chrono>
 #include <thread>
 #include <cstdlib>
@@ -36,6 +38,8 @@ int usage(int code) {
         "  roy_cli version\n"
         "  roy_cli devices [backend]\n"
         "  roy_cli midi-devices [--monitor <seconds>]         list MIDI inputs; --monitor prints what they send\n"
+        "  roy_cli plugin-compat <folder|file>... [--editor] [--seconds s] [--out report.md]\n"
+        "                                                     scan + run every plugin through the sandbox lifecycle\n"
         "  roy_cli new <parentFolder> <name> [bpm] [key]     create a project (folder + .roy file)\n"
         "  roy_cli info <project.roy>                         summary as JSON\n"
         "  roy_cli commands [search]                          list commands\n"
@@ -133,6 +137,31 @@ int main(int argc, char** argv) {
         for (auto& d : dm.outputDevices()) std::printf("  out %s%s\n", d.name.c_str(), d.isDefault ? " (default)" : "");
         for (auto& d : dm.inputDevices()) std::printf("  in  %s%s\n", d.name.c_str(), d.isDefault ? " (default)" : "");
         return 0;
+    }
+
+    if (cmd == "plugin-compat") {
+        plugins::ScanOptions so;
+        plugins::CompatOptions co;
+        fs::path out;
+        for (size_t i = 1; i < a.size(); ++i) {
+            if (a[i] == "--editor") co.editor = true;
+            else if (a[i] == "--seconds" && i + 1 < a.size()) co.seconds = std::max(0.1, std::atof(a[++i].c_str()));
+            else if (a[i] == "--out" && i + 1 < a.size()) out = a[++i];
+            else so.paths.push_back(a[i]);
+        }
+        if (so.paths.empty()) so.paths = plugins::defaultPluginPaths();
+        plugins::PluginDatabase db; // private database: the user's plugin list is not touched
+        const auto rep = plugins::scanPlugins(db, so);
+        std::fprintf(stderr, "scan: %d modules, %d plugins ok, %d failed/crashed/timeouts\n", rep.modulesFound, rep.pluginsOk,
+                     rep.failed + rep.crashed + rep.timeouts);
+        auto results = plugins::checkAll(db, co);
+        std::string md = plugins::compatReportMarkdown(results, co);
+        for (auto* f : db.failed()) md += std::format("\nScan: {} ({}) - {}: {}", f->name.empty() ? f->path : f->name, f->format, f->status, f->error);
+        std::printf("%s\n", md.c_str());
+        if (!out.empty() && !files::atomicWrite(out, md, &err)) std::fprintf(stderr, "%s\n", err.c_str());
+        int failed = 0;
+        for (auto& r : results) failed += !r.pass();
+        return failed ? 2 : 0;
     }
 
     if (cmd == "midi-devices") {

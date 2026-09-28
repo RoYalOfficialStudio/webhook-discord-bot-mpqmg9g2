@@ -7,6 +7,7 @@
 #include "commands/Commands.h"
 #include "core/Log.h"
 #include "core/Process.h"
+#include "plugins/Compat.h"
 #include "plugins/Sandbox.h"
 #include "plugins/Scanner.h"
 #include "project/ProjectIO.h"
@@ -87,7 +88,7 @@ TEST_CASE("vst3", "scan: VST3 bundle scanned out of process, classes instantiate
     CHECK(g->vendor == "RoY Studio (test)");
     CHECK(g->version == "1.3.0");
     CHECK(g->category == "effect");
-    CHECK(g->paramCount == 3);
+    CHECK(g->paramCount == 4);
     CHECK(db.instruments().size() == 1);
     CHECK(db.effects().size() == 3);
 }
@@ -105,7 +106,7 @@ TEST_CASE("vst3", "effect: load, process audio, parameters, automation") {
     REQUIRE(proc != nullptr);
     CHECK(proc->format() == "vst3");
     CHECK(proc->hostPid() != currentProcessId());
-    REQUIRE(proc->numParams() == 3);
+    REQUIRE(proc->numParams() == 4);
     CHECK(proc->paramInfo(0).name == "Gain");
     CHECK(proc->paramInfo(1).name == "Bypass");
     CHECK(proc->paramInfo(1).steps == 2);
@@ -218,6 +219,18 @@ TEST_CASE("vst3", "editor: open, plugin-requested resize, GUI edit reaches RoY, 
     roytest::render(s.engine, 2560, 256);
     CHECK_NEAR(proc->getParam(touch), 0.75, 1e-6);
     CHECK(proc->lastTouchedParam() == touch);
+#ifndef _WIN32
+    // like VSTGUI (SDK 3.7+) the view takes its run loop from the HOST CONTEXT and registers a timer
+    // there; RoY must provide Linux::IRunLoop on the host application and pump it
+    const int timer = proc->findParam("3");
+    REQUIRE(timer >= 0);
+    for (int i = 0; i < 100 && proc->getParam(timer) < 0.5f; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        proc->editorState(); // pumps the host run loop
+        roytest::render(s.engine, 512, 256);
+    }
+    CHECK_NEAR(proc->getParam(timer), 1.0, 1e-6);
+#endif
     proc->closeEditor();
     CHECK(!proc->editorState().value("open", true));
     CHECK(proc->alive());
@@ -330,4 +343,32 @@ TEST_CASE("vst3", "safe mode skips third-party plugins and keeps their state; UI
     auto out = roytest::render(engine, 4800, 256);
     CHECK(rms(out[0], 1000, 4800) > 0.3); // unprocessed
     CHECK(s.p.findSlot(slot)->state == saved);
+}
+
+TEST_CASE("vst3", "plugin-compat: healthy plugins PASS, crashing and hanging ones FAIL cleanly") {
+    setup();
+    const fs::path dir = tempDir("compat");
+    fs::copy(kBundle, dir / "RoYTest.vst3", fs::copy_options::recursive);
+    plugins::PluginDatabase db;
+    plugins::ScanOptions so;
+    so.paths = {dir};
+    so.hostExe = ROY_PLUGIN_HOST_EXE;
+    plugins::scanPlugins(db, so);
+    plugins::CompatOptions co;
+    co.seconds = 0.5;
+    const auto results = plugins::checkAll(db, co);
+    REQUIRE(results.size() == 4);
+    for (auto& r : results) {
+        if (r.name == "RoY VST3 Gain" || r.name == "RoY VST3 Synth") {
+            CHECK_MSG(r.pass(), r.name);
+            CHECK(r.stateOk && r.unloaded && r.audible);
+        } else { // "RoY VST3 Crash" / "RoY VST3 Hang": detected, reported, host cleaned up
+            CHECK_MSG(!r.pass(), r.name);
+            CHECK(!r.audioOk);
+            CHECK(r.unloaded);
+            CHECK(!r.notes.empty());
+        }
+    }
+    const std::string md = plugins::compatReportMarkdown(results, co);
+    CHECK(md.find("2 of 4 plugins PASS") != std::string::npos);
 }

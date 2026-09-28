@@ -1,6 +1,8 @@
 #include "pluginhost/EditorWindow.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cstdio>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -16,6 +18,13 @@ namespace roy::pluginhost {
 namespace {
 double nowMs() {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+// Plugins may report 0 x 0 before they are attached (or absurd sizes): never create such a window.
+void sanitizeSize(int& w, int& h) {
+    if (w <= 0) w = 400;
+    if (h <= 0) h = 300;
+    w = std::clamp(w, 50, 16384);
+    h = std::clamp(h, 50, 16384);
 }
 } // namespace
 
@@ -98,6 +107,7 @@ LRESULT CALLBACK editorProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 
 bool EditorWindow::create(const std::string& title, int width, int height, bool resizable, bool alwaysOnTop, std::string* error) {
     destroy();
+    sanitizeSize(width, height);
     static bool registered = false;
     if (!registered) {
         WNDCLASSEXW wc{sizeof(wc)};
@@ -134,6 +144,7 @@ void EditorWindow::destroy() {
 const char* EditorWindow::platformType() const { return "HWND"; }
 void EditorWindow::resize(int width, int height) {
     if (!handle_) return;
+    sanitizeSize(width, height);
     HWND h = static_cast<HWND>(handle_);
     RECT r{0, 0, width, height};
     AdjustWindowRectEx(&r, static_cast<DWORD>(GetWindowLongW(h, GWL_STYLE)), FALSE, static_cast<DWORD>(GetWindowLongW(h, GWL_EXSTYLE)));
@@ -162,8 +173,20 @@ void EditorWindow::pump() {
 }
 #else
 // ------------------------------------------------------------------ X11
+namespace {
+// Xlib's default error handler terminates the process. A plugin's bad X request must never kill
+// the host: log it and continue (the editor may look wrong, the audio keeps running).
+int nonFatalXError(Display*, XErrorEvent* e) {
+    std::fprintf(stderr, "RoYPluginHost: X11 error %d (request %d) ignored\n", e->error_code, e->request_code);
+    return 0;
+}
+} // namespace
+
 bool EditorWindow::create(const std::string& title, int width, int height, bool resizable, bool alwaysOnTop, std::string* error) {
     destroy();
+    sanitizeSize(width, height);
+    static const bool handlerInstalled = (XSetErrorHandler(nonFatalXError), true);
+    (void)handlerInstalled;
     Display* d = XOpenDisplay(nullptr);
     if (!d) {
         if (error) *error = "no X11 display (DISPLAY not set)";
@@ -206,6 +229,7 @@ void EditorWindow::destroy() {
 const char* EditorWindow::platformType() const { return "X11EmbedWindowID"; }
 void EditorWindow::resize(int width, int height) {
     if (!handle_) return;
+    sanitizeSize(width, height);
     XResizeWindow(static_cast<Display*>(display_), static_cast<::Window>(reinterpret_cast<uintptr_t>(handle_)), static_cast<unsigned>(width),
                   static_cast<unsigned>(height));
     XFlush(static_cast<Display*>(display_));

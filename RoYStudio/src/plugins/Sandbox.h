@@ -77,6 +77,8 @@ public:
     int lastTouchedParam() const { return lastTouched_.load(); }
     // Parameter changes received from the plugin since the last call (message thread).
     uint64_t pluginEditCount() const { return pluginEdits_.load(); }
+    // NaN/Inf samples the plugin produced (replaced by silence before they reach the mix).
+    uint64_t invalidSamples() const { return invalidSamples_.load(); }
     // Empty when healthy, else "crashed (...)" / "hung (...)".
     std::string problem() const;
     int hostPid() const;
@@ -90,6 +92,7 @@ private:
     std::vector<std::pair<uint32_t, int>> idToIndex_; // sorted by plugin param id (lookup on the audio thread)
     std::atomic<int> lastTouched_{-1};
     std::atomic<uint64_t> pluginEdits_{0};
+    std::atomic<uint64_t> invalidSamples_{0};
     std::unique_ptr<plugins::Sandbox> box_;
     std::vector<uint32_t> clapIds_;
     std::unique_ptr<float[]> lastSent_;

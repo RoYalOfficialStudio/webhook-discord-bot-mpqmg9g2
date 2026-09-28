@@ -38,7 +38,7 @@ static const FUID kSynthCtrlUID(0x524F5902, 0x53594E43, 0x54524C31, 0x00000004);
 static const FUID kCrashProcUID(0x524F5903, 0x43524150, 0x524F4331, 0x00000005);
 static const FUID kHangProcUID(0x524F5904, 0x48414E47, 0x524F4331, 0x00000006);
 
-enum { kGain = 0, kBypass = 1, kGuiTouch = 2 };
+enum { kGain = 0, kBypass = 1, kGuiTouch = 2, kHostTimer = 3 };
 
 // ------------------------------------------------------------------ gain processor
 class GainProcessor : public AudioEffect {
@@ -99,14 +99,25 @@ private:
 };
 
 // ------------------------------------------------------------------ editor view
+// Behaves like VSTGUI editors on purpose: reports 0 x 0 before it is attached, and (Linux) takes
+// its run loop from the HOST CONTEXT, registers a timer there and reports it via "Host Timer".
 class TestView : public CPluginView {
 public:
-    explicit TestView(EditController* c) : CPluginView(nullptr), controller_(c) {
+    TestView(EditController* c, FUnknown* hostContext) : CPluginView(nullptr), controller_(c), host_(hostContext) {
         ViewRect r(0, 0, 400, 300);
         setRect(r);
     }
+    ~TestView() override { stopTimer(); }
     tresult PLUGIN_API isPlatformTypeSupported(FIDString type) SMTG_OVERRIDE {
         return (std::strcmp(type, kPlatformTypeHWND) == 0 || std::strcmp(type, kPlatformTypeX11EmbedWindowID) == 0) ? kResultTrue : kResultFalse;
+    }
+    tresult PLUGIN_API getSize(ViewRect* size) SMTG_OVERRIDE {
+        if (!size) return kInvalidArgument;
+        if (!isAttached()) {
+            *size = ViewRect(0, 0, 0, 0); // like some VSTGUI editors: size unknown until attached
+            return kResultTrue;
+        }
+        return CPluginView::getSize(size);
     }
     tresult PLUGIN_API canResize() SMTG_OVERRIDE { return kResultTrue; }
     tresult PLUGIN_API checkSizeConstraint(ViewRect* r) SMTG_OVERRIDE {
@@ -121,16 +132,55 @@ public:
             ViewRect r(0, 0, 420, 320);
             plugFrame->resizeView(this, &r);
         }
+        edit(kGuiTouch, 0.75);
+#if SMTG_OS_LINUX
+        if (FUnknownPtr<Linux::IRunLoop> rl(host_); rl) {
+            runLoop_ = rl;
+            timer_ = owned(new Timer(this));
+            runLoop_->registerTimer(timer_, 20);
+        }
+#endif
+    }
+    void removedFromParent() SMTG_OVERRIDE { stopTimer(); }
+    void edit(ParamID id, double v) {
         if (auto* h = controller_->getComponentHandler()) {
-            h->beginEdit(kGuiTouch);
-            controller_->setParamNormalized(kGuiTouch, 0.75);
-            h->performEdit(kGuiTouch, 0.75);
-            h->endEdit(kGuiTouch);
+            h->beginEdit(id);
+            controller_->setParamNormalized(id, v);
+            h->performEdit(id, v);
+            h->endEdit(id);
         }
     }
 
 private:
+#if SMTG_OS_LINUX
+    struct Timer : public Linux::ITimerHandler, public FObject {
+        explicit Timer(TestView* v) : view(v) {}
+        void PLUGIN_API onTimer() override {
+            if (view) {
+                view->edit(kHostTimer, 1.0);
+                view->stopTimerLater_ = true;
+            }
+        }
+        TestView* view;
+        DELEGATE_REFCOUNT(FObject)
+        DEFINE_INTERFACES
+            DEF_INTERFACE(Linux::ITimerHandler)
+        END_DEFINE_INTERFACES(FObject)
+    };
+    IPtr<Linux::IRunLoop> runLoop_;
+    IPtr<Timer> timer_;
+#endif
+    bool stopTimerLater_ = false;
+    void stopTimer() {
+#if SMTG_OS_LINUX
+        if (runLoop_ && timer_) runLoop_->unregisterTimer(timer_);
+        if (timer_) timer_->view = nullptr;
+        timer_ = nullptr;
+        runLoop_ = nullptr;
+#endif
+    }
     EditController* controller_;
+    FUnknown* host_;
 };
 
 // ------------------------------------------------------------------ gain controller
@@ -143,6 +193,7 @@ public:
         parameters.addParameter(STR16("Gain"), STR16("x"), 0, 0.5, ParameterInfo::kCanAutomate, kGain);
         parameters.addParameter(STR16("Bypass"), nullptr, 1, 0, ParameterInfo::kCanAutomate | ParameterInfo::kIsBypass, kBypass);
         parameters.addParameter(STR16("GUI Touch"), nullptr, 0, 0, ParameterInfo::kCanAutomate, kGuiTouch);
+        parameters.addParameter(STR16("Host Timer"), nullptr, 0, 0, ParameterInfo::kCanAutomate, kHostTimer);
         return kResultOk;
     }
     tresult PLUGIN_API setComponentState(IBStream* s) SMTG_OVERRIDE {
@@ -170,7 +221,7 @@ public:
     IPlugView* PLUGIN_API createView(FIDString name) SMTG_OVERRIDE {
         if (name && std::strcmp(name, ViewType::kEditor) == 0) {
             uiZoom_ += 1; // opening the editor changes controller state
-            return new TestView(this);
+            return new TestView(this, hostContext);
         }
         return nullptr;
     }

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -139,17 +140,24 @@ public:
         const std::string s = cmd.dump() + "\n";
         std::string line;
         if (!child_.writeAll(s.data(), s.size())) return false;
-        if (!child_.readLine(line, timeoutMs)) {
-            if (child_.isRunning()) {
-                // Alive but not answering: treat like an audio hang (the watchdog terminates it).
-                controlTimeout_ = std::format("no reply to '{}' within {} ms", cmd.value("cmd", ""), timeoutMs);
-                int expected = Running;
-                state_.compare_exchange_strong(expected, Hung);
+        // Skip anything that is not a JSON reply (defensive: stray plugin output on the channel).
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+        for (;;) {
+            const int left = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()).count());
+            if (left <= 0 || !child_.readLine(line, left)) {
+                if (child_.isRunning()) {
+                    // Alive but not answering: treat like an audio hang (the watchdog terminates it).
+                    controlTimeout_ = std::format("no reply to '{}' within {} ms", cmd.value("cmd", ""), timeoutMs);
+                    int expected = Running;
+                    state_.compare_exchange_strong(expected, Hung);
+                }
+                return false;
             }
-            return false;
+            reply = json::parse(line, nullptr, false);
+            if (reply.is_object()) break;
+            log::warn("plugins", "ignored non-protocol output from the plugin host: {}", line.substr(0, 200));
         }
-        reply = json::parse(line, nullptr, false);
-        return reply.is_object() && reply.value("ok", false);
+        return reply.value("ok", false);
     }
 
     // Audio thread. true = output valid.
@@ -399,10 +407,17 @@ void SandboxedPluginProcessor::process(const AudioBlock& io, const AudioBlock* s
         }
         for (int c = 0; c < io.numChannels && c < 2; ++c) {
             float* dst = io.channel(c) + start;
-            if (instrument_)
-                for (int i = 0; i < n; ++i) dst[i] += b->out[c][i];
-            else
-                std::memcpy(dst, b->out[c], sizeof(float) * static_cast<size_t>(n));
+            // A plugin must never poison the mix: NaN/Inf become silence and are counted.
+            uint32_t bad = 0;
+            for (int i = 0; i < n; ++i) {
+                float v = b->out[c][i];
+                if (!std::isfinite(v)) {
+                    v = 0.0f;
+                    ++bad;
+                }
+                dst[i] = instrument_ ? dst[i] + v : v;
+            }
+            if (bad) invalidSamples_.fetch_add(bad, std::memory_order_relaxed);
         }
     }
 }

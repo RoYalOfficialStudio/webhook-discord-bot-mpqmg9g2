@@ -66,6 +66,7 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 ## 6. Plugins
 | # | Step | Expected |
 |---|---|---|
+| 6.0 | `roy_cli.exe plugin-compat "C:\Program Files\Common Files\VST3" --editor --out C:\RoYTest\compat.md` | report with one row per plugin (load, audio, state, editor, unload); send the report back |
 | 6.1 | PLUGINS → Scan (with your installed CLAP/VST3) | list INSTALLED/FAILED; nothing crashes RoY |
 | 6.2 | Insert a CLAP effect, a VST3 effect, a VST3 instrument | audio processed, parameters visible |
 | 6.3 | Open plugin editor window, resize, close, reopen | plugin keeps state, RoY keeps running |
