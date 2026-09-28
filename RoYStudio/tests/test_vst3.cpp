@@ -78,7 +78,7 @@ TEST_CASE("vst3", "scan: VST3 bundle scanned out of process, classes instantiate
     o.hostExe = ROY_PLUGIN_HOST_EXE;
     auto rep = plugins::scanPlugins(db, o);
     CHECK(rep.modulesFound == 1);
-    CHECK(rep.pluginsOk == 3);
+    CHECK(rep.pluginsOk == 4);
     CHECK(rep.unsupported == 0);
     const auto* g = db.find(plugins::makeVst3TypeId((dir / "RoYTest.vst3").string(), kGainCid));
     REQUIRE(g != nullptr);
@@ -89,7 +89,7 @@ TEST_CASE("vst3", "scan: VST3 bundle scanned out of process, classes instantiate
     CHECK(g->category == "effect");
     CHECK(g->paramCount == 3);
     CHECK(db.instruments().size() == 1);
-    CHECK(db.effects().size() == 2);
+    CHECK(db.effects().size() == 3);
 }
 
 TEST_CASE("vst3", "effect: load, process audio, parameters, automation") {

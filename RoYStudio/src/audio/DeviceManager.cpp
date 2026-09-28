@@ -104,6 +104,10 @@ void DeviceManager::dataCallback(void* devicePtr, void* output, const void* inpu
     auto* device = static_cast<ma_device*>(devicePtr);
     auto* self = static_cast<DeviceManager*>(device->pUserData);
     if (!self || !self->engine_) return;
+    if (self->stallForTest_.load(std::memory_order_relaxed)) {
+        std::memset(output, 0, sizeof(float) * frameCount * static_cast<size_t>(self->outChannels_));
+        return;
+    }
     self->callbacks_.fetch_add(1, std::memory_order_relaxed);
     const int inCh = self->inChannels_;
     const int outCh = self->outChannels_;
@@ -152,6 +156,7 @@ bool DeviceManager::open(const AudioDeviceConfig& cfg, AudioEngine& engine, std:
     dc.noPreSilencedOutputBuffer = MA_TRUE;
     dc.noClip = MA_TRUE;
     dc.dataCallback = [](ma_device* d, void* o, const void* i, ma_uint32 n) { DeviceManager::dataCallback(d, o, i, n); };
+    dc.notificationCallback = [](const ma_device_notification* n) { DeviceManager::notificationCallback(n); };
     dc.pUserData = this;
 
     const ma_result r = ma_device_init(&impl_->context, &dc, &impl_->device);
@@ -161,6 +166,9 @@ bool DeviceManager::open(const AudioDeviceConfig& cfg, AudioEngine& engine, std:
         return false;
     }
     impl_->deviceOk = true;
+    cfg_ = cfg;
+    lost_ = false;
+    lastProgress_ = -1;
     actualRate_ = impl_->device.sampleRate;
     actualBuffer_ = static_cast<int>(impl_->device.playback.internalPeriodSizeInFrames);
     if (actualBuffer_ <= 0) actualBuffer_ = cfg.bufferSize;
@@ -183,6 +191,7 @@ bool DeviceManager::start(std::string* error) {
         return false;
     }
     if (engine_) engine_->setDeviceRunning(true);
+    stopping_ = false;
     const ma_result r = ma_device_start(&impl_->device);
     if (r != MA_SUCCESS) {
         if (engine_) engine_->setDeviceRunning(false);
@@ -193,6 +202,7 @@ bool DeviceManager::start(std::string* error) {
 }
 
 void DeviceManager::stop() {
+    stopping_ = true; // a stop we asked for is not a device loss
     if (impl_->deviceOk && ma_device_is_started(&impl_->device)) ma_device_stop(&impl_->device);
     if (engine_) engine_->setDeviceRunning(false);
 }
@@ -208,6 +218,86 @@ void DeviceManager::close() {
 
 bool DeviceManager::isOpen() const { return impl_->deviceOk; }
 bool DeviceManager::isRunning() const { return impl_->deviceOk && ma_device_is_started(&impl_->device); }
+
+void DeviceManager::notificationCallback(const void* notification) {
+    auto* n = static_cast<const ma_device_notification*>(notification);
+    auto* self = static_cast<DeviceManager*>(n->pDevice->pUserData);
+    if (!self) return;
+    switch (n->type) {
+    case ma_device_notification_type_stopped:
+        if (!self->stopping_.load()) self->markLost("the audio device stopped unexpectedly (unplugged, disabled or taken by another application)");
+        break;
+    case ma_device_notification_type_rerouted: log::info("device", "audio device rerouted by the system"); break;
+    default: break;
+    }
+}
+
+void DeviceManager::markLost(const char* reason) {
+    const char* expected = nullptr;
+    lostReason_.compare_exchange_strong(expected, reason);
+    lost_.store(true);
+}
+
+std::string DeviceManager::lostReason() const {
+    const char* r = lostReason_.load();
+    return r ? r : "";
+}
+
+void DeviceManager::simulateDeviceLoss() {
+    if (impl_->deviceOk && ma_device_is_started(&impl_->device)) {
+        stopping_ = false;
+        ma_device_stop(&impl_->device); // fires the same "stopped" notification as a real loss
+    }
+    markLost("simulated device loss (fault injection)");
+}
+
+DeviceManager::Health DeviceManager::poll(double now) {
+    if (!lostHandled_) {
+        if (!lost_.load() && isRunning()) { // callback stall watchdog
+            const uint64_t c = callbacks_.load();
+            if (c != lastCallbacks_ || lastProgress_ < 0) {
+                lastCallbacks_ = c;
+                lastProgress_ = now;
+            } else if (now - lastProgress_ > kStallSeconds) {
+                markLost("the audio device stopped delivering audio (driver stalled)");
+            }
+        }
+        if (!lost_.load()) return Health::Ok;
+        log::error("device", "audio device lost: {}", lostReason());
+        lostEngine_ = engine_;
+        close();
+        lostHandled_ = true;
+        reconnectAttempts_ = 0;
+        nextRetry_ = now + 1.0;
+        return Health::Lost;
+    }
+    if (now < nextRetry_ || !lostEngine_) return Health::StillLost;
+    ++reconnectAttempts_;
+    nextRetry_ = now + std::min(5.0, 1.0 * reconnectAttempts_);
+    if (simulateAbsent_) return Health::StillLost;
+    AudioDeviceConfig cfg = cfg_;
+    std::string err;
+    // the device list may have changed: re-enumerate, then try the same device,
+    // and from the second attempt on the system default.
+    if (!initialise(cfg.backend, &err)) return Health::StillLost;
+    bool ok = open(cfg, *lostEngine_, &err) && start(&err);
+    if (!ok && reconnectAttempts_ >= 2 && (!cfg.outputDevice.empty() || !cfg.inputDevice.empty())) {
+        close();
+        cfg.outputDevice.clear();
+        cfg.inputDevice.clear();
+        ok = open(cfg, *lostEngine_, &err) && start(&err);
+    }
+    if (!ok) {
+        close();
+        log::warn("device", "reconnect attempt {} failed: {}", reconnectAttempts_, err);
+        return Health::StillLost;
+    }
+    log::info("device", "audio device reconnected after {} attempt(s)", reconnectAttempts_);
+    lostHandled_ = false;
+    lostReason_.store(nullptr);
+    lostEngine_ = nullptr;
+    return Health::Reconnected;
+}
 
 int DeviceManager::latencySamples() const {
     if (!impl_->deviceOk) return 0;

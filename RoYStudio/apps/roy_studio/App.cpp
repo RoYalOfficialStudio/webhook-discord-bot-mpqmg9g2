@@ -93,6 +93,33 @@ bool App::restartAudio(const AudioDeviceConfig& cfg) {
     return true;
 }
 
+void App::pollAudioDevice() {
+    switch (device_.poll(nowSeconds())) {
+    case DeviceManager::Health::Ok:
+    case DeviceManager::Health::StillLost: break;
+    case DeviceManager::Health::Lost: {
+        // Keep everything that was recorded: finish open takes (they are added to the
+        // project on this tick), stop the transport, then reconnect in the background.
+        const bool wasRecording = recorder_.isRecording();
+        if (wasRecording) recorder_.stopRecording();
+        engine_.transport().stop();
+        audioStatus_ = "DEVICE LOST - reconnecting...";
+        message(2, "AUDIO DEVICE LOST: " + device_.lostReason() +
+                       (wasRecording ? " - recording stopped, the take up to this point is kept" : "") +
+                       ". RoY keeps running and reconnects automatically.");
+        break;
+    }
+    case DeviceManager::Health::Reconnected:
+        audioStatus_ = std::format("{} | {:.0f} Hz | {} samples | {:.1f} ms", device_.backendName(), device_.actualSampleRate(),
+                                   device_.actualBufferSize(), 1000.0 * device_.latencySamples() / device_.actualSampleRate());
+        audioCfg_ = device_.config();
+        recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
+        if (project_) runtime_->rebuild(*project_);
+        message(0, "audio device reconnected: " + audioStatus_);
+        break;
+    }
+}
+
 void App::shutdown() {
     if (scanFuture_.valid()) scanFuture_.wait();
     if (recorder_.isRecording()) recorder_.stopRecording();
@@ -297,7 +324,12 @@ void App::tick() {
     log::flushAudioEvents();
     engine_.collectGarbage();
     if (previewer_) previewer_->collect();
+    pollAudioDevice();
     if (!project_) return;
+    if (recorder_.diskErrors() != diskErrorsSeen_) {
+        diskErrorsSeen_ = recorder_.diskErrors();
+        message(2, "DISK WRITE FAILED: " + recorder_.lastDiskError());
+    }
     // finished takes -> project (one undo step per take)
     for (auto& take : recorder_.collectFinishedTakes()) {
         undo_->begin("Record Take");

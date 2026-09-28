@@ -12,6 +12,38 @@ TempoMap::TempoMap(double bpm, int num, int den) {
 
 void TempoMap::setTempo(double bpm) {
     tempo_.assign(1, TempoEvent{0.0, std::clamp(bpm, 10.0, 999.0)});
+    rebuildCache();
+}
+
+void TempoMap::setTempoEvents(std::vector<TempoEvent> events) {
+    if (events.empty()) events.push_back({0.0, 120.0});
+    for (auto& e : events) {
+        e.bpm = std::isfinite(e.bpm) ? std::clamp(e.bpm, 10.0, 999.0) : 120.0;
+        e.beat = std::isfinite(e.beat) ? std::max(0.0, e.beat) : 0.0;
+    }
+    std::stable_sort(events.begin(), events.end(), [](auto& a, auto& b) { return a.beat < b.beat; });
+    tempo_.clear();
+    for (auto& e : events) {
+        if (!tempo_.empty() && std::fabs(tempo_.back().beat - e.beat) < 1e-9) tempo_.back().bpm = e.bpm;
+        else tempo_.push_back(e);
+    }
+    if (tempo_.front().beat > 0.0) tempo_.insert(tempo_.begin(), TempoEvent{0.0, tempo_.front().bpm});
+    rebuildCache();
+}
+
+void TempoMap::rebuildCache() {
+    startSeconds_.resize(tempo_.size());
+    double seconds = 0.0;
+    for (size_t i = 0; i < tempo_.size(); ++i) {
+        startSeconds_[i] = seconds;
+        if (i + 1 < tempo_.size()) seconds += (tempo_[i + 1].beat - tempo_[i].beat) * 60.0 / tempo_[i].bpm;
+    }
+}
+
+// Index of the last event starting at or before `beat` (0 for beats before the first).
+size_t TempoMap::eventAtBeat(double beat) const {
+    auto it = std::upper_bound(tempo_.begin(), tempo_.end(), beat, [](double b, const TempoEvent& e) { return b < e.beat; });
+    return it == tempo_.begin() ? 0 : static_cast<size_t>(it - tempo_.begin()) - 1;
 }
 
 void TempoMap::addTempoEvent(double beat, double bpm) {
@@ -25,6 +57,7 @@ void TempoMap::addTempoEvent(double beat, double bpm) {
         std::sort(tempo_.begin(), tempo_.end(), [](auto& a, auto& b) { return a.beat < b.beat; });
     }
     if (tempo_.front().beat > 0.0) tempo_.insert(tempo_.begin(), TempoEvent{0.0, tempo_.front().bpm});
+    rebuildCache();
 }
 
 void TempoMap::setTimeSignature(int num, int den) {
@@ -43,14 +76,7 @@ void TempoMap::addTimeSignature(int bar, int num, int den) {
     }
 }
 
-double TempoMap::tempoAt(double beat) const {
-    double bpm = tempo_.front().bpm;
-    for (auto& e : tempo_) {
-        if (e.beat <= beat) bpm = e.bpm;
-        else break;
-    }
-    return bpm;
-}
+double TempoMap::tempoAt(double beat) const { return tempo_[eventAtBeat(beat)].bpm; }
 
 TimeSigEvent TempoMap::signatureAtBar(int bar) const {
     TimeSigEvent s = sigs_.front();
@@ -64,32 +90,15 @@ TimeSigEvent TempoMap::signatureAtBar(int bar) const {
 double TempoMap::beatToSeconds(double beat) const {
     // Negative positions (count-in/pre-roll before zero) use the first tempo.
     if (beat <= 0.0) return beat * 60.0 / tempo_.front().bpm;
-    double seconds = 0.0;
-    for (size_t i = 0; i < tempo_.size(); ++i) {
-        const double start = tempo_[i].beat;
-        const double end = i + 1 < tempo_.size() ? tempo_[i + 1].beat : beat;
-        if (beat <= start) break;
-        const double segEnd = std::min(beat, end);
-        seconds += (segEnd - start) * 60.0 / tempo_[i].bpm;
-        if (beat <= end) break;
-    }
-    return seconds;
+    const size_t i = eventAtBeat(beat);
+    return startSeconds_[i] + (beat - tempo_[i].beat) * 60.0 / tempo_[i].bpm;
 }
 
 double TempoMap::secondsToBeat(double seconds) const {
     if (seconds <= 0.0) return seconds * tempo_.front().bpm / 60.0;
-    double elapsed = 0.0;
-    for (size_t i = 0; i < tempo_.size(); ++i) {
-        const double spb = 60.0 / tempo_[i].bpm;
-        if (i + 1 < tempo_.size()) {
-            const double segSeconds = (tempo_[i + 1].beat - tempo_[i].beat) * spb;
-            if (seconds < elapsed + segSeconds) return tempo_[i].beat + (seconds - elapsed) / spb;
-            elapsed += segSeconds;
-        } else {
-            return tempo_[i].beat + (seconds - elapsed) / spb;
-        }
-    }
-    return 0.0;
+    auto it = std::upper_bound(startSeconds_.begin(), startSeconds_.end(), seconds);
+    const size_t i = it == startSeconds_.begin() ? 0 : static_cast<size_t>(it - startSeconds_.begin()) - 1;
+    return tempo_[i].beat + (seconds - startSeconds_[i]) * tempo_[i].bpm / 60.0;
 }
 
 double TempoMap::barToBeat(int bar) const {

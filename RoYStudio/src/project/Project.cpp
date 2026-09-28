@@ -2,6 +2,7 @@
 #include "core/Files.h"
 
 #include <algorithm>
+#include <set>
 
 namespace roy {
 
@@ -150,18 +151,74 @@ Track& addTrack(Project& p, TrackType type, const std::string& name, const std::
     return p.tracks.back();
 }
 
+namespace {
+// Removes a mixer channel and every reference to it: its automation, sends into it
+// (and their automation lanes), sidechain keys. Channels routed into it are re-routed
+// to where it was going, so no audio silently disappears.
+void removeChannelRefs(Project& p, const std::string& chId) {
+    auto ch = std::find_if(p.channels.begin(), p.channels.end(), [&](auto& c) { return c.id == chId; });
+    if (ch == p.channels.end()) return;
+    const std::string downstream = ch->outputChannelId;
+    std::vector<std::string> ownSends;
+    for (auto& s : ch->sends) ownSends.push_back(s.id);
+    p.channels.erase(ch);
+    std::vector<std::string> deadSends = ownSends;
+    for (auto& c : p.channels) {
+        for (auto& s : c.sends)
+            if (s.targetChannelId == chId) deadSends.push_back(s.id);
+        std::erase_if(c.sends, [&](auto& s) { return s.targetChannelId == chId; });
+        for (auto& ins : c.inserts)
+            if (ins.sidechainChannelId == chId) ins.sidechainChannelId.clear();
+        if (c.outputChannelId == chId) c.outputChannelId = downstream;
+    }
+    std::erase_if(p.automation, [&](auto& a) {
+        if (a.channelId == chId) return true;
+        for (auto& id : deadSends)
+            if (a.paramId == "send:" + id) return true;
+        return false;
+    });
+}
+} // namespace
+
 bool removeTrack(Project& p, const std::string& trackId) {
     auto it = std::find_if(p.tracks.begin(), p.tracks.end(), [&](auto& t) { return t.id == trackId; });
     if (it == p.tracks.end()) return false;
     const std::string chId = it->channelId;
     p.tracks.erase(it);
-    std::erase_if(p.channels, [&](auto& c) { return c.id == chId; });
-    std::erase_if(p.automation, [&](auto& a) { return a.channelId == chId; });
-    for (auto& c : p.channels) {
-        std::erase_if(c.sends, [&](auto& s) { return s.targetChannelId == chId; });
-        for (auto& ins : c.inserts)
-            if (ins.sidechainChannelId == chId) ins.sidechainChannelId.clear();
+    removeChannelRefs(p, chId);
+    return true;
+}
+
+bool routingWouldLoop(const Project& p, const std::string& from, const std::string& to) {
+    if (from == to) return true;
+    const MixerChannel* master = p.master();
+    // signal edges: output (empty = master), sends, sidechain source -> consumer
+    auto next = [&](const MixerChannel& c) {
+        std::vector<std::string> n;
+        if (c.kind != ChannelKind::Master) n.push_back(!c.outputChannelId.empty() ? c.outputChannelId : master ? master->id : "");
+        for (auto& s : c.sends) n.push_back(s.targetChannelId);
+        for (auto& other : p.channels)
+            for (auto& ins : other.inserts)
+                if (ins.sidechainChannelId == c.id) n.push_back(other.id);
+        return n;
+    };
+    std::vector<std::string> stack{to};
+    std::set<std::string> seen;
+    while (!stack.empty()) {
+        const std::string id = stack.back();
+        stack.pop_back();
+        if (id == from) return true;
+        if (id.empty() || !seen.insert(id).second) continue;
+        if (const MixerChannel* c = p.findChannel(id))
+            for (auto& n : next(*c)) stack.push_back(n);
     }
+    return false;
+}
+
+bool removeBus(Project& p, const std::string& channelId) {
+    const MixerChannel* c = p.findChannel(channelId);
+    if (!c || c->kind != ChannelKind::Bus) return false;
+    removeChannelRefs(p, channelId);
     return true;
 }
 

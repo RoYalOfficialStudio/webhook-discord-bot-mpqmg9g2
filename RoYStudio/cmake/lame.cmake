@@ -15,6 +15,12 @@ if(MSVC)
   target_compile_options(roy_mp3lame PRIVATE /W0)
 else()
   target_compile_options(roy_mp3lame PRIVATE -w)
+  # Upstream LAME 3.100 left-shifts negative ints in VbrTag.c (well defined on GCC/Clang,
+  # formally UB in C). The unmodified third-party code is not our finding to "fix":
+  # exclude only that UBSan check so sanitizer runs stay clean for RoY's own code.
+  if(CMAKE_C_FLAGS MATCHES "sanitize=.*undefined")
+    target_compile_options(roy_mp3lame PRIVATE -fno-sanitize=shift)
+  endif()
   if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
     target_compile_options(roy_mp3lame PRIVATE -msse2)
   endif()

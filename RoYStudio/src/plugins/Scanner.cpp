@@ -478,8 +478,10 @@ ScanReport scanPlugins(PluginDatabase& db, const ScanOptions& options) {
                         base.status = "crashed";
                         base.error = "plugin crashed the scanner: " + child.terminationReason();
                     } else if (exited) {
-                        base.status = "failed";
-                        base.error = std::format("scanner exited without result (exit code {})", child.exitCode());
+                        // RoY's scanner always answers before it exits: ending without a result
+                        // means the plugin terminated the process (exit()/abort handler) - quarantine it.
+                        base.status = "crashed";
+                        base.error = std::format("plugin terminated the scanner without a result (exit code {})", child.exitCode());
                     } else {
                         child.kill();
                         base.status = "timeout";

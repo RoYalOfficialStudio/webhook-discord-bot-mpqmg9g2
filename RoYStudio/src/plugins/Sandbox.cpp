@@ -413,6 +413,7 @@ json SandboxedPluginProcessor::saveState() const {
     if (box_->state() == plugins::Sandbox::Running && box_->call({{"cmd", "state.save"}}, r)) {
         j["plugin"] = {{"format", format_}, {"state", r.value("state", "")}, {"pluginName", name_}};
         std::lock_guard<std::mutex> lk(stateMutex_);
+        if (!rejectedState_.empty()) j["plugin"]["rejectedState"] = rejectedState_;
         lastState_ = j;
         return j;
     }
@@ -428,7 +429,10 @@ void SandboxedPluginProcessor::loadState(const json& state) {
     const char* key = state.contains("plugin") ? "plugin" : "clap";
     if (state.contains(key) && state[key].is_object()) {
         json r;
-        if (box_->call({{"cmd", "state.load"}, {"state", state[key].value("state", "")}}, r) && r.contains("values")) {
+        const std::string blob = state[key].value("state", "");
+        rejectedState_ = state[key].value("rejectedState", "");
+        loadWarning_.clear();
+        if (box_->call({{"cmd", "state.load"}, {"state", blob}}, r) && r.contains("values")) {
             for (size_t i = 0; i < clapIds_.size(); ++i) {
                 auto key = std::to_string(clapIds_[i]);
                 if (r["values"].contains(key)) {
@@ -438,13 +442,23 @@ void SandboxedPluginProcessor::loadState(const json& state) {
             }
         } else {
             log::warn("plugins", "{}: plugin rejected the saved state", name_);
+            if (!blob.empty()) {
+                rejectedState_ = blob;
+                loadWarning_ = std::format("{}: the plugin rejected its saved state (other plugin version or damaged data) - "
+                                           "it runs with default settings; the saved state is kept in the project and not lost",
+                                           name_);
+            }
         }
+        if (loadWarning_.empty() && !rejectedState_.empty())
+            loadWarning_ = std::format("{}: an older plugin state that could not be loaded is still kept in the project", name_);
         std::lock_guard<std::mutex> lk(stateMutex_);
         lastState_ = state;
         if (!lastState_.contains("plugin")) lastState_["plugin"] = state[key];
     }
     Processor::loadState(state);
 }
+
+std::string SandboxedPluginProcessor::loadWarning() const { return loadWarning_; }
 
 bool SandboxedPluginProcessor::openEditor(bool alwaysOnTop, std::string* error) {
     json r;

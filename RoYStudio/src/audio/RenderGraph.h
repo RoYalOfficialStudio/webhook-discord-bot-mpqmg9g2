@@ -141,14 +141,20 @@ struct GraphChannel {
 
 struct AutomationTarget {
     int channel = -1;
-    enum Kind { Gain, Pan, Width, ProcessorParam } kind = Gain;
+    enum Kind { Gain, Pan, Width, ProcessorParam, SendLevel } kind = Gain;
     Processor* processor = nullptr;
-    int paramIndex = -1;
+    int paramIndex = -1; // processor parameter or send index
 };
 
 struct AutomationCurve {
+    struct Point {
+        int64_t sample = 0; // timeline sample
+        float value = 0.0f;
+        int curve = 0;      // automation::Curve of the segment to the next point
+        float tension = 0.0f;
+    };
     AutomationTarget target;
-    std::vector<std::pair<int64_t, float>> points; // timeline sample, value (sorted)
+    std::vector<Point> points; // sorted by sample
     float valueAt(int64_t t) const noexcept;
 };
 

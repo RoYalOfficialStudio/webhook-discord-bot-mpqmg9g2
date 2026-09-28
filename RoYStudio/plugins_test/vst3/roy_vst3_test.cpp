@@ -4,7 +4,12 @@
 //                      processor + controller state, an editor view (IPlugView) with resize.
 //   "RoY VST3 Synth" - instrument, note events -> sine, param Volume (id 0).
 //   "RoY VST3 Crash" - effect that dereferences null after 20 process calls.
+//   "RoY VST3 Hang"  - effect that stops returning from process() after 20 calls.
 #include "base/source/fstreamer.h"
+
+#include <chrono>
+#include <thread>
+
 #include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/gui/iplugview.h"
@@ -31,6 +36,7 @@ static const FUID kGainCtrlUID(0x524F5901, 0x47414943, 0x54524C31, 0x00000002);
 static const FUID kSynthProcUID(0x524F5902, 0x53594E50, 0x524F4331, 0x00000003);
 static const FUID kSynthCtrlUID(0x524F5902, 0x53594E43, 0x54524C31, 0x00000004);
 static const FUID kCrashProcUID(0x524F5903, 0x43524150, 0x524F4331, 0x00000005);
+static const FUID kHangProcUID(0x524F5904, 0x48414E47, 0x524F4331, 0x00000006);
 
 enum { kGain = 0, kBypass = 1, kGuiTouch = 2 };
 
@@ -281,6 +287,20 @@ private:
     int blocks_ = 0;
 };
 
+// ------------------------------------------------------------------ hang
+class HangProcessor : public GainProcessor {
+public:
+    static FUnknown* create(void*) { return static_cast<IAudioProcessor*>(new HangProcessor()); }
+    tresult PLUGIN_API process(ProcessData& d) SMTG_OVERRIDE {
+        if (++blocks_ > 20)
+            for (;;) std::this_thread::sleep_for(std::chrono::seconds(1));
+        return GainProcessor::process(d);
+    }
+
+private:
+    int blocks_ = 0;
+};
+
 } // namespace roytest
 
 BEGIN_FACTORY_DEF("RoY Studio (test)", "https://example.invalid/roy-test", "mailto:test@example.invalid")
@@ -294,4 +314,6 @@ DEF_CLASS2(INLINE_UID_FROM_FUID(roytest::kSynthCtrlUID), PClassInfo::kManyInstan
            0, "", "1.0.0", kVstVersionString, roytest::SynthController::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(roytest::kCrashProcUID), PClassInfo::kManyInstances, kVstAudioEffectClass, "RoY VST3 Crash",
            Vst::kDistributable, "Fx", "0.1.0", kVstVersionString, roytest::CrashProcessor::create)
+DEF_CLASS2(INLINE_UID_FROM_FUID(roytest::kHangProcUID), PClassInfo::kManyInstances, kVstAudioEffectClass, "RoY VST3 Hang",
+           Vst::kDistributable, "Fx", "0.1.0", kVstVersionString, roytest::HangProcessor::create)
 END_FACTORY

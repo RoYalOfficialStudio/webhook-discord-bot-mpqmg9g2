@@ -3,6 +3,7 @@
 // * atomicWrite writes to a temp file, flushes, then renames over the target.
 // * uniquePath never returns an existing path, so nothing is overwritten.
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -26,5 +27,21 @@ std::string newId();      // 128-bit random hex id
 // Per-user settings folder: %APPDATA%\\RoYStudio (Windows), ~/.config/RoYStudio (Linux),
 // ~/Library/Application Support/RoYStudio (macOS). Created on demand. ROY_USER_DIR overrides it.
 fs::path userDataDirectory();
+
+// Atomically renames `from` over `to` (replacing it).
+bool replaceFile(const fs::path& from, const fs::path& to, std::string* error = nullptr);
+// fopen(path, "wb") that also handles non-ASCII paths on Windows (_wfopen).
+FILE* openForWrite(const fs::path& path, bool append = false);
+// fwrite() through the disk-fault injector below. Returns bytes actually written.
+size_t writeBytes(FILE* f, const void* data, size_t size, const fs::path& path);
+
+// ---- FAULT INJECTION (TESTS ONLY) ----------------------------------------------
+// Simulates a full / failing disk for every write through atomicWrite / writeBytes
+// whose path contains `pathFragment`: after `bytesBudget` more bytes, writes come
+// back short. An empty fragment disables the fault. Never enabled by the product.
+namespace fault {
+void setDiskFull(const std::string& pathFragment, int64_t bytesBudget = 0);
+void clear();
+} // namespace fault
 
 } // namespace roy::files

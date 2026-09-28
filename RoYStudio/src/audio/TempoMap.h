@@ -1,6 +1,8 @@
 #pragma once
 // Musical time <-> seconds <-> samples.
-// "Beat" always means a quarter note. Tempo is piecewise constant.
+// "Beat" always means a quarter note. Tempo is piecewise constant; tempo automation
+// (ramps / curves) is rendered into fine constant steps (see automation::renderTempo).
+// Conversions are O(log n) via a cumulative-seconds table rebuilt on every edit.
 #include <cstdint>
 #include <vector>
 
@@ -29,6 +31,8 @@ public:
 
     void setTempo(double bpm); // replaces all tempo events with a single tempo
     void addTempoEvent(double beat, double bpm);
+    // Replaces all tempo events (sorted, clamped, first one moved to beat 0).
+    void setTempoEvents(std::vector<TempoEvent> events);
     void setTimeSignature(int num, int den); // replaces all signature events
     void addTimeSignature(int bar, int num, int den);
 
@@ -48,7 +52,10 @@ public:
     BarBeat beatToBarBeat(double beat) const;
 
 private:
+    void rebuildCache();
+    size_t eventAtBeat(double beat) const;
     std::vector<TempoEvent> tempo_{TempoEvent{0.0, 120.0}};
+    std::vector<double> startSeconds_{0.0}; // seconds at tempo_[i].beat
     std::vector<TimeSigEvent> sigs_{TimeSigEvent{0, 4, 4}};
 };
 

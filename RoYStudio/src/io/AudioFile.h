@@ -44,11 +44,15 @@ public:
     bool writeInterleaved(const float* data, int numFrames);
     bool close();
     bool isOpen() const { return file_ != nullptr; }
+    // True after a short write (disk full / removed drive). The file on disk stays a
+    // valid WAV holding every frame that was written before the failure.
+    bool failed() const { return failed_; }
     int64_t framesWritten() const { return frames_; }
     const std::filesystem::path& path() const { return path_; }
 
 private:
     bool writeHeader();
+    bool commit(int numFrames);
     void encode(float v, uint8_t* dst) const;
 
     FILE* file_ = nullptr;
@@ -58,6 +62,7 @@ private:
     SampleFormat fmt_ = SampleFormat::Pcm24;
     int64_t frames_ = 0;
     int64_t framesAtLastHeader_ = 0;
+    bool failed_ = false;
     std::vector<uint8_t> scratch_;
 };
 

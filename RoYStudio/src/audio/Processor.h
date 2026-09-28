@@ -90,6 +90,8 @@ public:
     // Default: all parameters by id. Subclasses may add opaque state.
     virtual json saveState() const;
     virtual void loadState(const json& state);
+    // Non-empty when the last loadState() could not be applied completely (shown to the user).
+    virtual std::string loadWarning() const { return {}; }
 
     // Audio assets the processor needs (e.g. sampler zones). The runtime loads
     // them and calls setAsset() on the message thread before the processor goes live.

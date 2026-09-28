@@ -3,6 +3,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <regex>
 #include <set>
@@ -233,9 +234,11 @@ json toJ(const MixerChannel& c) {
     for (auto& s : c.inserts) inserts.push_back(toJ(s));
     for (auto& s : c.sends)
         sends.push_back({{"id", s.id}, {"target", s.targetChannelId}, {"levelDb", s.levelDb}, {"preFader", s.preFader}, {"enabled", s.enabled}});
-    return {{"id", c.id}, {"name", c.name}, {"kind", channelKindId(c.kind)}, {"gainDb", c.gainDb}, {"pan", c.pan},
+    json j = {{"id", c.id}, {"name", c.name}, {"kind", channelKindId(c.kind)}, {"gainDb", c.gainDb}, {"pan", c.pan},
             {"width", c.width}, {"mute", c.mute}, {"solo", c.solo}, {"phaseInvert", c.phaseInvert}, {"inserts", inserts},
             {"sends", sends}, {"output", c.outputChannelId}, {"color", c.color}};
+    if (c.soloSafe) j["soloSafe"] = true;
+    return j;
 }
 MixerChannel channelFrom(const json& j) {
     MixerChannel c;
@@ -247,6 +250,7 @@ MixerChannel channelFrom(const json& j) {
     c.width = get<float>(j, "width", 1.0f);
     c.mute = get<bool>(j, "mute", false);
     c.solo = get<bool>(j, "solo", false);
+    c.soloSafe = get<bool>(j, "soloSafe", false);
     c.phaseInvert = get<bool>(j, "phaseInvert", false);
     c.outputChannelId = get<std::string>(j, "output", "");
     c.color = get<uint32_t>(j, "color", c.color);
@@ -369,7 +373,10 @@ json projectToJson(const Project& p) {
     j["automation"] = json::array();
     for (auto& a : p.automation) {
         json pts = json::array();
-        for (auto& pt : a.points) pts.push_back({pt.beat, pt.value});
+        for (auto& pt : a.points) {
+            if (pt.curve == 0 && pt.tension == 0.0f) pts.push_back({pt.beat, pt.value}); // v1 layout
+            else pts.push_back({pt.beat, pt.value, pt.curve, pt.tension});
+        }
         j["automation"].push_back({{"id", a.id}, {"channelId", a.channelId}, {"slotId", a.slotId}, {"paramId", a.paramId},
                                    {"enabled", a.enabled}, {"points", pts}});
     }
@@ -490,8 +497,15 @@ bool projectFromJson(const json& jIn, Project& p, std::string* error, std::vecto
         lane.slotId = get<std::string>(a, "slotId", "");
         lane.paramId = get<std::string>(a, "paramId", "");
         lane.enabled = get<bool>(a, "enabled", true);
-        for (auto& pt : a.value("points", json::array()))
-            if (pt.is_array() && pt.size() == 2) lane.points.push_back({pt[0].get<double>(), pt[1].get<float>()});
+        for (auto& pt : a.value("points", json::array())) {
+            if (!pt.is_array() || pt.size() < 2 || !pt[0].is_number() || !pt[1].is_number()) continue;
+            AutomationPoint ap{pt[0].get<double>(), pt[1].get<float>()};
+            if (pt.size() >= 4 && pt[2].is_number_integer() && pt[3].is_number()) {
+                ap.curve = std::clamp(pt[2].get<int>(), 0, 3);
+                ap.tension = std::clamp(pt[3].get<float>(), -1.0f, 1.0f);
+            }
+            if (std::isfinite(ap.beat) && std::isfinite(ap.value)) lane.points.push_back(ap);
+        }
         out.automation.push_back(lane);
     }
     for (auto& pat : j.value("patterns", json::array())) out.patterns.push_back(patternFrom(pat));

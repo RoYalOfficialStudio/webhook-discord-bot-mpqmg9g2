@@ -208,14 +208,14 @@ bool encode(const fs::path& out, const std::vector<std::vector<float>>& ch, int 
     if (a.init_params(g) < 0) return fail("LAME rejected the encoder settings");
 
     const fs::path tmp = out.string() + ".partial";
-    FILE* f = std::fopen(tmp.string().c_str(), "wb");
+    FILE* f = files::openForWrite(tmp);
     if (!f) return fail("cannot write " + tmp.string());
     bool ok = true;
     std::vector<unsigned char> buf(1 << 16);
     // ID3v2 at the start
     const size_t v2 = a.get_id3v2_tag(g, buf.data(), buf.size());
     if (v2 > buf.size()) buf.resize(v2), a.get_id3v2_tag(g, buf.data(), buf.size());
-    if (v2 > 0) ok &= std::fwrite(buf.data(), 1, v2, f) == v2;
+    if (v2 > 0) ok &= files::writeBytes(f, buf.data(), v2, tmp) == v2;
     const long audioStart = std::ftell(f);
     const size_t frames = ch[0].size();
     const size_t block = 4096;
@@ -233,21 +233,21 @@ bool encode(const fs::path& out, const std::vector<std::vector<float>>& ch, int 
             if (error) *error = std::format("LAME encode error {}", bytes);
             break;
         }
-        ok &= std::fwrite(buf.data(), 1, static_cast<size_t>(bytes), f) == static_cast<size_t>(bytes);
+        ok &= files::writeBytes(f, buf.data(), static_cast<size_t>(bytes), tmp) == static_cast<size_t>(bytes);
     }
     if (ok) {
         const int bytes = a.flush(g, buf.data(), static_cast<int>(buf.size()));
-        ok = bytes >= 0 && std::fwrite(buf.data(), 1, static_cast<size_t>(bytes), f) == static_cast<size_t>(bytes);
+        ok = bytes >= 0 && files::writeBytes(f, buf.data(), static_cast<size_t>(bytes), tmp) == static_cast<size_t>(bytes);
     }
     if (ok) { // ID3v1 at the end
         const size_t v1 = a.get_id3v1_tag(g, buf.data(), buf.size());
-        if (v1 > 0) ok = std::fwrite(buf.data(), 1, v1, f) == v1;
+        if (v1 > 0) ok = files::writeBytes(f, buf.data(), v1, tmp) == v1;
     }
     if (ok) { // LAME/Xing info frame replaces the first (empty) frame
         const size_t tag = a.get_lametag_frame(g, buf.data(), buf.size());
         if (tag > 0 && tag <= buf.size()) {
             std::fseek(f, audioStart, SEEK_SET);
-            ok = std::fwrite(buf.data(), 1, tag, f) == tag;
+            ok = files::writeBytes(f, buf.data(), tag, tmp) == tag;
         }
     }
     ok &= std::fflush(f) == 0;
@@ -256,10 +256,10 @@ bool encode(const fs::path& out, const std::vector<std::vector<float>>& ch, int 
         fs::remove(tmp, ec);
         return fail(error && !error->empty() ? *error : "writing the MP3 file failed (disk full or no permission?)");
     }
-    fs::rename(tmp, out, ec);
-    if (ec) {
+    std::string renameError;
+    if (!files::replaceFile(tmp, out, &renameError)) {
         fs::remove(tmp, ec);
-        return fail("cannot finalize " + out.string());
+        return fail("cannot finalize " + out.string() + ": " + renameError);
     }
     return true;
 }

@@ -1,4 +1,6 @@
 #include "io/AudioFile.h"
+
+#include "core/Files.h"
 #include <fstream>
 #include "dsp/Resampler.h"
 
@@ -162,15 +164,12 @@ bool WavWriter::open(const fs::path& path, double sampleRate, int channels, Samp
         return false;
     }
     if (path.has_parent_path()) fs::create_directories(path.parent_path(), ec);
-#ifdef _WIN32
-    file_ = _wfopen(path.wstring().c_str(), L"wb");
-#else
-    file_ = std::fopen(path.string().c_str(), "wb");
-#endif
+    file_ = files::openForWrite(path);
     if (!file_) {
         if (error) *error = "cannot open " + path.string();
         return false;
     }
+    failed_ = false;
     path_ = path;
     sampleRate_ = sampleRate;
     channels_ = std::max(1, channels);
@@ -203,6 +202,7 @@ bool WavWriter::writeHeader() {
     put32(40, dataBytes);
     const long pos = std::ftell(file_);
     std::fseek(file_, 0, SEEK_SET);
+    // The header overwrites bytes that already exist, so it needs no new disk space.
     const bool ok = std::fwrite(h, 1, 44, file_) == 44;
     if (pos > 44) std::fseek(file_, pos, SEEK_SET);
     else std::fseek(file_, 0, SEEK_END);
@@ -235,7 +235,8 @@ void WavWriter::encode(float v, uint8_t* dst) const {
 }
 
 bool WavWriter::writePlanar(const float* const* channels, int numFrames) {
-    if (!file_ || numFrames <= 0) return file_ != nullptr;
+    if (!file_ || failed_) return false;
+    if (numFrames <= 0) return true;
     const int bytes = bitsPerSample(fmt_) / 8;
     scratch_.resize(static_cast<size_t>(numFrames * channels_ * bytes));
     uint8_t* p = scratch_.data();
@@ -244,18 +245,12 @@ bool WavWriter::writePlanar(const float* const* channels, int numFrames) {
             encode(channels[c][i], p);
             p += bytes;
         }
-    const bool ok = std::fwrite(scratch_.data(), 1, scratch_.size(), file_) == scratch_.size();
-    frames_ += numFrames;
-    if (frames_ - framesAtLastHeader_ > static_cast<int64_t>(sampleRate_)) {
-        std::fflush(file_);
-        writeHeader();
-        framesAtLastHeader_ = frames_;
-    }
-    return ok;
+    return commit(numFrames);
 }
 
 bool WavWriter::writeInterleaved(const float* data, int numFrames) {
-    if (!file_ || numFrames <= 0) return file_ != nullptr;
+    if (!file_ || failed_) return false;
+    if (numFrames <= 0) return true;
     const int bytes = bitsPerSample(fmt_) / 8;
     scratch_.resize(static_cast<size_t>(numFrames * channels_ * bytes));
     uint8_t* p = scratch_.data();
@@ -263,9 +258,32 @@ bool WavWriter::writeInterleaved(const float* data, int numFrames) {
         encode(data[i], p);
         p += bytes;
     }
-    const bool ok = std::fwrite(scratch_.data(), 1, scratch_.size(), file_) == scratch_.size();
+    return commit(numFrames);
+}
+
+// Writes scratch_ (numFrames encoded frames). On a short write only whole frames
+// count, the writer stops accepting data and the header describes exactly what is
+// on disk, so a full disk leaves a valid (shorter) WAV instead of a broken one.
+bool WavWriter::commit(int numFrames) {
+    const size_t blockAlign = static_cast<size_t>(channels_ * (bitsPerSample(fmt_) / 8));
+    const size_t written = files::writeBytes(file_, scratch_.data(), scratch_.size(), path_);
+    if (written < scratch_.size()) {
+        frames_ += static_cast<int64_t>(written / blockAlign);
+        failed_ = true;
+        // drop a trailing partial frame so the data chunk stays frame-aligned
+        std::fflush(file_);
+        std::fseek(file_, static_cast<long>(44 + frames_ * static_cast<int64_t>(blockAlign)), SEEK_SET);
+        writeHeader();
+        std::fflush(file_);
+        return false;
+    }
     frames_ += numFrames;
-    return ok;
+    if (frames_ - framesAtLastHeader_ > static_cast<int64_t>(sampleRate_)) {
+        std::fflush(file_);
+        writeHeader();
+        framesAtLastHeader_ = frames_;
+    }
+    return true;
 }
 
 bool WavWriter::close() {
@@ -274,7 +292,7 @@ bool WavWriter::close() {
     ok = std::fflush(file_) == 0 && ok;
     std::fclose(file_);
     file_ = nullptr;
-    return ok;
+    return ok && !failed_;
 }
 
 bool writeWavFile(const fs::path& path, const std::vector<std::vector<float>>& channels, double sampleRate,
@@ -283,22 +301,39 @@ bool writeWavFile(const fs::path& path, const std::vector<std::vector<float>>& c
         if (error) *error = "no channels";
         return false;
     }
+    std::error_code ec;
+    if (!allowOverwrite && fs::exists(path, ec)) {
+        if (error) *error = "refusing to overwrite existing file " + path.string();
+        return false;
+    }
+    // Written next to the target and renamed on success: a failed write (disk full)
+    // never destroys an existing file of the same name.
+    fs::path tmp = path;
+    tmp += ".partial";
     WavWriter w;
-    if (!w.open(path, sampleRate, static_cast<int>(channels.size()), fmt, allowOverwrite, error)) return false;
+    if (!w.open(tmp, sampleRate, static_cast<int>(channels.size()), fmt, true, error)) return false;
     const size_t frames = channels[0].size();
     std::vector<const float*> ptrs;
     for (auto& c : channels) ptrs.push_back(c.data());
     const size_t chunk = 65536;
-    for (size_t off = 0; off < frames; off += chunk) {
+    bool ok = true;
+    for (size_t off = 0; off < frames && ok; off += chunk) {
         const int n = static_cast<int>(std::min(chunk, frames - off));
         std::vector<const float*> p2;
         for (auto* p : ptrs) p2.push_back(p + off);
-        if (!w.writePlanar(p2.data(), n)) {
-            if (error) *error = "write error";
-            return false;
-        }
+        ok = w.writePlanar(p2.data(), n);
     }
-    return w.close();
+    ok = w.close() && ok;
+    if (!ok) {
+        fs::remove(tmp, ec);
+        if (error) *error = "writing " + path.string() + " failed (disk full or no permission?)";
+        return false;
+    }
+    if (!files::replaceFile(tmp, path, error)) {
+        fs::remove(tmp, ec);
+        return false;
+    }
+    return true;
 }
 
 } // namespace roy

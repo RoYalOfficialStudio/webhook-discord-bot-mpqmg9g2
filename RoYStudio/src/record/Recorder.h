@@ -43,6 +43,7 @@ struct FinishedTake {
     int channels = 1;
     double sampleRate = 48000;
     uint32_t clippedSamples = 0;
+    bool diskError = false; // writing failed part-way: the file holds only the first `frames`
 };
 
 struct RecoveredPerformance {
@@ -82,6 +83,12 @@ public:
     float inputPeak(const std::string& trackId, bool reset = true);
     uint32_t clipCount(const std::string& trackId) const;
     uint64_t droppedSamples() const { return dropped_.load(); }
+    // Disk write failures since startup (disk full, drive removed) and the latest message.
+    uint32_t diskErrors() const { return diskErrors_.load(); }
+    std::string lastDiskError() const {
+        std::lock_guard l(diskErrorMutex_);
+        return diskErrorMessage_;
+    }
 
     std::vector<FinishedTake> collectFinishedTakes();
 
@@ -157,6 +164,9 @@ private:
     std::atomic<int64_t> punchIn_{0}, punchOut_{0};
     std::atomic<int> latency_{0};
     std::atomic<uint64_t> dropped_{0};
+    std::atomic<uint32_t> diskErrors_{0};
+    mutable std::mutex diskErrorMutex_;
+    std::string diskErrorMessage_;
 
     std::mutex diskMutex_;
     std::condition_variable diskCv_;

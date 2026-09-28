@@ -1,4 +1,6 @@
 #include "commands/Commands.h"
+#include "project/Automation.h"
+#include "project/AutomationShape.h"
 #include "arrange/ClipOps.h"
 #include "midi/MidiFile.h"
 #include "midi/MidiOps.h"
@@ -262,6 +264,13 @@ void registerCoreCommands(CommandRegistry& r) {
                ch->solo = argBool(a, "solo", !ch->solo);
                return true;
            }});
+    r.add({"SetSoloSafe", "Solo Safe", "Mixer", "", true, false, [](CommandContext& ctx, const json& a) {
+               auto* ch = channelArg(ctx, a);
+               if (!ch) return fail(ctx, "channel not found");
+               if (ch->kind == ChannelKind::Master) return fail(ctx, "the master is never muted by solo");
+               ch->soloSafe = argBool(a, "safe", !ch->soloSafe);
+               return true;
+           }});
     r.add({"InvertPhase", "Invert Phase", "Mixer", "", true, false, [](CommandContext& ctx, const json& a) {
                auto* ch = channelArg(ctx, a);
                if (!ch) return fail(ctx, "channel not found");
@@ -271,6 +280,19 @@ void registerCoreCommands(CommandRegistry& r) {
     r.add({"AddBus", "Add Bus", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
                auto& b = addBus(ctx.project, argStr(a, "name", "BUS"));
                ctx.result["id"] = b.id;
+               return true;
+           }});
+    r.add({"DeleteBus", "Delete Bus", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
+               return removeBus(ctx.project, argStr(a, "channelId")) || fail(ctx, "bus not found");
+           }});
+    r.add({"RenameChannel", "Rename Channel", "Mixer", "", true, false, [](CommandContext& ctx, const json& a) {
+               auto* ch = channelArg(ctx, a);
+               if (!ch) return fail(ctx, "channel not found");
+               const std::string name = argStr(a, "name");
+               if (name.empty()) return fail(ctx, "name must not be empty");
+               ch->name = name;
+               for (auto& t : ctx.project.tracks)
+                   if (t.channelId == ch->id) t.name = name;
                return true;
            }});
     r.add({"RouteChannel", "Route Output", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
@@ -283,12 +305,7 @@ void registerCoreCommands(CommandRegistry& r) {
                    if (!target) return fail(ctx, "output channel not found");
                    if (target->kind == ChannelKind::Track) return fail(ctx, "channels can only route to busses or master");
                    if (out == ch->id) return fail(ctx, "cannot route a channel into itself");
-                   // Reject cycles: follow target's output chain.
-                   const MixerChannel* cur = target;
-                   for (int i = 0; cur && i < 64; ++i) {
-                       if (cur->id == ch->id) return fail(ctx, "routing would create a feedback loop");
-                       cur = cur->outputChannelId.empty() ? nullptr : ctx.project.findChannel(cur->outputChannelId);
-                   }
+                   if (routingWouldLoop(ctx.project, ch->id, out)) return fail(ctx, "routing would create a feedback loop");
                }
                ch->outputChannelId = out;
                return true;
@@ -301,6 +318,7 @@ void registerCoreCommands(CommandRegistry& r) {
                if (!t || t->kind != ChannelKind::Bus) return fail(ctx, "send target must be a bus");
                if (target == ch->id) return fail(ctx, "cannot send to itself");
                if (ch->sends.size() >= 16) return fail(ctx, "maximum 16 sends per channel");
+               if (routingWouldLoop(ctx.project, ch->id, target)) return fail(ctx, "this send would create a feedback loop");
                Send s;
                s.id = files::newId();
                s.targetChannelId = target;
@@ -310,7 +328,16 @@ void registerCoreCommands(CommandRegistry& r) {
                ctx.result["id"] = s.id;
                return true;
            }});
-    r.add({"SetSend", "Set Send Level", "Mixer", "", true, false, [](CommandContext& ctx, const json& a) {
+    r.add({"RemoveSend", "Remove Send", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
+               const std::string id = argStr(a, "sendId");
+               for (auto& ch : ctx.project.channels)
+                   if (std::erase_if(ch.sends, [&](const Send& s) { return s.id == id; }) > 0) {
+                       std::erase_if(ctx.project.automation, [&](const AutomationLane& l) { return l.paramId == "send:" + id; });
+                       return true;
+                   }
+               return fail(ctx, "send not found");
+           }});
+    r.add({"SetSend", "Set Send Level", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
                for (auto& ch : ctx.project.channels)
                    for (auto& s : ch.sends)
                        if (s.id == argStr(a, "sendId")) {
@@ -335,9 +362,29 @@ void registerCoreCommands(CommandRegistry& r) {
                s.name = argStr(a, "name", type);
                if (a.contains("params") && a["params"].is_object()) s.state["params"] = a["params"];
                s.sidechainChannelId = argStr(a, "sidechain");
+               if (!s.sidechainChannelId.empty()) {
+                   if (!ctx.project.findChannel(s.sidechainChannelId)) return fail(ctx, "sidechain source not found");
+                   if (routingWouldLoop(ctx.project, s.sidechainChannelId, ch->id)) return fail(ctx, "this sidechain would create a feedback loop");
+               }
                const int index = static_cast<int>(argNum(a, "index", static_cast<double>(ch->inserts.size())));
                ch->inserts.insert(ch->inserts.begin() + std::clamp(index, 0, static_cast<int>(ch->inserts.size())), s);
                ctx.result["id"] = s.id;
+               return true;
+           }});
+    r.add({"SetSidechain", "Set Sidechain Source", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
+               MixerChannel* owner = nullptr;
+               PluginSlot* slot = ctx.project.findSlot(argStr(a, "slotId"), &owner);
+               if (!slot || !owner) return fail(ctx, "effect not found");
+               const std::string src = argStr(a, "sidechain");
+               if (!src.empty()) {
+                   if (!ctx.project.findChannel(src)) return fail(ctx, "sidechain source not found");
+                   const std::string old = slot->sidechainChannelId;
+                   slot->sidechainChannelId.clear(); // judge the new edge without the old one
+                   const bool loop = routingWouldLoop(ctx.project, src, owner->id);
+                   slot->sidechainChannelId = old;
+                   if (loop) return fail(ctx, "this sidechain would create a feedback loop");
+               }
+               slot->sidechainChannelId = src;
                return true;
            }});
     r.add({"RemoveInsert", "Remove Effect", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
@@ -507,26 +554,103 @@ void registerCoreCommands(CommandRegistry& r) {
                l.channelId = ch->id;
                l.slotId = argStr(a, "slotId");
                l.paramId = argStr(a, "paramId", "gain");
-               if (l.slotId.empty() && l.paramId != "gain" && l.paramId != "pan" && l.paramId != "width")
-                   return fail(ctx, "unknown channel parameter " + l.paramId);
+               if (l.slotId.empty()) {
+                   if (l.paramId == "tempo") {
+                       if (ch->kind != ChannelKind::Master) return fail(ctx, "tempo automation lives on the master channel");
+                       if (automation::tempoLane(ctx.project)) return fail(ctx, "the project already has a tempo lane");
+                   } else if (l.paramId.rfind("send:", 0) == 0) {
+                       const std::string sid = l.paramId.substr(5);
+                       if (std::none_of(ch->sends.begin(), ch->sends.end(), [&](const Send& s) { return s.id == sid; }))
+                           return fail(ctx, "send not found on this channel");
+                   } else if (l.paramId != "gain" && l.paramId != "pan" && l.paramId != "width") {
+                       return fail(ctx, "unknown channel parameter " + l.paramId);
+                   }
+               }
                for (auto& p : a.value("points", json::array()))
-                   if (p.is_array() && p.size() == 2) l.points.push_back({p[0].get<double>(), p[1].get<float>()});
+                   if (p.is_array() && p.size() >= 2) {
+                       AutomationPoint ap{p[0].get<double>(), p[1].get<float>()};
+                       if (p.size() >= 3) ap.curve = std::clamp(p[2].get<int>(), 0, 3);
+                       if (p.size() >= 4) ap.tension = std::clamp(p[3].get<float>(), -1.0f, 1.0f);
+                       l.points.push_back(ap);
+                   }
+               std::stable_sort(l.points.begin(), l.points.end(), [](auto& x, auto& y) { return x.beat < y.beat; });
                ctx.project.automation.push_back(l);
+               automation::applyTempoAutomation(ctx.project);
                ctx.result["id"] = l.id;
                return true;
            }});
-    r.add({"AddAutomationPoint", "Add Automation Point", "Automation", "", true, true, [](CommandContext& ctx, const json& a) {
+    auto curveArg = [](const json& a, int def) {
+        if (!a.contains("curve")) return def;
+        if (a["curve"].is_number_integer()) return std::clamp(a["curve"].get<int>(), 0, 3);
+        const std::string c = a.value("curve", "");
+        for (int k = 0; k < 4; ++k)
+            if (c == automation::curveName(k)) return k;
+        return def;
+    };
+    r.add({"AddAutomationPoint", "Add Automation Point", "Automation", "", true, true, [curveArg](CommandContext& ctx, const json& a) {
                for (auto& l : ctx.project.automation)
                    if (l.id == argStr(a, "laneId")) {
-                       l.points.push_back({argNum(a, "beat", 0.0), static_cast<float>(argNum(a, "value", 0.0))});
-                       std::sort(l.points.begin(), l.points.end(), [](auto& x, auto& y) { return x.beat < y.beat; });
+                       AutomationPoint ap{argNum(a, "beat", 0.0), static_cast<float>(argNum(a, "value", 0.0))};
+                       ap.curve = curveArg(a, 0);
+                       ap.tension = std::clamp(static_cast<float>(argNum(a, "tension", 0.0)), -1.0f, 1.0f);
+                       l.points.push_back(ap);
+                       std::stable_sort(l.points.begin(), l.points.end(), [](auto& x, auto& y) { return x.beat < y.beat; });
+                       automation::applyTempoAutomation(ctx.project);
+                       return true;
+                   }
+               return fail(ctx, "automation lane not found");
+           }});
+    r.add({"SetAutomationPoint", "Edit Automation Point", "Automation", "", true, true, [curveArg](CommandContext& ctx, const json& a) {
+               for (auto& l : ctx.project.automation)
+                   if (l.id == argStr(a, "laneId")) {
+                       const int i = static_cast<int>(argNum(a, "index", -1));
+                       if (i < 0 || i >= static_cast<int>(l.points.size())) return fail(ctx, "point index out of range");
+                       auto& p = l.points[static_cast<size_t>(i)];
+                       if (a.contains("beat")) p.beat = std::max(0.0, argNum(a, "beat", p.beat));
+                       if (a.contains("value")) p.value = static_cast<float>(argNum(a, "value", p.value));
+                       p.curve = curveArg(a, p.curve);
+                       if (a.contains("tension")) p.tension = std::clamp(static_cast<float>(argNum(a, "tension", 0.0)), -1.0f, 1.0f);
+                       std::stable_sort(l.points.begin(), l.points.end(), [](auto& x, auto& y) { return x.beat < y.beat; });
+                       automation::applyTempoAutomation(ctx.project);
+                       return true;
+                   }
+               return fail(ctx, "automation lane not found");
+           }});
+    r.add({"DeleteAutomationPoint", "Delete Automation Point", "Automation", "", true, true, [](CommandContext& ctx, const json& a) {
+               for (auto& l : ctx.project.automation)
+                   if (l.id == argStr(a, "laneId")) {
+                       const int i = static_cast<int>(argNum(a, "index", -1));
+                       if (i < 0 || i >= static_cast<int>(l.points.size())) return fail(ctx, "point index out of range");
+                       l.points.erase(l.points.begin() + i);
+                       automation::applyTempoAutomation(ctx.project);
+                       return true;
+                   }
+               return fail(ctx, "automation lane not found");
+           }});
+    r.add({"SetAutomationCurve", "Set Automation Curve", "Automation", "", true, true, [curveArg](CommandContext& ctx, const json& a) {
+               for (auto& l : ctx.project.automation)
+                   if (l.id == argStr(a, "laneId")) {
+                       const int c = curveArg(a, -1);
+                       if (c < 0) return fail(ctx, "curve must be Linear, Hold, Smooth or Bezier");
+                       const float t = std::clamp(static_cast<float>(argNum(a, "tension", 0.0)), -1.0f, 1.0f);
+                       for (auto& p : l.points) {
+                           p.curve = c;
+                           p.tension = t;
+                       }
+                       automation::applyTempoAutomation(ctx.project);
                        return true;
                    }
                return fail(ctx, "automation lane not found");
            }});
     r.add({"DeleteAutomation", "Delete Automation Lane", "Automation", "", true, true, [](CommandContext& ctx, const json& a) {
-               return std::erase_if(ctx.project.automation, [&](auto& l) { return l.id == argStr(a, "laneId"); }) > 0 ||
-                      fail(ctx, "automation lane not found");
+               const AutomationLane* tl = automation::tempoLane(ctx.project);
+               const bool hadTempo = tl != nullptr;
+               const double startBpm = tl ? automation::laneValueAt(*tl, 0.0).value_or(120.0) : 120.0;
+               if (std::erase_if(ctx.project.automation, [&](auto& l) { return l.id == argStr(a, "laneId"); }) == 0)
+                   return fail(ctx, "automation lane not found");
+               // removing the tempo lane keeps the tempo at the start of the song
+               if (hadTempo && !automation::tempoLane(ctx.project)) ctx.project.tempo.setTempo(startBpm);
+               return true;
            }});
 
     // ---- project / timeline ------------------------------------------------------

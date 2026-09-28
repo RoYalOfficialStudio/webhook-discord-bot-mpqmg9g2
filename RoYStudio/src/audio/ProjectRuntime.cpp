@@ -115,6 +115,7 @@ std::shared_ptr<Processor> ProjectRuntime::ensureProcessor(const Project& projec
         return nullptr;
     }
     proc->loadState(slot.state);
+    if (auto w = proc->loadWarning(); !w.empty()) warnings_.push_back(w);
     for (auto& id : proc->requiredAssets()) {
         auto data = asset(project, id);
         if (!data) warnings_.push_back(std::format("{}: sample asset {} missing", slot.name, id));
@@ -447,10 +448,23 @@ bool ProjectRuntime::rebuild(const Project& project) {
         AutomationCurve curve;
         curve.target.channel = pos[lane.channelId];
         if (lane.slotId.empty()) {
+            if (lane.paramId == "tempo") continue; // rendered into the tempo map, not a channel parameter
             if (lane.paramId == "gain") curve.target.kind = AutomationTarget::Gain;
             else if (lane.paramId == "pan") curve.target.kind = AutomationTarget::Pan;
             else if (lane.paramId == "width") curve.target.kind = AutomationTarget::Width;
-            else {
+            else if (lane.paramId.rfind("send:", 0) == 0) {
+                const std::string sendId = lane.paramId.substr(5);
+                const MixerChannel* mc = project.findChannel(lane.channelId);
+                int idx = -1;
+                for (size_t k = 0; mc && k < mc->sends.size() && k < ChannelParams::kMaxSends; ++k)
+                    if (mc->sends[k].id == sendId) idx = static_cast<int>(k);
+                if (idx < 0) {
+                    warnings_.push_back("automation lane for a send that no longer exists (" + sendId + ")");
+                    continue;
+                }
+                curve.target.kind = AutomationTarget::SendLevel;
+                curve.target.paramIndex = idx;
+            } else {
                 warnings_.push_back("unknown channel automation parameter " + lane.paramId);
                 continue;
             }
@@ -467,7 +481,7 @@ bool ProjectRuntime::rebuild(const Project& project) {
         }
         auto pts = lane.points;
         std::sort(pts.begin(), pts.end(), [](auto& a, auto& b) { return a.beat < b.beat; });
-        for (auto& p : pts) curve.points.emplace_back(toSample(p.beat), p.value);
+        for (auto& p : pts) curve.points.push_back({toSample(p.beat), p.value, p.curve, p.tension});
         graph->automation.push_back(std::move(curve));
     }
 
@@ -501,7 +515,7 @@ void ProjectRuntime::syncParams(const Project& project) {
         pp->width.store(c.width);
         pp->phaseInvert.store(c.phaseInvert);
         bool muted = c.mute;
-        if (anySolo && c.kind == ChannelKind::Track && !soloedDownstream(c)) muted = true;
+        if (anySolo && c.kind == ChannelKind::Track && !c.soloSafe && !soloedDownstream(c)) muted = true;
         pp->effectiveMute.store(muted);
         for (size_t s = 0; s < c.sends.size() && s < ChannelParams::kMaxSends; ++s) {
             pp->sendLevelDb[s].store(c.sends[s].levelDb);

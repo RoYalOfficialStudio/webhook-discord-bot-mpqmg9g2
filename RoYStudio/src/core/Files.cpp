@@ -2,7 +2,11 @@
 
 #include <cstdlib>
 
+#include <algorithm>
 #include <array>
+#include <atomic>
+#include <cerrno>
+#include <mutex>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -84,7 +88,7 @@ struct Sha256 {
     }
 };
 
-bool replaceFile(const fs::path& from, const fs::path& to, std::string* error) {
+bool replaceFileImpl(const fs::path& from, const fs::path& to, std::string* error) {
 #ifdef _WIN32
     if (!MoveFileExW(from.wstring().c_str(), to.wstring().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         if (error) *error = std::format("MoveFileExW failed ({})", GetLastError());
@@ -101,22 +105,71 @@ bool replaceFile(const fs::path& from, const fs::path& to, std::string* error) {
 
 } // namespace
 
+namespace {
+struct DiskFault {
+    std::mutex m;
+    std::atomic<bool> active{false};
+    std::string fragment;
+    int64_t budget = 0;
+};
+DiskFault& diskFault() {
+    static DiskFault f;
+    return f;
+}
+// How many of `want` bytes may be written to `path` right now.
+size_t allowedBytes(const fs::path& path, size_t want) {
+    DiskFault& f = diskFault();
+    if (!f.active.load(std::memory_order_acquire)) return want;
+    std::lock_guard l(f.m);
+    if (f.fragment.empty() || path.string().find(f.fragment) == std::string::npos) return want;
+    const size_t ok = static_cast<size_t>(std::clamp<int64_t>(f.budget, 0, static_cast<int64_t>(want)));
+    f.budget -= static_cast<int64_t>(ok);
+    return ok;
+}
+} // namespace
+
+namespace fault {
+void setDiskFull(const std::string& pathFragment, int64_t bytesBudget) {
+    DiskFault& f = diskFault();
+    std::lock_guard l(f.m);
+    f.fragment = pathFragment;
+    f.budget = bytesBudget;
+    f.active.store(!pathFragment.empty(), std::memory_order_release);
+}
+void clear() { setDiskFull({}, 0); }
+} // namespace fault
+
+bool replaceFile(const fs::path& from, const fs::path& to, std::string* error) {
+    return replaceFileImpl(from, to, error);
+}
+
+FILE* openForWrite(const fs::path& path, bool append) {
+#ifdef _WIN32
+    return _wfopen(path.wstring().c_str(), append ? L"ab" : L"wb");
+#else
+    return std::fopen(path.string().c_str(), append ? "ab" : "wb");
+#endif
+}
+
+size_t writeBytes(FILE* f, const void* data, size_t size, const fs::path& path) {
+    if (!f || size == 0) return 0;
+    const size_t allowed = allowedBytes(path, size);
+    const size_t written = allowed > 0 ? std::fwrite(data, 1, allowed, f) : 0;
+    if (written < size) errno = ENOSPC;
+    return written;
+}
+
 bool atomicWrite(const fs::path& target, const std::string& contents, std::string* error) {
     std::error_code ec;
     if (target.has_parent_path()) fs::create_directories(target.parent_path(), ec);
     fs::path tmp = target;
     tmp += std::format(".tmp{}", newId().substr(0, 8));
-    FILE* f = nullptr;
-#ifdef _WIN32
-    f = _wfopen(tmp.wstring().c_str(), L"wb");
-#else
-    f = std::fopen(tmp.string().c_str(), "wb");
-#endif
+    FILE* f = openForWrite(tmp);
     if (!f) {
         if (error) *error = "cannot open temp file " + tmp.string();
         return false;
     }
-    const bool ok = std::fwrite(contents.data(), 1, contents.size(), f) == contents.size() && std::fflush(f) == 0;
+    const bool ok = writeBytes(f, contents.data(), contents.size(), tmp) == contents.size() && std::fflush(f) == 0;
 #ifdef _WIN32
     _commit(_fileno(f));
 #else
@@ -125,10 +178,10 @@ bool atomicWrite(const fs::path& target, const std::string& contents, std::strin
     std::fclose(f);
     if (!ok) {
         fs::remove(tmp, ec);
-        if (error) *error = "write failed for " + tmp.string();
+        if (error) *error = "write failed for " + tmp.string() + " (disk full or no permission?); the previous file is untouched";
         return false;
     }
-    if (!replaceFile(tmp, target, error)) {
+    if (!replaceFileImpl(tmp, target, error)) {
         fs::remove(tmp, ec);
         return false;
     }

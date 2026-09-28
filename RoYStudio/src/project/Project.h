@@ -177,6 +177,7 @@ struct MixerChannel {
     float width = 1.0f;     // 0 = mono, 1 = original, 2 = extra wide
     bool mute = false;
     bool solo = false;
+    bool soloSafe = false;  // never muted by other channels' solo (reference track, FX return feeds)
     bool phaseInvert = false;
     std::vector<PluginSlot> inserts;
     std::vector<Send> sends;
@@ -187,13 +188,16 @@ struct MixerChannel {
 struct AutomationPoint {
     double beat = 0.0;
     float value = 0.0f;
+    int curve = 0;         // shape of the segment to the next point: 0 Linear, 1 Hold, 2 Smooth, 3 Bezier
+    float tension = 0.0f;  // Bezier bend, -1..1
 };
 
 struct AutomationLane {
     std::string id;
     std::string channelId;
     std::string slotId;   // empty = channel strip parameter
-    std::string paramId;  // "gain" | "pan" | "width" | processor param id
+    // "gain" | "pan" | "width" | "send:<sendId>" | "tempo" (master only) | processor param id
+    std::string paramId;
     bool enabled = true;
     std::vector<AutomationPoint> points;
 };
@@ -309,6 +313,10 @@ Track& addTrack(Project& p, TrackType type, const std::string& name, const std::
 MixerChannel& addBus(Project& p, const std::string& name);
 // Removes a track and its channel (clips/assets stay in the asset list: files are never deleted).
 bool removeTrack(Project& p, const std::string& trackId);
+// Deletes a bus: channels routed into it go to the bus's own output, sends into it are removed.
+bool removeBus(Project& p, const std::string& channelId);
+// True if adding a signal edge from -> to (output, send or sidechain) would close a loop.
+bool routingWouldLoop(const Project& p, const std::string& from, const std::string& to);
 
 // Default pattern with the standard Beat Lab rows.
 Pattern makeDefaultPattern(const std::string& name, int numSteps = 16);

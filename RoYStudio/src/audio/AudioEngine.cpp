@@ -1,4 +1,5 @@
 #include "audio/AudioEngine.h"
+#include "project/AutomationShape.h"
 #include "core/Log.h"
 #include "core/Math.h"
 
@@ -24,15 +25,14 @@ namespace roy {
 
 float AutomationCurve::valueAt(int64_t t) const noexcept {
     if (points.empty()) return 0.0f;
-    if (t <= points.front().first) return points.front().second;
-    if (t >= points.back().first) return points.back().second;
-    auto it = std::upper_bound(points.begin(), points.end(), t,
-                               [](int64_t v, const std::pair<int64_t, float>& p) { return v < p.first; });
+    if (t <= points.front().sample) return points.front().value;
+    if (t >= points.back().sample) return points.back().value;
+    auto it = std::upper_bound(points.begin(), points.end(), t, [](int64_t v, const Point& p) { return v < p.sample; });
     const auto& b = *it;
     const auto& a = *(it - 1);
-    const double span = static_cast<double>(b.first - a.first);
-    const double x = span > 0 ? static_cast<double>(t - a.first) / span : 0.0;
-    return static_cast<float>(a.second + (b.second - a.second) * x);
+    const double span = static_cast<double>(b.sample - a.sample);
+    const double x = span > 0 ? static_cast<double>(t - a.sample) / span : 0.0;
+    return static_cast<float>(automation::interpolate(a.value, b.value, a.curve, a.tension, x));
 }
 
 namespace {
@@ -328,6 +328,10 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
             case AutomationTarget::Width: params.width.store(v, std::memory_order_relaxed); break;
             case AutomationTarget::ProcessorParam:
                 if (t.processor) t.processor->setParam(t.paramIndex, v);
+                break;
+            case AutomationTarget::SendLevel:
+                if (t.paramIndex >= 0 && t.paramIndex < ChannelParams::kMaxSends)
+                    params.sendLevelDb[t.paramIndex].store(v, std::memory_order_relaxed);
                 break;
             }
         }

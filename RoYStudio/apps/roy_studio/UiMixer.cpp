@@ -168,10 +168,50 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
     if (ch.inserts.size() < 32 && ImGui::Button("+ effect", ImVec2(-1, 0))) ImGui::OpenPopup("addInsert");
     addInsertMenu(app, ch.id);
     // sends
-    if (!ch.sends.empty()) {
-        ImGui::TextDisabled("SENDS");
-        for (auto& s : ch.sends)
-            if (const MixerChannel* t = app.project().findChannel(s.targetChannelId)) ImGui::TextDisabled("> %s %.0f dB", t->name.c_str(), s.levelDb);
+    if (!ch.sends.empty()) ImGui::TextDisabled("SENDS");
+    for (size_t si = 0; si < ch.sends.size(); ++si) {
+        const Send& s = ch.sends[si];
+        const MixerChannel* t = app.project().findChannel(s.targetChannelId);
+        if (!t) continue;
+        ImGui::PushID(s.id.c_str());
+        float lvl = s.levelDb;
+        ImGui::SetNextItemWidth(-1);
+        const std::string fmt = t->name + " %.0f dB";
+        if (ImGui::SliderFloat("##send", &lvl, -60.0f, 6.0f, fmt.c_str()) && params && si < ChannelParams::kMaxSends)
+            params->sendLevelDb[si].store(lvl); // live while dragging
+        if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetSend", {{"sendId", s.id}, {"levelDb", lvl}});
+        if (ImGui::BeginPopupContextItem("sendctx")) {
+            if (ImGui::MenuItem(s.preFader ? "Switch to POST fader" : "Switch to PRE fader"))
+                app.run("SetSend", {{"sendId", s.id}, {"preFader", !s.preFader}});
+            if (ImGui::MenuItem(s.enabled ? "Disable send" : "Enable send")) app.run("SetSend", {{"sendId", s.id}, {"enabled", !s.enabled}});
+            if (ImGui::MenuItem("Automate send level")) {
+                const double b = app.positionBeats();
+                app.run("CreateAutomation", {{"channelId", ch.id}, {"paramId", "send:" + s.id}, {"points", {{b, s.levelDb}, {b + 4.0, s.levelDb}}}});
+            }
+            if (ImGui::MenuItem("Remove send")) app.run("RemoveSend", {{"sendId", s.id}});
+            ImGui::EndPopup();
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s %s%s - right-click: pre/post, on/off, automate, remove", s.preFader ? "PRE" : "POST", t->name.c_str(),
+                              s.enabled ? "" : " (off)");
+        ImGui::PopID();
+    }
+    if (!master && ch.sends.size() < ChannelParams::kMaxSends && ImGui::SmallButton("+ send")) ImGui::OpenPopup("addSend");
+    if (ImGui::BeginPopup("addSend")) {
+        bool any = false;
+        for (auto& b : app.project().channels)
+            if (b.kind == ChannelKind::Bus && b.id != ch.id) {
+                any = true;
+                if (ImGui::MenuItem(b.name.c_str())) app.run("AddSend", {{"channelId", ch.id}, {"target", b.id}, {"levelDb", -6.0}});
+            }
+        if (!any) ImGui::TextDisabled("no bus yet");
+        if (ImGui::MenuItem("+ new FX bus")) {
+            if (app.run("AddBus", {{"name", "FX"}})) {
+                const std::string bus = app.lastResult().value("id", "");
+                if (!bus.empty()) app.run("AddSend", {{"channelId", ch.id}, {"target", bus}, {"levelDb", -6.0}});
+            }
+        }
+        ImGui::EndPopup();
     }
     // pan
     const float bottomH = height * 0.55f;
@@ -205,6 +245,9 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
         if (toggleButton("S", ch.solo, col::Gold, bs)) app.run("SoloChannel", {{"channelId", ch.id}, {"solo", !ch.solo}});
         ImGui::SameLine();
         if (toggleButton("Ø", ch.phaseInvert, col::Ivory, bs)) app.run("InvertPhase", {{"channelId", ch.id}, {"invert", !ch.phaseInvert}});
+        if (ch.kind == ChannelKind::Track && toggleButton(ch.soloSafe ? "SOLO SAFE" : "solo safe", ch.soloSafe, col::Gold, ImVec2(-1, 0)))
+            app.run("SetSoloSafe", {{"channelId", ch.id}, {"safe", !ch.soloSafe}});
+        if (ch.kind == ChannelKind::Bus && ImGui::SmallButton("delete bus")) app.run("DeleteBus", {{"channelId", ch.id}});
     }
     ImGui::EndChild();
     // drop targets: plugin -> insert slot, audio file -> this channel's track at the playhead

@@ -142,6 +142,8 @@ private:
     CommandRegistry registry_;
     ProjectSession session_;
     Recorder recorder_;
+    uint32_t diskErrorsSeen_ = 0;
+    void pollAudioDevice();
     WaveformStore waveforms_;
     json lastResult_ = json::object();
     std::string lastError_;

@@ -66,6 +66,7 @@ public:
     void setHostTempo(double bpm) override { tempo_.store(bpm); }
     json saveState() const override;
     void loadState(const json& state) override;
+    std::string loadWarning() const override;
 
     bool alive() const;
     // Plugin editor window (runs inside the sandbox process). Message thread.
@@ -99,6 +100,10 @@ private:
     int chunk_ = 512;
     mutable std::mutex stateMutex_;
     mutable json lastState_ = json::object(); // last good state, used after a crash
+    // A saved plugin chunk the plugin refused to load (other version, corrupt). It is
+    // carried along in every later save so it can be recovered - never dropped.
+    std::string rejectedState_;
+    std::string loadWarning_;
 };
 
 // Registers the "clap:" and "vst3:" prefixes with the ProcessorFactory. Idempotent.

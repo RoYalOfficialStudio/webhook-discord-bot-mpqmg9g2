@@ -347,7 +347,19 @@ void Recorder::drain(Config& cfg, bool final) {
             if (n == 0) break;
             buf.resize(static_cast<size_t>(n) * static_cast<size_t>(nCh));
             ts.fifo->read(buf.data(), buf.size());
-            if (ts.writing) ts.writer.writeInterleaved(buf.data(), static_cast<int>(n));
+            if (ts.writing && !ts.writer.failed() && !ts.writer.writeInterleaved(buf.data(), static_cast<int>(n))) {
+                // Disk full / drive removed: the take file keeps every frame written so
+                // far, the never-lose buffer still holds the performance, the UI is told.
+                ts.current.diskError = true;
+                {
+                    std::lock_guard l(diskErrorMutex_);
+                    diskErrorMessage_ = std::format("disk write failed for {} after {} frames - take is incomplete; "
+                                                    "use Recover Last Performance to rescue the audio",
+                                                    ts.current.path.filename().string(), ts.writer.framesWritten());
+                }
+                diskErrors_.fetch_add(1);
+                log::error("record", "disk write failed: {}", ts.current.path.string());
+            }
             ts.framesDrained += n;
         }
         if (final && ts.writing && !ts.hasPendingMarker) {

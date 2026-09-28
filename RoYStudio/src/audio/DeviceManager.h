@@ -58,15 +58,51 @@ public:
     int latencySamples() const;
     uint64_t callbackCount() const { return callbacks_.load(); }
 
+    // ---- device loss / reconnect (message thread) -----------------------------
+    // A device that stops without stop() being called (unplugged, taken exclusively
+    // by another app, driver reset) or whose callbacks stall for kStallSeconds is
+    // "lost". poll() reports it once, then retries opening it with backoff; when
+    // the named device stays gone it falls back to the system default device.
+    enum class Health { Ok, Lost, StillLost, Reconnected };
+    Health poll(double nowSeconds);
+    bool deviceLost() const { return lostHandled_; }
+    std::string lostReason() const;
+    int reconnectAttempts() const { return reconnectAttempts_; }
+    const AudioDeviceConfig& config() const { return cfg_; }
+    static constexpr double kStallSeconds = 3.0;
+    // FAULT INJECTION (tests only): stops the device behind the manager's back,
+    // which is exactly what the backend does when the device disappears.
+    void simulateDeviceLoss();
+    // FAULT INJECTION (tests only): reconnect attempts fail while this is set.
+    void simulateDeviceAbsent(bool absent) { simulateAbsent_ = absent; }
+    // FAULT INJECTION (tests only): the callback outputs silence without processing,
+    // like a driver that stopped delivering buffers.
+    void simulateCallbackStall(bool stall) { stallForTest_.store(stall); }
+
 private:
     struct Impl;
     static void dataCallback(void* device, void* output, const void* input, unsigned int frameCount);
+    static void notificationCallback(const void* notification);
+    void markLost(const char* reason);
     std::unique_ptr<Impl> impl_;
     AudioEngine* engine_ = nullptr;
     double actualRate_ = 0;
     int actualBuffer_ = 0;
     int inChannels_ = 0, outChannels_ = 0;
     std::atomic<uint64_t> callbacks_{0};
+    // loss detection
+    AudioDeviceConfig cfg_;
+    AudioEngine* lostEngine_ = nullptr;
+    std::atomic<bool> stopping_{false};
+    std::atomic<bool> lost_{false};
+    std::atomic<bool> stallForTest_{false};
+    std::atomic<const char*> lostReason_{nullptr};
+    bool lostHandled_ = false;
+    bool simulateAbsent_ = false;
+    int reconnectAttempts_ = 0;
+    double nextRetry_ = 0;
+    uint64_t lastCallbacks_ = 0;
+    double lastProgress_ = -1;
     AudioBuffer inPlanar_, outPlanar_;
 };
 
