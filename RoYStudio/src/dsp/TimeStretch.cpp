@@ -4,19 +4,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace roy::dsp {
 
-Channels timeStretch(const Channels& in, double ratio, double sr) {
-    if (in.empty() || in[0].empty()) return in;
-    if (std::fabs(ratio - 1.0) < 1e-6) return in;
-    ratio = std::clamp(ratio, 0.1, 10.0);
+namespace {
+Channels wsola(const Channels& in, int64_t outLen, const std::function<double(int64_t)>& nominalIn, double sr) {
     const size_t nCh = in.size();
     const int64_t inLen = static_cast<int64_t>(in[0].size());
     const int N = std::max(256, static_cast<int>(std::lround(0.030 * sr)) & ~1); // frame
     const int Hs = N / 2;                                                        // synthesis hop
     const int tol = Hs / 2;                                                      // search range
-    const int64_t outLen = static_cast<int64_t>(std::llround(static_cast<double>(inLen) * ratio));
 
     // periodic Hann window: sums to 1 at 50% overlap
     std::vector<float> win(static_cast<size_t>(N));
@@ -35,7 +33,7 @@ Channels timeStretch(const Channels& in, double ratio, double sr) {
     for (int64_t k = 0;; ++k) {
         const int64_t outPos = k * Hs;
         if (outPos >= outLen) break;
-        const int64_t nominal = static_cast<int64_t>(std::llround(static_cast<double>(outPos) / ratio));
+        const int64_t nominal = static_cast<int64_t>(std::llround(nominalIn(outPos)));
         int64_t best = nominal;
         if (k > 0) {
             const int64_t natural = prevPos + Hs;
@@ -88,6 +86,20 @@ Channels timeStretch(const Channels& in, double ratio, double sr) {
         }
     }
     return out;
+}
+} // namespace
+
+Channels timeStretch(const Channels& in, double ratio, double sr) {
+    if (in.empty() || in[0].empty()) return in;
+    if (std::fabs(ratio - 1.0) < 1e-6) return in;
+    ratio = std::clamp(ratio, 0.1, 10.0);
+    const int64_t outLen = static_cast<int64_t>(std::llround(static_cast<double>(in[0].size()) * ratio));
+    return wsola(in, outLen, [ratio](int64_t o) { return static_cast<double>(o) / ratio; }, sr);
+}
+
+Channels timeWarp(const Channels& in, int64_t outLen, const std::function<double(int64_t)>& inputPosForOutput, double sr) {
+    if (in.empty() || in[0].empty() || outLen <= 0) return in;
+    return wsola(in, outLen, inputPosForOutput, sr);
 }
 
 Channels stretchAndShift(const Channels& in, double ratio, double semitones, double sr) {

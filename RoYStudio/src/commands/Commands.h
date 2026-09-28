@@ -6,6 +6,7 @@
 #include "commands/UndoManager.h"
 #include "project/Project.h"
 
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <string>
@@ -20,6 +21,7 @@ struct CommandContext {
     Project& project;
     UndoManager& undo;
     ProjectRuntime* runtime = nullptr;          // optional: audio-side operations (normalize, analysis)
+    std::filesystem::path projectFolder;        // where new audio files (processed vocals, renders) are written
     std::function<void(bool structural)> changed; // notify: structural -> rebuild graph, else sync params
     json result = json::object();               // command output (e.g. created ids)
     std::string error;
@@ -60,5 +62,7 @@ private:
 
 // Registers the built-in command set (tracks, clips, mixer, automation, markers, MIDI, ...).
 void registerCoreCommands(CommandRegistry& r);
+// Vocal Lab commands (Pitch Guardian, Double Magnet, Vocal Doctor, region edits). Called by registerCoreCommands.
+void registerVocalCommands(CommandRegistry& r);
 
 } // namespace roy

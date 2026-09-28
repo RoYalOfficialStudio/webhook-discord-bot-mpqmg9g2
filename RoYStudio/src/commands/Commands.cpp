@@ -704,6 +704,7 @@ void registerCoreCommands(CommandRegistry& r) {
                if (!midi::writeMidiFile(argStr(a, "path"), d, false, &err)) return fail(ctx, err);
                return true;
            }});
+    registerVocalCommands(r);
 }
 
 } // namespace roy
