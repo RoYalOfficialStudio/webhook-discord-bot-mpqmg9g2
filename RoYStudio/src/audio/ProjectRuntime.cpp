@@ -1,6 +1,7 @@
 #include "audio/ProjectRuntime.h"
 #include "core/Log.h"
 #include "core/Math.h"
+#include "dsp/TimeStretch.h"
 #include "io/AudioFile.h"
 
 #include <algorithm>
@@ -13,7 +14,17 @@ namespace roy {
 
 namespace fs = std::filesystem;
 
-ProjectRuntime::ProjectRuntime(AudioEngine& engine) : engine_(engine) {}
+ProjectRuntime::ProjectRuntime(AudioEngine& engine) : engine_(engine) {
+    // Default clip time-stretch / pitch engine (WSOLA + band-limited resampling).
+    derive_ = [](const AudioData& src, double stretch, double semitones) {
+        auto d = std::make_shared<AudioData>();
+        d->sampleRate = src.sampleRate;
+        d->numChannels = src.numChannels;
+        d->channels = dsp::stretchAndShift(src.channels, stretch, semitones, src.sampleRate);
+        d->numFrames = d->channels.empty() ? 0 : static_cast<int64_t>(d->channels[0].size());
+        return d;
+    };
+}
 ProjectRuntime::~ProjectRuntime() = default;
 
 fs::path ProjectRuntime::resolveAssetPath(const AudioAsset& a) const {
@@ -454,6 +465,20 @@ void ProjectRuntime::syncParams(const Project& project) {
     }
     for (auto& t : project.tracks)
         if (auto m = monitorFlag(t.id)) m->store(t.monitor);
+
+    // The model is the source of truth for plugin parameters (undo/redo, load).
+    auto applyParams = [&](const PluginSlot& slot) {
+        auto proc = processorForSlot(slot.id);
+        if (!proc || !slot.state.is_object()) return;
+        auto it = slot.state.find("params");
+        if (it == slot.state.end() || !it->is_object()) return;
+        for (auto& [k, v] : it->items())
+            if (v.is_number()) proc->setParam(k, v.get<float>());
+    };
+    for (auto& c : project.channels)
+        for (auto& s : c.inserts) applyParams(s);
+    for (auto& t : project.tracks)
+        if (t.instrument) applyParams(*t.instrument);
 }
 
 } // namespace roy
