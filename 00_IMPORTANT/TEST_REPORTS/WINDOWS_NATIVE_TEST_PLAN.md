@@ -5,9 +5,11 @@ environment (Linux + Wine + null audio backend) cannot test. Record every result
 PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TEST_REPORTS/`.
 
 ## 0. Preparation
-- Build: Visual Studio 2022 (x64, Release) – `cmake -S RoYStudio -B build -G "Visual Studio 17 2022" -A x64` then build `ALL_BUILD`,
-  or use the mingw-built binaries from `build-win/` (roy_studio.exe, roy_cli.exe, roy_plugin_host.exe, roy_tests.exe).
-- Keep `roy_plugin_host.exe` next to `roy_studio.exe`.
+- Easiest: the test kit ZIP (`cmake --build build-win --target package` → `RoYStudio-0.2.0-win64.zip`):
+  programs + LAME DLL + licences + `roy_tests.exe` with `test_plugins\` (CLAP/VST3 test plugins, MOCK stem engine).
+  Unzip anywhere; `README_TESTKIT.txt` lists the quick check. The tests find their resources next to `roy_tests.exe`.
+- Or build: Visual Studio 2022 (x64, Release) – `cmake -S RoYStudio -B build -G "Visual Studio 17 2022" -A x64` then build `ALL_BUILD`.
+- Keep `roy_plugin_host.exe` and `roy_mp3lame.dll` next to `roy_studio.exe`.
 - Note: CPU, RAM, GPU, Windows build, audio interface + driver version, buffer/sample rate defaults.
 - Logs: `%APPDATA%\RoYStudio\roy_studio.log`, crash reports: `%APPDATA%\RoYStudio\CrashReports\`.
 
@@ -31,7 +33,9 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 |---|---|---|
 | 3.1 | Audio menu: 44.1 / 48 / 96 kHz | status bar shows the actual rate, playback correct pitch |
 | 3.2 | Buffer 64 / 128 / 256 / 512 / 1024 | stable playback; note the smallest buffer without xruns (status bar "xruns") |
-| 3.3 | Unplug/replug USB interface during playback | no crash; audio stops; restart via Audio menu works (report behaviour) |
+| 3.3 | Unplug the USB interface during playback | no crash; message "AUDIO DEVICE LOST"; transport stops; a running recording is stopped and its take kept |
+| 3.3b | Plug it back in | RoY reconnects automatically within a few seconds ("audio device reconnected"); if the device stays gone it falls back to the Windows default device |
+| 3.3c | Start another app that takes the device exclusively | same as 3.3 (loss detected, reconnect when released) |
 | 3.4 | ASIO | CURRENTLY NOT SUPPORTED (miniaudio has no ASIO backend) – verify message/behaviour, mark BLOCKED |
 
 ## 4. Recording & monitoring
@@ -50,6 +54,10 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 | 5.2 | Build a beat in CHANNELS, 808 in PIANO ROLL | audible immediately while playing |
 | 5.3 | MIDI keyboard input (if supported yet) | currently NOT IMPLEMENTED for live input – mark BLOCKED/UNTESTED |
 | 5.4 | VOCALS: Pitch analysis + Pitch Guardian on a real sung take | corrections audible and natural; original file unchanged |
+| 5.5 | VOCALS: Preview → pitch editor shows waveform, pitch curve, notes with IN SCALE / OFF KEY / UNCERTAIN / CORRECTED | statuses plausible for your take |
+| 5.6 | Apply, then A ORIGINAL / B CORRECTED while playing | instant switch, both play in sync; Apply again with other settings starts from the original |
+| 5.7 | BEATS: Generate (Trap/Drill/...), groove templates, note repeat 1/16T, pattern chain | timing feel audible, one undo per action |
+| 5.8 | BEATS: 808 Start Phase / Phase Reset, "Analyze kick vs 808" | plots appear, suggestions sensible, nothing changed in the project |
 
 ## 6. Plugins
 | # | Step | Expected |
@@ -65,6 +73,7 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 |---|---|---|
 | 7.1 | Export WAV 16/24/32f, FLAC, MP3 128/320 | files play in Windows Media Player / VLC, loudness as reported |
 | 7.2 | Export into a read-only folder | clear error, project untouched |
+| 7.2b | Export/record onto an almost full USB stick | clear "disk full" error, previous files intact, recorded take keeps what was written, "Recover last performance" rescues the rest |
 | 7.3 | Save/Reload, Backups folder, Undo/Redo across 50 edits | identical state |
 
 ## 8. Crash recovery

@@ -42,7 +42,16 @@ struct AllocationCounter {
 // A scratch directory unique to the running test (removed at start of test).
 std::filesystem::path tempDir(const std::string& name);
 
+// Test resources (test plugins, plugin host, MOCK engines): the build-tree path baked in by CMake,
+// or - when the test package was copied to another machine (native Windows validation) - the
+// same name next to the roy_tests executable (`relative`, or the file name of `buildPath`).
+std::string testPath(const char* buildPath, const char* relative = nullptr);
+
 } // namespace roytest
+
+#define ROY_TEST_PLUGIN_DIR ::roytest::testPath(ROY_TEST_PLUGIN_DIR_BUILD, "test_plugins")
+#define ROY_PLUGIN_HOST_EXE ::roytest::testPath(ROY_PLUGIN_HOST_EXE_BUILD)
+#define ROY_TEST_STEM_ENGINE ::roytest::testPath(ROY_TEST_STEM_ENGINE_BUILD, "test_plugins")
 
 #define ROY_CAT2(a, b) a##b
 #define ROY_CAT(a, b) ROY_CAT2(a, b)

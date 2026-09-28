@@ -1,6 +1,7 @@
 // Test runner: runs all registered tests, prints results, optionally writes a
 // JUnit-style XML and a Markdown report (--report <dir>).
 #include "TestFramework.h"
+#include "core/Process.h"
 #include "core/Log.h"
 
 #include <chrono>
@@ -38,6 +39,20 @@ void recordCheck(bool ok, const std::string& expr, const char* file, int line) {
 }
 
 int checksFailedInCurrentTest() { return g_failedChecks; }
+
+std::string testPath(const char* buildPath, const char* relative) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    // ROY_TESTKIT_LOCAL=1: always use the copies next to roy_tests (verifies an unpacked test kit)
+    const char* local = std::getenv("ROY_TESTKIT_LOCAL");
+    if (!(local && *local == '1') && fs::exists(buildPath, ec)) return buildPath;
+    const fs::path exeDir = roy::executableDirectory();
+    fs::path p = exeDir / (relative ? fs::path(relative) : fs::path(buildPath).filename());
+    // an executable that lives inside a relative folder (e.g. test_plugins/roy_test_stem_engine)
+    if (relative && fs::is_directory(p, ec) && !fs::path(buildPath).filename().empty() && fs::path(buildPath).filename() != fs::path(relative))
+        p /= fs::path(buildPath).filename();
+    return p.string();
+}
 
 std::filesystem::path tempDir(const std::string& name) {
     auto base = std::filesystem::temp_directory_path() / "roy_tests" / name;

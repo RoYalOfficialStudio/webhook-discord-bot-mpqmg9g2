@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(RoYStudio VERSION 0.1.0 LANGUAGES C CXX)
+project(RoYStudio VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -139,9 +139,39 @@ if(ROY_BUILD_TESTS)
   target_link_libraries(roy_test_stem_engine PRIVATE roy_core)
   set_target_properties(roy_test_stem_engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test_plugins)
   target_compile_definitions(roy_tests PRIVATE
-    ROY_TEST_PLUGIN_DIR="${CMAKE_BINARY_DIR}/test_plugins"
-    ROY_PLUGIN_HOST_EXE="$<TARGET_FILE:roy_plugin_host>"
-    ROY_TEST_STEM_ENGINE="$<TARGET_FILE:roy_test_stem_engine>")
+    ROY_TEST_PLUGIN_DIR_BUILD="${CMAKE_BINARY_DIR}/test_plugins"
+    ROY_PLUGIN_HOST_EXE_BUILD="$<TARGET_FILE:roy_plugin_host>"
+    ROY_TEST_STEM_ENGINE_BUILD="$<TARGET_FILE:roy_test_stem_engine>")
   add_dependencies(roy_tests roy_plugin_host roy_mp3lame roy_test_stem_engine ${ROY_TEST_PLUGINS})
   add_test(NAME roy_tests COMMAND roy_tests)
 endif()
+
+# ---------------------------------------------------------------- package for native testing
+# `cmake --build <dir> --target package` -> RoYStudio-<version>-<system>.zip with the programs, the
+# LAME library, all third-party licence texts and (component "tests") the self-contained test kit
+# (roy_tests + test plugins + MOCK engine) for validation on a real Windows PC.
+set(ROY_PKG_TARGETS roy_cli roy_plugin_host roy_bench)
+if(TARGET roy_studio)
+  list(APPEND ROY_PKG_TARGETS roy_studio)
+endif()
+install(TARGETS ${ROY_PKG_TARGETS} RUNTIME DESTINATION . COMPONENT app)
+install(TARGETS roy_mp3lame RUNTIME DESTINATION . LIBRARY DESTINATION . COMPONENT app)
+install(FILES third_party/THIRD_PARTY_NOTICES.md DESTINATION licenses COMPONENT app)
+foreach(lic clap/LICENSE imgui/LICENSE.txt lame/COPYING lame/LICENSE miniaudio/LICENSE nlohmann/LICENSE.MIT vst3sdk/LICENSE.txt)
+  get_filename_component(lic_dir ${lic} DIRECTORY)
+  install(FILES third_party/${lic} DESTINATION licenses/${lic_dir} COMPONENT app)
+endforeach()
+install(FILES packaging/README_TESTKIT.txt DESTINATION . COMPONENT app)
+if(ROY_BUILD_TESTS)
+  install(TARGETS roy_tests RUNTIME DESTINATION . COMPONENT tests)
+  install(TARGETS roy_test_stem_engine RUNTIME DESTINATION test_plugins COMPONENT tests)
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/test_plugins/ DESTINATION test_plugins COMPONENT tests
+          FILES_MATCHING PATTERN "*.clap" PATTERN "*.vst3" PATTERN "*.so" PATTERN "*.dll" PATTERN "*.json")
+endif()
+set(CPACK_GENERATOR ZIP)
+set(CPACK_PACKAGE_NAME RoYStudio)
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VENDOR "RoY Studio")
+set(CPACK_ARCHIVE_COMPONENT_INSTALL OFF) # one zip with app + test kit
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
+include(CPack)

@@ -1,5 +1,8 @@
 // roy_bench - performance benchmarks for RoY Studio.
-//   roy_bench [--out <dir>] [--sizes 10,50,100,150] [--plugins <dir>] [--seconds N]
+//   roy_bench [--out <dir>] [--sizes 10,50,100,150] [--plugins <dir>] [--seconds N] [--baseline <benchmark.json>]
+// With --baseline the results are compared with an earlier run; a CPU (mean) increase or an
+// offline-render slowdown beyond the tolerance (default 15 %, --tolerance) is reported as
+// REGRESSION and the exit code is 2 - regressions are never silent.
 // Test projects (generated, MOCK content: synthetic audio/MIDI/patterns):
 //   each "track group" = audio track (30 s clip, EQ + compressor), MIDI synth track (chords,
 //   EQ), beat track (pattern, compressor); plus 4 busses with reverb/delay and a master chain.
@@ -237,7 +240,8 @@ int main(int argc, char** argv) {
     registerBuiltinProcessors();
     fs::path outDir = fs::temp_directory_path() / "roy_bench";
     std::vector<int> sizes = {10, 50, 100, 150};
-    fs::path pluginDir;
+    fs::path pluginDir, baselineFile;
+    double tolerance = 0.15;
     double seconds = 20.0;
     int buffer = 256;
     for (int i = 1; i < argc; ++i) {
@@ -246,6 +250,8 @@ int main(int argc, char** argv) {
         else if (a == "--plugins" && i + 1 < argc) pluginDir = argv[++i];
         else if (a == "--seconds" && i + 1 < argc) seconds = std::atof(argv[++i]);
         else if (a == "--buffer" && i + 1 < argc) buffer = std::atoi(argv[++i]);
+        else if (a == "--baseline" && i + 1 < argc) baselineFile = argv[++i];
+        else if (a == "--tolerance" && i + 1 < argc) tolerance = std::atof(argv[++i]);
         else if (a == "--sizes" && i + 1 < argc) {
             sizes.clear();
             std::stringstream ss(argv[++i]);
@@ -296,6 +302,37 @@ int main(int argc, char** argv) {
                           rep.modulesFound, rep.pluginsOk, rep.crashed, rep.timeouts, s, o.timeoutMs);
         results.push_back({{"pluginScan", rep.toJson()}, {"seconds", s}});
     }
+    int regressions = 0;
+    if (!baselineFile.empty()) {
+        auto text = files::readAll(baselineFile);
+        const json base = text ? json::parse(*text, nullptr, false) : json();
+        md += std::format("\n## Comparison with baseline {}\n\nTolerance {:.0f} %. CPU values in % of the buffer budget; render in x realtime.\n\n",
+                          baselineFile.filename().string(), tolerance * 100);
+        if (!base.is_array()) {
+            md += "Baseline could not be read - no comparison.\n";
+        } else {
+            md += "| Size | Threads | CPU mean (base -> now) | CPU p99 | Render | Verdict |\n|---|---|---|---|---|---|\n";
+            for (auto& r : results) {
+                if (!r.contains("size")) continue;
+                const json* b = nullptr;
+                for (auto& x : base)
+                    if (x.value("size", std::string()) == r["size"].get<std::string>() && x.value("threads", 0) == r["threads"].get<int>()) b = &x;
+                if (!b) continue;
+                const double m0 = b->value("cpuMean", 0.0), m1 = r.value("cpuMean", 0.0);
+                const double p0 = b->value("cpuP99", 0.0), p1 = r.value("cpuP99", 0.0);
+                const double x0 = b->value("renderRealtimeFactor", 0.0), x1 = r.value("renderRealtimeFactor", 0.0);
+                // absolute floor: changes below 2 % of the budget are measurement noise on a shared VM
+                const bool cpuWorse = m1 > m0 * (1 + tolerance) && m1 - m0 > 0.02;
+                const bool renderWorse = x0 > 0 && x1 < x0 / (1 + tolerance);
+                const bool regressed = cpuWorse || renderWorse;
+                regressions += regressed;
+                md += std::format("| {} | {} | {:.0f} -> {:.0f} % | {:.0f} -> {:.0f} % | {:.1f} -> {:.1f}x | {} |\n", r["size"].get<std::string>(),
+                                  r["threads"].get<int>(), m0 * 100, m1 * 100, p0 * 100, p1 * 100, x0, x1,
+                                  regressed ? "REGRESSION" : (m1 < m0 / (1 + tolerance) ? "faster" : "ok"));
+            }
+            md += regressions ? std::format("\n**{} REGRESSION(S)** - investigate before release.\n", regressions) : "\nNo regression beyond the tolerance.\n";
+        }
+    }
     md += processorCosts(buffer);
     md += "\nCPU = callback wall time / buffer duration. Threads = audio thread + mixing workers (channels of one routing level run\n"
           "in parallel; output is bit-identical to single-threaded). Blocks over budget would be audible dropouts (xruns) on a\n"
@@ -303,5 +340,5 @@ int main(int argc, char** argv) {
     files::atomicWrite(outDir / "benchmark.json", results.dump(2));
     files::atomicWrite(outDir / "benchmark.md", md);
     std::printf("%s", md.c_str());
-    return 0;
+    return regressions ? 2 : 0;
 }

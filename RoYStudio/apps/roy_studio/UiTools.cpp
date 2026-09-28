@@ -200,6 +200,8 @@ void drawVocals(App& app) {
             const auto& a1 = curve[i];
             if (a0[1].is_null() || a1[1].is_null()) continue;
             const float conf = a1[2].get<float>();
+            // break the line at detector jumps (onsets, octave slips) and unreliable frames
+            if (std::fabs(a1[1].get<double>() - a0[1].get<double>()) > 3.0 || conf < 0.5f || a0[2].get<float>() < 0.5f) continue;
             dl->AddLine(ImVec2(X(a0[0].get<double>()), Y(a0[1].get<double>())), ImVec2(X(a1[0].get<double>()), Y(a1[1].get<double>())),
                         col::rgb(0xFFFFF0, static_cast<int>(60 + 195 * std::clamp(conf, 0.0f, 1.0f))), 1.2f * dpi);
         }
