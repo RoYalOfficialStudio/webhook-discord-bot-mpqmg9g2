@@ -68,5 +68,7 @@ void registerVocalCommands(CommandRegistry& r);
 void registerProductionCommands(CommandRegistry& r);
 // Master chain presets and export. Called by registerCoreCommands.
 void registerMasterCommands(CommandRegistry& r);
+// Mix analysis, energy map, sections, project assistant, Vocal DNA. Called by registerCoreCommands.
+void registerIntelligenceCommands(CommandRegistry& r);
 
 } // namespace roy

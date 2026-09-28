@@ -710,6 +710,7 @@ void registerCoreCommands(CommandRegistry& r) {
     registerVocalCommands(r);
     registerProductionCommands(r);
     registerMasterCommands(r);
+    registerIntelligenceCommands(r);
 }
 
 } // namespace roy
