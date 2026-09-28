@@ -274,6 +274,14 @@ void drawPlaylist(App& app) {
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ROY_FILE")) {
             const std::string path(static_cast<const char*>(pl->Data), static_cast<size_t>(pl->DataSize));
+            if (laneTrack && laneTrack->type == TrackType::Midi) { // Browser -> Sampler (MIDI track)
+                const std::string midiTrack = laneTrack->id;
+                const std::string asset = app.importAsset(path);
+                if (!asset.empty()) app.run("LoadSampleIntoSampler", {{"trackId", midiTrack}, {"assetId", asset}, {"rootNote", 60}});
+                ImGui::EndDragDropTarget();
+                ImGui::EndChild();
+                return;
+            }
             std::string trackId = laneTrack && laneTrack->type == TrackType::Audio ? laneTrack->id : "";
             if (trackId.empty()) {
                 app.run("AddTrack", {{"type", "audio"}, {"name", "Audio"}});

@@ -20,6 +20,7 @@ std::vector<std::vector<float>> renderOffline(AudioEngine& engine, const Offline
     const int64_t savedLoopStart = t.loopStart(), savedLoopEnd = t.loopEnd();
     const bool savedMetro = engine.metronome().enabled();
 
+    engine.setOfflineRendering(true); // no browser preview in renders
     t.stop();
     t.setCountInSamples(0);
     t.setPreRollSamples(0);
@@ -48,6 +49,7 @@ std::vector<std::vector<float>> renderOffline(AudioEngine& engine, const Offline
         }
     }
     engine.setCapture(nullptr);
+    engine.setOfflineRendering(false);
     t.stop();
     t.setCountInSamples(savedCountIn);
     t.setPreRollSamples(savedPreRoll);

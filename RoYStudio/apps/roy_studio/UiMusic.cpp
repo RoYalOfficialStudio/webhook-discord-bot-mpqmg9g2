@@ -227,7 +227,17 @@ void drawChannels(App& app) {
         if (toggleButton("M", row.muted, col::Orange, ImVec2(22 * dpi, stepH)))
             app.run("SetRowMix", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"muted", !row.muted}});
         ImGui::SameLine();
-        ImGui::Button(row.name.c_str(), ImVec2(nameW, stepH));
+        ImGui::Button(row.sampleAssetId.empty() ? row.name.c_str() : ("~ " + row.name).c_str(), ImVec2(nameW, stepH));
+        if (ImGui::BeginDragDropTarget()) { // Browser -> Drum Pad
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ROY_FILE")) {
+                const fs::path file(std::string(static_cast<const char*>(pl->Data), static_cast<size_t>(pl->DataSize)));
+                const std::string asset = app.importAsset(file);
+                if (!asset.empty()) app.run("SetRowSample", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"assetId", asset}, {"name", file.stem().string()}});
+            }
+            ImGui::EndDragDropTarget();
+        }
+        if (!row.sampleAssetId.empty() && ImGui::IsItemClicked(ImGuiMouseButton_Right))
+            app.run("SetRowSample", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"assetId", ""}});
         ImGui::SameLine();
         float vol = row.volume;
         ImGui::SetNextItemWidth(60 * dpi);

@@ -105,6 +105,38 @@ void registerBeatCommands(CommandRegistry& r) {
                row->solo = a.value("solo", row->solo);
                return true;
            }});
+    // Drum pad sample: the row plays this asset instead of the synthesized drum voice.
+    r.add({"SetRowSample", "Set Drum Pad Sample", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Pattern* p = patternArg(ctx, a);
+               if (!p) return false;
+               PatternRow* row = rowArg(ctx, *p, a);
+               if (!row) return false;
+               const std::string asset = str(a, "assetId");
+               if (!asset.empty() && !ctx.project.findAsset(asset)) return fail(ctx, "asset not found");
+               row->sampleAssetId = asset;
+               if (a.contains("name") && !str(a, "name").empty()) row->name = str(a, "name");
+               return true;
+           }});
+    // Sampler: map one sample chromatically (root note) on a MIDI track (switches it to RoY Sampler).
+    r.add({"LoadSampleIntoSampler", "Load Sample Into Sampler", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(str(a, "trackId"));
+               if (!t || t->type == TrackType::Audio) return fail(ctx, "MIDI/beat track required");
+               const std::string asset = str(a, "assetId");
+               if (!ctx.project.findAsset(asset)) return fail(ctx, "asset not found");
+               PluginSlot slot;
+               slot.id = t->instrument && t->instrument->typeId == "roy.sampler" ? t->instrument->id : files::newId();
+               slot.typeId = "roy.sampler";
+               slot.name = "RoY Sampler";
+               slot.state = t->instrument && t->instrument->typeId == "roy.sampler" ? t->instrument->state : json::object();
+               if (!a.value("append", false)) slot.state["zones"] = json::array();
+               slot.state["zones"].push_back({{"assetId", asset}, {"root", static_cast<int>(num(a, "rootNote", 60))}, {"lo", 0}, {"hi", 127},
+                                             {"loVel", 1}, {"hiVel", 127}, {"start", 0}, {"end", -1}, {"loop", 0}, {"loopStart", 0},
+                                             {"loopEnd", -1}, {"oneShot", a.value("oneShot", false)}, {"reverse", false}, {"gainDb", 0.0},
+                                             {"tune", 0.0}, {"pan", 0.0}, {"choke", 0}});
+               t->instrument = slot;
+               ctx.result["id"] = slot.id;
+               return true;
+           }});
     r.add({"AddPatternClip", "Place Pattern", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
                Track* t = ctx.project.findTrack(str(a, "trackId"));
                if (!t || t->type != TrackType::Beat) return fail(ctx, "beat track not found");

@@ -312,6 +312,7 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
     if (!g) {
         for (int c = 0; c < numOutputs; ++c)
             for (int i = 0; i < frames; ++i) outputs[c][outOffset + i] = (c % 2 == 0 ? mL : mR)[i];
+        if (!offlineRendering_) preview_.render(outputs, numOutputs, outOffset, frames);
         return;
     }
 
@@ -355,6 +356,7 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
     const float* outL = master.out.channel(0);
     const float* outR = master.out.channel(1);
     uint64_t fixes = 0;
+    const bool previewOn = !offlineRendering_ && numOutputs >= 1;
     for (int c = 0; c < numOutputs; ++c) {
         float* dst = outputs[c] + outOffset;
         if (numOutputs == 1) {
@@ -372,6 +374,7 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
                 ++fixes;
             }
     }
+    if (previewOn) preview_.render(outputs, numOutputs, outOffset, frames);
     if (fixes) {
         nonFinite_.fetch_add(fixes, std::memory_order_relaxed);
         log::audioEvent(log::Level::Error, "non-finite samples removed at output", static_cast<double>(fixes));

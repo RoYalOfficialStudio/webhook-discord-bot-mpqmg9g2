@@ -3,6 +3,7 @@
 // current RenderGraph. process() is called by the device callback or by the
 // offline renderer - same code path for live playback and export.
 #include "audio/Metronome.h"
+#include "audio/PreviewPlayer.h"
 #include "audio/RenderGraph.h"
 #include "audio/Transport.h"
 
@@ -60,6 +61,8 @@ public:
     Transport& transport() { return transport_; }
     const Transport& transport() const { return transport_; }
     Metronome& metronome() { return metronome_; }
+    // Browser audition voice (mixed after the master, never exported).
+    PreviewPlayer& preview() { return preview_; }
 
     // Message thread: installs a new graph. The old one is released later by
     // collectGarbage() once the audio thread no longer uses it.
@@ -70,6 +73,8 @@ public:
     // current graph to its initial state, so an offline render does not depend on
     // what was played before (deterministic exports).
     void resetProcessingState();
+    // Offline renders exclude the preview voice.
+    void setOfflineRendering(bool on) { offlineRendering_ = on; }
     // True while a callback is running or device is active.
     void setDeviceRunning(bool running) { deviceRunning_.store(running); }
     bool isDeviceRunning() const { return deviceRunning_.load(); }
@@ -125,6 +130,8 @@ private:
     int maxBlock_ = 512;
     Transport transport_;
     Metronome metronome_;
+    PreviewPlayer preview_;
+    bool offlineRendering_ = false;
     std::atomic<RenderGraph*> current_{nullptr};
     std::atomic<InputListener*> listener_{nullptr};
     std::atomic<bool> deviceRunning_{false};

@@ -240,7 +240,13 @@ void drawPlugins(App& app) {
             ImGui::PushID(k++);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::TextUnformatted(r.value("name", "").c_str());
+            ImGui::Selectable(r.value("name", "").c_str(), false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap);
+            if (r.value("status", "") == "ok" && ImGui::BeginDragDropSource()) {
+                const std::string payload = r.value("typeId", "") + "\n" + r.value("name", "");
+                ImGui::SetDragDropPayload("ROY_PLUGIN", payload.data(), payload.size());
+                ImGui::Text("%s -> drop on a mixer strip", r.value("name", "").c_str());
+                ImGui::EndDragDropSource();
+            }
             if (ImGui::IsItemHovered() && !r.value("path", "").empty()) ImGui::SetTooltip("%s", r.value("path", "").c_str());
             ImGui::TableNextColumn();
             ImGui::TextUnformatted(r.value("vendor", "").c_str());
@@ -328,11 +334,11 @@ void drawBrowser(App& app) {
     static int tab = 0;
     static std::vector<std::pair<fs::path, bool>> entries;
     static fs::path listed;
-    static std::vector<std::string> favorites;
+    static fs::path selected;
     sectionTitle("BROWSER");
-    const char* tabs[] = {"Project", "Samples", "Home"};
-    for (int i = 0; i < 3; ++i) {
-        if (i) ImGui::SameLine();
+    const char* tabs[] = {"Project", "Samples", "Drums", "808", "Loops", "Vocals", "Home"};
+    for (int i = 0; i < 7; ++i) {
+        if (i && i != 4) ImGui::SameLine();
         if (toggleButton(tabs[i], tab == i, col::Gold)) {
             tab = i;
             rootBuf[0] = 0;
@@ -341,7 +347,7 @@ void drawBrowser(App& app) {
     if (!rootBuf[0]) {
         fs::path root;
         if (tab == 0 && app.hasProject()) root = app.session().folder();
-        else if (tab == 1) root = files::userDataDirectory() / "Samples";
+        else if (tab >= 1 && tab <= 5) root = browser::categoryFolder(tabs[tab]);
         else {
             const char* h = std::getenv(
 #ifdef _WIN32
@@ -352,14 +358,26 @@ void drawBrowser(App& app) {
             );
             root = h ? fs::path(h) : fs::current_path();
         }
-        std::error_code ec;
-        fs::create_directories(root, ec);
         std::snprintf(rootBuf, sizeof(rootBuf), "%s", root.string().c_str());
     }
     ImGui::SetNextItemWidth(-1);
     ImGui::InputText("##root", rootBuf, sizeof(rootBuf));
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##filter", "search...", filter, sizeof(filter));
+    // preview controls
+    ImGui::Checkbox("Auto", &app.previewAuto);
+    ImGui::SameLine();
+    ImGui::Checkbox("Tempo sync", &app.previewTempoSync);
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::SliderFloat("##pvol", &app.previewVolume, 0.0f, 1.0f, "Preview %.2f")) app.previewer().setGain(app.previewVolume);
+    const bool playing = app.previewer().playing();
+    if (toggleButton(playing ? "STOP" : "PREVIEW", playing, col::Green, ImVec2(-1, 0))) {
+        if (playing) app.previewer().stop();
+        else if (!selected.empty()) app.previewFile(selected);
+    }
+    if (playing && app.lastPreview.ok)
+        ImGui::TextDisabled("%s  %.1f s%s", app.previewer().current().filename().string().c_str(), app.lastPreview.seconds,
+                            app.lastPreview.sourceBpm > 0 ? std::format("  {:.0f} BPM ({})", app.lastPreview.sourceBpm, app.lastPreview.bpmSource).c_str() : "");
     const fs::path root(rootBuf);
     if (listed != root || ImGui::GetFrameCount() % 120 == 0) {
         entries.clear();
@@ -382,14 +400,17 @@ void drawBrowser(App& app) {
         std::string low = name;
         std::transform(low.begin(), low.end(), low.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
         if (!f.empty() && low.find(f) == std::string::npos) continue;
-        const std::string ext = path.extension().string();
-        const bool audio = ext == ".wav" || ext == ".WAV" || ext == ".flac" || ext == ".mp3" || ext == ".aif" || ext == ".aiff";
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        const bool audio = ext == ".wav" || ext == ".flac" || ext == ".mp3" || ext == ".aif" || ext == ".aiff" || ext == ".ogg";
         const bool project = ext == ".roy";
         const bool midi = ext == ".mid" || ext == ".midi";
         if (!dir && !audio && !project && !midi) continue;
         ImGui::PushStyleColor(ImGuiCol_Text, ImGui::ColorConvertU32ToFloat4(dir ? col::Gold : project ? col::Orange : audio ? col::Ivory : col::Green));
-        const std::string label = (dir ? "[+] " : audio ? "~ " : project ? "* " : "# ") + name;
-        if (ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick)) {
+        const bool isPlaying = playing && app.previewer().current() == path;
+        const std::string label = (dir ? "[+] " : audio ? (isPlaying ? "> " : "~ ") : project ? "* " : "# ") + name;
+        if (ImGui::Selectable(label.c_str(), selected == path, ImGuiSelectableFlags_AllowDoubleClick)) {
+            selected = path;
             if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                 if (dir) std::snprintf(rootBuf, sizeof(rootBuf), "%s", path.string().c_str());
                 else if (project) app.openProject(path);
@@ -403,6 +424,10 @@ void drawBrowser(App& app) {
                     app.run("ImportAudio", {{"path", path.string()}, {"trackId", tid}, {"startBeat", app.positionBeats()}});
                 } else if (midi && app.hasProject() && !app.selTrack.empty())
                     app.run("ImportMidi", {{"path", path.string()}, {"trackId", app.selTrack}});
+            } else if (audio) {
+                // one click: preview; click the playing file again: stop
+                if (isPlaying) app.previewer().stop();
+                else if (app.previewAuto) app.previewFile(path);
             }
         }
         ImGui::PopStyleColor();
@@ -413,9 +438,8 @@ void drawBrowser(App& app) {
             ImGui::EndDragDropSource();
         }
     }
-    ImGui::TextDisabled("double-click: open / import at playhead | drag audio onto a track");
+    ImGui::TextDisabled("click: preview | double-click: import at playhead | drag onto playlist, drum pad, sampler lane or mixer strip");
     ImGui::EndChild();
-    (void)favorites;
 }
 
 // ---------------------------------------------------------------- PROJECT

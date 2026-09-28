@@ -207,6 +207,27 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
         if (toggleButton("Ø", ch.phaseInvert, col::Ivory, bs)) app.run("InvertPhase", {{"channelId", ch.id}, {"invert", !ch.phaseInvert}});
     }
     ImGui::EndChild();
+    // drop targets: plugin -> insert slot, audio file -> this channel's track at the playhead
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ROY_PLUGIN")) {
+            const std::string s(static_cast<const char*>(pl->Data), static_cast<size_t>(pl->DataSize));
+            const auto nl = s.find('\n');
+            const std::string typeId = s.substr(0, nl), name = nl == std::string::npos ? typeId : s.substr(nl + 1);
+            if (app.run("AddInsert", {{"channelId", ch.id}, {"typeId", typeId}, {"name", name}})) {
+                app.pluginDb().markUsed(typeId);
+                app.savePluginDb();
+            }
+        }
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ROY_FILE")) {
+            const std::string path(static_cast<const char*>(pl->Data), static_cast<size_t>(pl->DataSize));
+            for (auto& t : app.project().tracks)
+                if (t.channelId == ch.id && t.type == TrackType::Audio) {
+                    app.run("ImportAudio", {{"path", path}, {"trackId", t.id}, {"startBeat", app.positionBeats()}});
+                    break;
+                }
+        }
+        ImGui::EndDragDropTarget();
+    }
     ImGui::PopStyleColor();
     ImGui::PopID();
 }

@@ -68,6 +68,7 @@ bool App::init(const AppOptions& o) {
     engine_.prepare(audioCfg_.sampleRate, audioCfg_.bufferSize);
     engine_.setWorkerThreads(AudioEngine::defaultWorkerThreads()); // multi-core mixing
     runtime_ = std::make_unique<ProjectRuntime>(engine_);
+    previewer_ = std::make_unique<browser::Previewer>(engine_);
     if (!restartAudio(audioCfg_)) message(1, "audio device unavailable: " + audioStatus_ + " - running without audio output");
     engine_.setInputListener(&recorder_);
     recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
@@ -295,6 +296,7 @@ std::string App::positionText() const {
 void App::tick() {
     log::flushAudioEvents();
     engine_.collectGarbage();
+    if (previewer_) previewer_->collect();
     if (!project_) return;
     // finished takes -> project (one undo step per take)
     for (auto& take : recorder_.collectFinishedTakes()) {
@@ -330,6 +332,22 @@ void App::tick() {
         runtime_->captureProcessorStates(*project_);
         if (session_.autosave(*project_)) lastAutosave_ = now;
     }
+}
+
+browser::PreviewInfo App::previewFile(const fs::path& file) {
+    browser::PreviewOptions o;
+    o.gain = previewVolume;
+    o.tempo = previewTempoSync ? browser::TempoMode::Project : browser::TempoMode::Original;
+    o.projectBpm = project_ ? project_->tempo.tempoAt(positionBeats()) : 120.0;
+    lastPreview = previewer_->preview(file, o);
+    if (!lastPreview.ok) message(1, "preview: " + lastPreview.error);
+    if (!device_.isRunning()) message(1, "preview: audio device is not running");
+    return lastPreview;
+}
+
+std::string App::importAsset(const fs::path& file) {
+    if (!run("ImportAudio", {{"path", file.string()}, {"copy", true}})) return {};
+    return lastResult_.value("assetId", "");
 }
 
 std::shared_ptr<const WaveformCache> App::waveform(const std::string& assetId) {

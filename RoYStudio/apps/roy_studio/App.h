@@ -3,6 +3,7 @@
 // through run(<command>) - the same command system the CLI and tests use - so
 // every UI action is undoable, validated and logged.
 #include "arrange/WaveformCache.h"
+#include "browser/SamplePreview.h"
 #include "audio/AudioEngine.h"
 #include "audio/DeviceManager.h"
 #include "audio/ProjectRuntime.h"
@@ -89,6 +90,16 @@ public:
     bool restartAudio(const AudioDeviceConfig& cfg);
     const AudioDeviceConfig& audioConfig() const { return audioCfg_; }
 
+    // ---- browser preview ---------------------------------------------------------
+    browser::Previewer& previewer() { return *previewer_; }
+    browser::PreviewInfo previewFile(const fs::path& file);
+    bool previewAuto = true;
+    bool previewTempoSync = false;
+    float previewVolume = 0.8f;
+    browser::PreviewInfo lastPreview;
+    // Import a dropped/double-clicked file as a project asset (copied into the project). Returns asset id.
+    std::string importAsset(const fs::path& file);
+
     // ---- waveforms / assets --------------------------------------------------------
     std::shared_ptr<const WaveformCache> waveform(const std::string& assetId);
 
@@ -124,6 +135,7 @@ private:
     AudioDeviceConfig audioCfg_;
     std::string audioStatus_;
     std::unique_ptr<ProjectRuntime> runtime_;
+    std::unique_ptr<browser::Previewer> previewer_;
     std::unique_ptr<Project> project_;
     std::unique_ptr<UndoManager> undo_;
     std::unique_ptr<CommandContext> ctx_;
