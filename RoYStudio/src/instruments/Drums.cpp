@@ -28,6 +28,7 @@ void RoyDrums::prepare(double sr, int maxBlock) {
 
 void RoyDrums::reset() {
     for (auto& v : voices_) v = Voice{};
+    counter_ = 0; // noise seeds derive from it: identical renders after reset
 }
 
 void RoyDrums::setSample(int note, std::shared_ptr<const AudioData> sample) {

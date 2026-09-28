@@ -1,5 +1,7 @@
 #include "core/Files.h"
 
+#include <cstdlib>
+
 #include <array>
 #include <chrono>
 #include <cstdio>
@@ -202,6 +204,27 @@ std::string newId() {
     static thread_local std::mt19937_64 rng{std::random_device{}() ^
                                             static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())};
     return std::format("{:016x}{:016x}", rng(), rng());
+}
+
+fs::path userDataDirectory() {
+    auto env = [](const char* n) -> std::string {
+        const char* v = std::getenv(n);
+        return v ? v : "";
+    };
+    fs::path dir;
+    if (auto o = env("ROY_USER_DIR"); !o.empty()) dir = o;
+#ifdef _WIN32
+    else if (auto ad = env("APPDATA"); !ad.empty()) dir = fs::path(ad) / "RoYStudio";
+#elif defined(__APPLE__)
+    else if (auto h = env("HOME"); !h.empty()) dir = fs::path(h) / "Library" / "Application Support" / "RoYStudio";
+#else
+    else if (auto x = env("XDG_CONFIG_HOME"); !x.empty()) dir = fs::path(x) / "RoYStudio";
+    else if (auto h = env("HOME"); !h.empty()) dir = fs::path(h) / ".config" / "RoYStudio";
+#endif
+    else dir = fs::temp_directory_path() / "RoYStudio";
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    return dir;
 }
 
 } // namespace roy::files

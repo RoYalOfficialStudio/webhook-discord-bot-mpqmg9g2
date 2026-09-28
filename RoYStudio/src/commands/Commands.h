@@ -72,5 +72,7 @@ void registerMasterCommands(CommandRegistry& r);
 void registerIntelligenceCommands(CommandRegistry& r);
 // Plugin status / crash recovery (sandboxed CLAP plugins). Called by registerCoreCommands.
 void registerPluginCommands(CommandRegistry& r);
+// Beat Lab: patterns, steps, swing, pattern clips. Called by registerCoreCommands.
+void registerBeatCommands(CommandRegistry& r);
 
 } // namespace roy

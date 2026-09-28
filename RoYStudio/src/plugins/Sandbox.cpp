@@ -132,7 +132,16 @@ public:
         if (state_.load() != Running) return false;
         const std::string s = cmd.dump() + "\n";
         std::string line;
-        if (!child_.writeAll(s.data(), s.size()) || !child_.readLine(line, timeoutMs)) return false;
+        if (!child_.writeAll(s.data(), s.size())) return false;
+        if (!child_.readLine(line, timeoutMs)) {
+            if (child_.isRunning()) {
+                // Alive but not answering: treat like an audio hang (the watchdog terminates it).
+                controlTimeout_ = std::format("no reply to '{}' within {} ms", cmd.value("cmd", ""), timeoutMs);
+                int expected = Running;
+                state_.compare_exchange_strong(expected, Hung);
+            }
+            return false;
+        }
         reply = json::parse(line, nullptr, false);
         return reply.is_object() && reply.value("ok", false);
     }
@@ -186,10 +195,12 @@ private:
                     std::lock_guard<std::mutex> lk(ioMutex_);
                     child_.kill();
                 }
-                const std::string r = std::format("hung (no audio response within {} ms) - host process terminated", processTimeoutMs());
-                setProblem(r);
+                const std::string r = controlTimeout_.empty()
+                                          ? std::format("hung (no audio response within {} ms) - host process terminated", processTimeoutMs())
+                                          : std::format("hung ({}) - host process terminated", controlTimeout_);
                 response_.post();
-                reportCrash(typeId_, name_, r);
+                reportCrash(typeId_, name_, r); // logged + queued before problem() becomes visible
+                setProblem(r);
                 return;
             }
             std::unique_lock<std::mutex> lk(ioMutex_, std::try_to_lock);
@@ -209,9 +220,9 @@ private:
                                            : std::format("crashed ({})", child_.crashed() ? child_.terminationReason()
                                                                                          : std::format("exit code {}", child_.exitCode()));
                 lk.unlock();
-                setProblem(r);
                 response_.post(); // wake a waiting audio thread immediately
                 reportCrash(typeId_, name_, r);
+                setProblem(r);
                 return;
             }
         }
@@ -246,6 +257,7 @@ private:
     mutable std::mutex reasonMutex_;
     std::string reason_;
     bool testKill_ = false;
+    std::string controlTimeout_; // set under ioMutex_ before state_ becomes Hung
     std::atomic<int> state_{Running};
     std::atomic<bool> stopWatch_{false};
     std::thread watchdog_;
@@ -314,6 +326,11 @@ void SandboxedPluginProcessor::prepare(double sampleRate, int maxBlockSize) {
         activated_ = false;
         log::error("plugins", "{}: activation failed", name_);
     }
+}
+
+void SandboxedPluginProcessor::reset() {
+    json r;
+    if (box_->state() == plugins::Sandbox::Running) box_->call({{"cmd", "reset"}}, r, 500);
 }
 
 void SandboxedPluginProcessor::process(const AudioBlock& io, const AudioBlock* sidechain, const NoteEvent* events, int numEvents) noexcept {

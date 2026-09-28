@@ -177,7 +177,14 @@ void registerCoreCommands(CommandRegistry& r) {
                if (!out.empty() && !ctx.project.findChannel(out)) return fail(ctx, "output channel not found");
                auto& t = addTrack(ctx.project, type, argStr(a, "name", "Track"), out);
                t.role = argStr(a, "role");
-               if (a.contains("instrument") && t.instrument) t.instrument->typeId = argStr(a, "instrument");
+               if (a.contains("instrument") && t.instrument) {
+                   const std::string type = argStr(a, "instrument");
+                   if (!ProcessorFactory::instance().has(type)) return fail(ctx, "unknown instrument " + type);
+                   t.instrument->typeId = type;
+                   t.instrument->name = type;
+                   for (auto& e : ProcessorFactory::instance().entries())
+                       if (e.typeId == type) t.instrument->name = e.displayName;
+               }
                ctx.result["id"] = t.id;
                ctx.result["channelId"] = t.channelId;
                return true;
@@ -712,6 +719,7 @@ void registerCoreCommands(CommandRegistry& r) {
     registerMasterCommands(r);
     registerIntelligenceCommands(r);
     registerPluginCommands(r);
+    registerBeatCommands(r);
 }
 
 } // namespace roy

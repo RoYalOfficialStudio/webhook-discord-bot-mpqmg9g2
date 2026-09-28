@@ -8,7 +8,12 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ROY_BUILD_TESTS "Build RoY Studio tests" ON)
-option(ROY_BUILD_GUI "Build the RoY Studio GUI application" OFF)
+if(WIN32)
+  set(ROY_GUI_DEFAULT ON)
+else()
+  set(ROY_GUI_DEFAULT OFF) # needs GLFW (libglfw3-dev) on Linux/macOS
+endif()
+option(ROY_BUILD_GUI "Build the RoY Studio GUI application" ${ROY_GUI_DEFAULT})
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "" FORCE)

@@ -60,6 +60,21 @@ void AudioEngine::setGraph(std::unique_ptr<RenderGraph> graph) {
     collectGarbage();
 }
 
+void AudioEngine::resetProcessingState() {
+    if (isDeviceRunning()) return;
+    RenderGraph* g = current_.load(std::memory_order_acquire);
+    if (!g) return;
+    for (auto& ch : g->channels) {
+        if (ch.instrument) ch.instrument->reset();
+        for (auto& ins : ch.inserts)
+            if (ins.processor) ins.processor->reset();
+        for (auto& c : ch.outputs)
+            if (c.compensation) c.compensation->clear();
+        ch.gainInitialised = false;
+    }
+    metronome_.reset();
+}
+
 void AudioEngine::collectGarbage() {
     std::lock_guard lock(garbageMutex_);
     const uint64_t done = blocksProcessed_.load(std::memory_order_acquire);

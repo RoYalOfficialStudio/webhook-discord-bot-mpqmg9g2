@@ -62,6 +62,8 @@ public:
     void deactivate();
     bool active() const { return active_; }
     uint32_t latency() const;
+    // Clears the plugin's internal buffers/voices (host guarantees the audio thread is idle).
+    void reset();
     double paramValue(clap_id id) const;
     bool saveState(std::vector<uint8_t>& out);
     bool loadState(const std::vector<uint8_t>& in);

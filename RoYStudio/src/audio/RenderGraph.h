@@ -70,6 +70,7 @@ class DelayLine {
 public:
     void setMaxDelay(int samples) { buf_.setSize(2, samples + 1); pos_ = 0; delay_ = 0; }
     void setDelay(int samples) { delay_ = samples; }
+    void clear() { buf_.clear(); pos_ = 0; }
     int delay() const { return delay_; }
     // In-place delay of a stereo block. Audio thread safe.
     void process(float* l, float* r, int n) noexcept {

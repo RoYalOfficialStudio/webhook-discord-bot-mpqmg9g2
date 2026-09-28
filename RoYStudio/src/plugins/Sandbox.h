@@ -57,6 +57,7 @@ public:
     std::string displayName() const override { return name_; }
     bool isInstrument() const override { return instrument_; }
     void prepare(double sampleRate, int maxBlockSize) override;
+    void reset() override;
     void process(const AudioBlock& io, const AudioBlock* sidechain, const NoteEvent* events, int numEvents) noexcept override;
     int latencySamples() const override { return latency_.load(); }
     void setHostTempo(double bpm) override { tempo_.store(bpm); }

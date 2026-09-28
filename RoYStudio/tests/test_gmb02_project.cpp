@@ -268,14 +268,18 @@ TEST_CASE("gmb02", "second instance cannot open a live project") {
     Project p = makeNewProject("Locked");
     ProjectSession s;
     REQUIRE(s.create(dir, p));
-    // pretend another live process holds it: use our parent pid (alive)
-    json lock = {{"pid", 1}, {"host", hostName()}};
+    // another live process holds it: a real child process that stays alive
+    // (the plugin host scanning the hanging test plugin never finishes)
+    ChildProcess other;
+    REQUIRE(other.start(ROY_PLUGIN_HOST_EXE, {"--scan", (std::filesystem::path(ROY_TEST_PLUGIN_DIR) / "roy_test_hang.clap").string()}));
+    json lock = {{"pid", other.pid()}, {"host", hostName()}};
     files::atomicWrite(s.folder() / ".roy_session.lock", lock.dump());
     Project q;
     ProjectSession s2;
     std::string err;
     CHECK(!s2.open(s.file(), q, OpenMode::Normal, &err));
     CHECK(err.find("already open") != std::string::npos);
+    other.kill();
 }
 
 TEST_CASE("gmb02", "commands with undo redo and macros") {

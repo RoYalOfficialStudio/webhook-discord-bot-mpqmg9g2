@@ -26,6 +26,7 @@ std::vector<std::vector<float>> renderOffline(AudioEngine& engine, const Offline
     t.setLoop(false, savedLoopStart, savedLoopEnd);
     engine.metronome().setEnabled(opt.includeMetronome);
     t.seek(opt.startSample);
+    engine.resetProcessingState();
     t.play();
     if (opt.capture) {
         opt.capture->writePos = 0;

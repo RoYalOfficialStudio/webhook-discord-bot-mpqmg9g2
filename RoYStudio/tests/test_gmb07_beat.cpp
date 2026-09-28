@@ -50,7 +50,10 @@ NoteEvent off(int note, int at) {
 }
 
 double bandShare(const std::vector<float>& x, size_t from, double lo, double hi) {
-    auto mag = dsp::magnitudeSpectrum(x.data() + from, 4096);
+    // zero-padded copy: never read past the end of short renders
+    std::vector<float> w(4096, 0.0f);
+    for (size_t i = 0; i < w.size() && from + i < x.size(); ++i) w[i] = x[from + i];
+    auto mag = dsp::magnitudeSpectrum(w.data(), 4096);
     double in = 0, all = 0;
     for (size_t i = 1; i < mag.size(); ++i) {
         const double f = static_cast<double>(i) * SR / 4096;

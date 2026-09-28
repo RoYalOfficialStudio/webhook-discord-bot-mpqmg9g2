@@ -360,7 +360,7 @@ TEST_CASE("plugins", "hung plugin host is detected by timeout and the audio cont
     auto out = render(s.engine, 4800, 256);
     const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     CHECK(!proc->alive());
-    CHECK_MSG(secs < 1.0, std::format("render took {} s", secs)); // one timeout, then bypass
+    CHECK_MSG(secs < 1.5, std::format("render took {} s", secs)); // one timeout (reset or audio), then bypass
     CHECK(allFinite(out[0]));
     CHECK(rms(out[0], 2400, 4800) > 0.3); // bypassed: full-level dry sine (0.5 amp)
     for (int i = 0; i < 100 && proc->problem().empty(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));

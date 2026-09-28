@@ -274,6 +274,10 @@ int runHost(const std::string& modulePath, const std::string& pluginId, const st
             const uint32_t mb = std::min<uint32_t>(cmd.value("maxFrames", 512u), pipc::kMaxFrames);
             const bool ok = inst->activate(sr, mb);
             reply({{"ok", ok}, {"latency", inst->latency()}, {"error", ok ? "" : "activate failed"}});
+        } else if (c == "reset") {
+            std::lock_guard<std::mutex> lk(procMutex);
+            inst->reset();
+            reply({{"ok", true}});
         } else if (c == "state.save") {
             std::vector<uint8_t> data;
             const bool ok = inst->saveState(data);

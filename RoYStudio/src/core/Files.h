@@ -23,5 +23,8 @@ std::string sha256(const void* data, size_t size);
 std::string nowIso8601();
 std::string nowCompact(); // 20260928_153200
 std::string newId();      // 128-bit random hex id
+// Per-user settings folder: %APPDATA%\\RoYStudio (Windows), ~/.config/RoYStudio (Linux),
+// ~/Library/Application Support/RoYStudio (macOS). Created on demand. ROY_USER_DIR overrides it.
+fs::path userDataDirectory();
 
 } // namespace roy::files

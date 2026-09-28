@@ -56,6 +56,7 @@ public:
     int maxBlockSize() const { return maxBlock_; }
 
     Transport& transport() { return transport_; }
+    const Transport& transport() const { return transport_; }
     Metronome& metronome() { return metronome_; }
 
     // Message thread: installs a new graph. The old one is released later by
@@ -63,6 +64,10 @@ public:
     void setGraph(std::unique_ptr<RenderGraph> graph);
     const RenderGraph* currentGraphForMessageThread() const { return current_.load(std::memory_order_acquire); }
     void collectGarbage();
+    // Message thread, device stopped: returns every processor and delay line of the
+    // current graph to its initial state, so an offline render does not depend on
+    // what was played before (deterministic exports).
+    void resetProcessingState();
     // True while a callback is running or device is active.
     void setDeviceRunning(bool running) { deviceRunning_.store(running); }
     bool isDeviceRunning() const { return deviceRunning_.load(); }

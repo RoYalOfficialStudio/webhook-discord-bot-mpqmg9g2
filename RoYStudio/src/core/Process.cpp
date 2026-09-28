@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <format>
 #include <thread>
 
 #ifdef _WIN32
@@ -146,7 +147,7 @@ void ChildProcess::reap(bool block, int timeoutMs) {
         exited_ = true;
         exitCode_ = static_cast<int>(code);
         crashed_ = code >= 0xC0000000u;
-        reason_ = crashed_ ? "exception 0x" + std::to_string(code) : "exit " + std::to_string(code);
+        reason_ = crashed_ ? std::format("exception 0x{:08X}", static_cast<unsigned>(code)) : "exit " + std::to_string(code);
     }
 }
 

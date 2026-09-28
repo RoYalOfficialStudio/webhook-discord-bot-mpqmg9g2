@@ -192,6 +192,10 @@ void Instance::deactivate() {
     active_ = false;
 }
 
+void Instance::reset() {
+    if (active_) plugin_->reset(plugin_);
+}
+
 uint32_t Instance::latency() const { return latencyExt_ && active_ ? latencyExt_->get(plugin_) : 0; }
 
 double Instance::paramValue(clap_id id) const {
