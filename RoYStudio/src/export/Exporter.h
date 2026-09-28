@@ -1,8 +1,9 @@
 #pragma once
-// EXPORT: mixdown and stems to WAV / FLAC with sample-rate conversion,
+// EXPORT: mixdown and stems to WAV / FLAC / MP3 with sample-rate conversion,
 // bit depth, dither, normalisation, tail, range selection.
-// MP3 is not available: it needs an MP3 encoder library whose licence
-// (e.g. LAME, LGPL) must be approved first - reported as an error, never faked.
+// MP3 uses LAME (LGPL) loaded at runtime (see export/Mp3Encoder.h); if the library
+// is missing the export reports a clear error - never a fake file.
+#include "export/Mp3Encoder.h"
 #include "dsp/Loudness.h"
 #include "project/Project.h"
 
@@ -42,6 +43,7 @@ struct ExportOptions {
     std::filesystem::path folder;
     std::string baseName;
     std::function<bool(double)> progress;
+    mp3::Options mp3;             // bitrate / VBR / metadata for Format::Mp3
 };
 
 struct ExportedFile {
@@ -64,7 +66,7 @@ ExportResult exportProject(AudioEngine& engine, ProjectRuntime& runtime, Project
 // Building blocks (also used by tests / other features)
 std::vector<std::vector<int32_t>> quantize(const std::vector<std::vector<float>>& in, int bits, Dither dither, uint64_t seed = 1);
 bool writeAudio(const std::filesystem::path& path, const std::vector<std::vector<float>>& audio, double sampleRate, Format fmt,
-                int bitDepth, Dither dither, std::string* error = nullptr);
+                int bitDepth, Dither dither, std::string* error = nullptr, const mp3::Options* mp3 = nullptr);
 double automaticTailSeconds(ProjectRuntime& runtime, const Project& project);
 const char* extensionFor(Format f);
 

@@ -1,6 +1,7 @@
 // MIXER (channel strips, inserts, sends, parameter editor) and MASTER (chain, loudness, export).
 #include "Ui.h"
 
+#include "export/Mp3Encoder.h"
 #include "plugins/Sandbox.h"
 
 #include <algorithm>
@@ -324,16 +325,46 @@ void drawMaster(App& app) {
     }
     ImGui::Spacing();
     sectionTitle("EXPORT");
-    static int fmt = 0, bits = 1, norm = 0, stems = 0;
+    static int fmt = 0, bits = 1, norm = 0, stems = 0, mp3Rate = 3, mp3Mode = 0, vbrQ = 2;
     static float lufs = -14.0f, ceiling = -1.0f;
-    const char* fmts[] = {"WAV", "FLAC", "MP3 (not available)"};
+    static char mArtist[128] = "", mAlbum[128] = "", mYear[16] = "", mTrack[16] = "", mComment[256] = "", mGenre[64] = "";
+    const char* fmts[] = {"WAV", "FLAC", "MP3"};
     const char* bitsN[] = {"16 bit", "24 bit", "32 bit float"};
     const char* norms[] = {"none", "peak", "loudness"};
     const char* stemN[] = {"mixdown only", "all tracks", "busses", "vocals", "instrumental"};
+    const char* rates[] = {"128 kbps", "192 kbps", "256 kbps", "320 kbps"};
+    const int rateVals[] = {128, 192, 256, 320};
+    const char* modes[] = {"CBR", "VBR"};
     ImGui::SetNextItemWidth(160 * dpi);
     ImGui::Combo("Format", &fmt, fmts, 3);
-    ImGui::SetNextItemWidth(160 * dpi);
-    ImGui::Combo("Bit depth", &bits, bitsN, 3);
+    if (fmt == 2) {
+        static std::string mp3Status;
+        static bool checked = false;
+        if (!checked) {
+            std::string why;
+            mp3Status = mp3::available(&why) ? mp3::encoderVersion() : "NOT AVAILABLE: " + why;
+            checked = true;
+        }
+        ImGui::TextDisabled("Encoder: %s (LGPL, separate library)", mp3Status.c_str());
+        ImGui::SetNextItemWidth(160 * dpi);
+        ImGui::Combo("Mode", &mp3Mode, modes, 2);
+        ImGui::SetNextItemWidth(160 * dpi);
+        if (mp3Mode == 0) ImGui::Combo("Bitrate", &mp3Rate, rates, 4);
+        else ImGui::SliderInt("VBR quality (0 best)", &vbrQ, 0, 9);
+        if (ImGui::TreeNode("Metadata")) {
+            ImGui::InputText("Artist", mArtist, sizeof(mArtist));
+            ImGui::InputText("Album", mAlbum, sizeof(mAlbum));
+            ImGui::InputText("Track", mTrack, sizeof(mTrack));
+            ImGui::InputText("Year", mYear, sizeof(mYear));
+            ImGui::InputText("Genre", mGenre, sizeof(mGenre));
+            ImGui::InputText("Comment", mComment, sizeof(mComment));
+            ImGui::TextDisabled("Title = project name");
+            ImGui::TreePop();
+        }
+    } else {
+        ImGui::SetNextItemWidth(160 * dpi);
+        ImGui::Combo("Bit depth", &bits, bitsN, fmt == 1 ? 2 : 3);
+    }
     ImGui::SetNextItemWidth(160 * dpi);
     ImGui::Combo("Normalize", &norm, norms, 3);
     if (norm == 2) {
@@ -347,10 +378,19 @@ void drawMaster(App& app) {
     if (goldButton("EXPORT", ImVec2(160 * dpi, 0))) {
         static const char* stemIds[] = {"none", "tracks", "busses", "vocals", "instrumental"};
         const int bitVals[] = {16, 24, 32};
-        if (app.run("Export", {{"format", fmt == 0 ? "wav" : fmt == 1 ? "flac" : "mp3"}, {"bitDepth", bitVals[bits]}, {"normalize", norms[norm]},
-                               {"lufs", lufs}, {"ceilingDb", ceiling}, {"stems", stemIds[stems]}})) {
+        json args = {{"format", fmt == 0 ? "wav" : fmt == 1 ? "flac" : "mp3"}, {"bitDepth", bitVals[bits]}, {"normalize", norms[norm]},
+                     {"lufs", lufs}, {"ceilingDb", ceiling}, {"stems", stemIds[stems]}};
+        if (fmt == 2) {
+            args["bitrate"] = rateVals[mp3Rate];
+            args["mp3Mode"] = mp3Mode == 0 ? "cbr" : "vbr";
+            args["vbrQuality"] = vbrQ;
+            args["metadata"] = {{"title", p.name}, {"artist", std::string(mArtist)}, {"album", std::string(mAlbum)}, {"track", std::string(mTrack)},
+                                {"year", std::string(mYear)}, {"genre", std::string(mGenre)}, {"comment", std::string(mComment)}};
+        }
+        if (app.run("Export", args)) {
             for (auto& f : app.lastResult()["files"])
                 app.message(0, std::format("exported {} ({:.1f} LUFS, {:.1f} dBTP)", f.value("path", ""), f.value("lufs", 0.0), f.value("truePeakDb", 0.0)));
+            for (auto& w : app.lastResult().value("warnings", json::array())) app.message(1, w.get<std::string>());
         }
     }
     ImGui::TextDisabled("Files go to <project>/Exports. Existing files are never overwritten.");

@@ -53,11 +53,12 @@ std::vector<std::vector<int32_t>> quantize(const std::vector<std::vector<float>>
 }
 
 bool writeAudio(const fs::path& path, const std::vector<std::vector<float>>& audio, double sr, Format fmt, int bitDepth, Dither dither,
-                std::string* error) {
+                std::string* error, const mp3::Options* mp3opt) {
     switch (fmt) {
-    case Format::Mp3:
-        if (error) *error = "MP3 export is not available: it requires an MP3 encoder library (e.g. LAME, LGPL) - licence approval pending";
-        return false;
+    case Format::Mp3: {
+        const mp3::Options def;
+        return mp3::encode(path, audio, static_cast<int>(std::lround(sr)), mp3opt ? *mp3opt : def, error);
+    }
     case Format::Flac: {
         const int bits = bitDepth >= 24 ? 24 : 16;
         auto q = quantize(audio, bits, dither);
@@ -115,8 +116,15 @@ struct Job {
 ExportResult exportProject(AudioEngine& engine, ProjectRuntime& runtime, Project& project, const ExportOptions& o) {
     ExportResult res;
     if (o.format == Format::Mp3) {
-        res.error = "MP3 export is not available: it requires an MP3 encoder library (e.g. LAME, LGPL) - licence approval pending";
-        return res;
+        std::string why;
+        if (!mp3::available(&why)) {
+            res.error = "MP3 export is not available: " + why;
+            return res;
+        }
+        if (!o.mp3.vbr && !mp3::validBitrate(o.mp3.bitrateKbps)) {
+            res.error = std::format("invalid MP3 bitrate {} kbps", o.mp3.bitrateKbps);
+            return res;
+        }
     }
     if (o.folder.empty()) {
         res.error = "no export folder";
@@ -213,7 +221,12 @@ ExportResult exportProject(AudioEngine& engine, ProjectRuntime& runtime, Project
         jobs.push_back({"Instrumental", trim(inst)});
     }
 
-    const double outRate = o.sampleRate > 0 ? o.sampleRate : sr;
+    double outRate = o.sampleRate > 0 ? o.sampleRate : sr;
+    if (o.format == Format::Mp3 && !mp3::supportedSampleRate(static_cast<int>(std::lround(outRate)))) {
+        const double to = outRate > 44100.5 ? 48000.0 : outRate > 32000.5 ? 44100.0 : 32000.0;
+        res.warnings.push_back(std::format("MP3 cannot store {:.0f} Hz - resampled to {:.0f} Hz", outRate, to));
+        outRate = to;
+    }
     std::error_code ec;
     fs::create_directories(o.folder, ec);
     const std::string base = sanitizeFileName(o.baseName.empty() ? project.name : o.baseName);
@@ -237,11 +250,11 @@ ExportResult exportProject(AudioEngine& engine, ProjectRuntime& runtime, Project
                 for (auto& v : c) v *= g;
             stats = dsp::measureLoudness(audio, outRate);
         }
-        if (o.bitDepth < 32 && stats.samplePeakDb > 0.0)
+        if ((o.bitDepth < 32 || o.format != Format::Wav) && stats.samplePeakDb > 0.0)
             res.warnings.push_back(std::format("{}: peaks at {:+.2f} dBFS will clip in {}-bit output", job.what, stats.samplePeakDb, o.bitDepth));
         const std::string name = job.what == "mixdown" ? base : std::format("{}_{}", base, sanitizeFileName(job.what));
         const fs::path path = files::uniquePath(o.folder / (name + extensionFor(o.format)));
-        if (!writeAudio(path, audio, outRate, o.format, o.bitDepth, o.dither, &err)) {
+        if (!writeAudio(path, audio, outRate, o.format, o.bitDepth, o.dither, &err, &o.mp3)) {
             res.error = std::format("writing {} failed: {}", path.string(), err);
             return res;
         }

@@ -8,6 +8,7 @@
 #include "commands/Commands.h"
 #include "core/Files.h"
 #include "core/Log.h"
+#include "export/Mp3Encoder.h"
 #include "plugins/Sandbox.h"
 #include "plugins/Scanner.h"
 #include "project/ProjectIO.h"
@@ -39,6 +40,7 @@ int usage(int code) {
         "  roy_cli check <project.roy>                        Project Assistant findings\n"
         "  roy_cli recovery <project.roy>                     crash-recovery status\n"
         "  roy_cli scan-plugins [--db file] [--force] [--retry] [--timeout ms] [paths...]\n"
+        "  roy_cli mp3-check                                  is the LAME MP3 encoder available?\n"
         "  roy_cli selftest <folder>                          headless workflow check (new/tracks/beat/export/save/reopen/recovery)\n"
         "  roy_cli plugins <INSTALLED|AVAILABLE|FAILED|BLACKLISTED|FAVORITES|RECENT|INSTRUMENTS|EFFECTS|DUPLICATES> [--db file]\n",
         ROY_VERSION_STRING);
@@ -110,6 +112,12 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (cmd == "help" || cmd == "--help" || cmd == "-h") return usage(0);
+    if (cmd == "mp3-check") {
+        std::string why;
+        const bool ok = mp3::available(&why);
+        print({{"available", ok}, {"encoder", ok ? mp3::encoderVersion() : ""}, {"error", why}});
+        return ok ? 0 : 1;
+    }
 
     if (cmd == "devices") {
         DeviceManager dm;

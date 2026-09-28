@@ -43,6 +43,7 @@ add_library(roy_thirdparty_headers INTERFACE)
 target_include_directories(roy_thirdparty_headers SYSTEM INTERFACE third_party third_party/clap/include)
 
 include(cmake/vst3sdk.cmake)
+include(cmake/lame.cmake)
 
 # ---------------------------------------------------------------- core library
 file(GLOB_RECURSE ROY_CORE_SOURCES CONFIGURE_DEPENDS
@@ -61,6 +62,7 @@ endif()
 # ---------------------------------------------------------------- applications
 add_executable(roy_cli apps/roy_cli/main.cpp)
 target_link_libraries(roy_cli PRIVATE roy_core)
+add_dependencies(roy_cli roy_mp3lame)
 
 add_executable(roy_bench apps/roy_bench/main.cpp)
 target_link_libraries(roy_bench PRIVATE roy_core)
@@ -135,6 +137,6 @@ if(ROY_BUILD_TESTS)
   target_compile_definitions(roy_tests PRIVATE
     ROY_TEST_PLUGIN_DIR="${CMAKE_BINARY_DIR}/test_plugins"
     ROY_PLUGIN_HOST_EXE="$<TARGET_FILE:roy_plugin_host>")
-  add_dependencies(roy_tests roy_plugin_host ${ROY_TEST_PLUGINS})
+  add_dependencies(roy_tests roy_plugin_host roy_mp3lame ${ROY_TEST_PLUGINS})
   add_test(NAME roy_tests COMMAND roy_tests)
 endif()

@@ -12,6 +12,8 @@ from unknown sources. Hashes below were computed after download.
 
 | Steinberg VST3 SDK | 3.8.1 (tag `v3.8.1_build_84`, commit 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96; base fcf9da0b, pluginterfaces 4f547e8e, public.sdk 586dc5e6) | https://github.com/steinbergmedia/vst3sdk (+ official submodules vst3_base, vst3_pluginterfaces, vst3_public_sdk) | MIT (LICENSE.txt included in third_party/vst3sdk) | VST3 hosting in RoYPluginHost + RoY VST3 test plugins | git commits above | Sources copied into `third_party/vst3sdk/` (AAX/AU/AUv3/InterAppAudio wrappers, samples, testsuite and VSTGUI not included); static libraries |
 
+| LAME (libmp3lame) | 3.100 | https://sourceforge.net/projects/lame/files/lame/3.100/lame-3.100.tar.gz (verified identical to Ubuntu lame_3.100.orig.tar.gz) | LGPL-2.0 (COPYING/LICENSE in third_party/lame) | MP3 export | tarball: ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e | libmp3lame sources copied unmodified into `third_party/lame/`; built as separate shared library `roy_mp3lame`, loaded at runtime (LGPL: replaceable) |
+
 ## Toolchain (not shipped)
 | Tool | Version | Source |
 |---|---|---|
@@ -24,5 +26,5 @@ from unknown sources. Hashes below were computed after download.
 | Xvfb | system | Ubuntu 24.04 package | MIT/X11 | Headless display for GUI screenshots |
 
 ## Not used / pending decisions
-- **MP3 encoding**: approved by the owner on 2026-09-28 (LAME or equivalent, licence-compatible, documented).
+- **MP3 encoding**: approved by the owner on 2026-09-28 → LAME 3.100 added (see table and third_party/THIRD_PARTY_NOTICES.md).
 - **Stem separation models** (e.g. Demucs, MIT code / model weights with their own terms): not added.

@@ -1,4 +1,5 @@
 #include "io/AudioFile.h"
+#include <fstream>
 #include "dsp/Resampler.h"
 
 #include <miniaudio.h>
@@ -58,6 +59,51 @@ bool probeAudioFile(const fs::path& path, AudioFileInfo& info, std::string* erro
     return true;
 }
 
+namespace {
+// Gapless MP3: the LAME/Xing info frame stores encoder delay and padding. The decoder
+// outputs the (silent) info frame plus encoder delay + 529 samples decoder delay at the
+// start, and padding - 529 extra samples at the end. Returns false if no LAME tag.
+bool mp3GaplessTrim(const fs::path& path, int64_t decodedFrames, int64_t& trimStart, int64_t& trimEnd) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    std::vector<unsigned char> h(64 * 1024);
+    f.read(reinterpret_cast<char*>(h.data()), static_cast<std::streamsize>(h.size()));
+    const size_t n = static_cast<size_t>(f.gcount());
+    size_t pos = 0;
+    if (n >= 10 && h[0] == 'I' && h[1] == 'D' && h[2] == '3') // skip ID3v2 (synch-safe size)
+        pos = 10 + ((h[6] & 0x7f) << 21 | (h[7] & 0x7f) << 14 | (h[8] & 0x7f) << 7 | (h[9] & 0x7f));
+    while (pos + 4 < n && !(h[pos] == 0xFF && (h[pos + 1] & 0xE0) == 0xE0)) ++pos; // first frame sync
+    if (pos + 200 >= n) return false;
+    const bool mpeg1 = (h[pos + 1] & 0x18) == 0x18;
+    const bool mono = (h[pos + 3] & 0xC0) == 0xC0;
+    const size_t sideInfo = mpeg1 ? (mono ? 17 : 32) : (mono ? 9 : 17);
+    const size_t x = pos + 4 + sideInfo;
+    if (std::memcmp(&h[x], "Xing", 4) != 0 && std::memcmp(&h[x], "Info", 4) != 0) return false;
+    // LAME extension follows the Xing fields; find it within the frame
+    size_t lame = 0;
+    for (size_t i = x; i + 4 < std::min(n, x + 200); ++i)
+        if (std::memcmp(&h[i], "LAME", 4) == 0 || std::memcmp(&h[i], "Lavc", 4) == 0) {
+            lame = i;
+            break;
+        }
+    if (!lame || lame + 24 > n) return false;
+    const int encDelay = (h[lame + 21] << 4) | (h[lame + 22] >> 4);
+    const int padding = ((h[lame + 22] & 0x0F) << 8) | h[lame + 23];
+    const int frameSamples = mpeg1 ? 1152 : 576;
+    // Did the decoder output the (silent) info frame? The Xing frame count excludes it.
+    int64_t infoFrame = frameSamples;
+    const uint32_t flags = (uint32_t(h[x + 4]) << 24) | (uint32_t(h[x + 5]) << 16) | (uint32_t(h[x + 6]) << 8) | h[x + 7];
+    if (flags & 1u) {
+        const int64_t frames = (int64_t(h[x + 8]) << 24) | (int64_t(h[x + 9]) << 16) | (int64_t(h[x + 10]) << 8) | h[x + 11];
+        if (decodedFrames == frames * frameSamples) infoFrame = 0;
+        else if (decodedFrames != (frames + 1) * frameSamples) return false; // unexpected decoder behaviour: do not trim
+    }
+    trimStart = infoFrame + encDelay + 529;
+    trimEnd = std::max(0, padding - 529);
+    return true;
+}
+} // namespace
+
 bool readAudioFile(const fs::path& path, AudioData& out, std::string* error) {
     ma_decoder dec;
     if (initDecoder(path, &dec) != MA_SUCCESS) {
@@ -80,6 +126,16 @@ bool readAudioFile(const fs::path& path, AudioData& out, std::string* error) {
     }
     ma_decoder_uninit(&dec);
     out.numFrames = total;
+    std::string ext = path.extension().string();
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    int64_t t0 = 0, t1 = 0;
+    if (ext == ".mp3" && mp3GaplessTrim(path, total, t0, t1) && t0 + t1 < total) {
+        for (auto& c : out.channels) {
+            c.erase(c.end() - t1, c.end());
+            c.erase(c.begin(), c.begin() + t0);
+        }
+        out.numFrames = total - t0 - t1;
+    }
     return true;
 }
 

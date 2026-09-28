@@ -71,6 +71,21 @@ void registerMasterCommands(CommandRegistry& r) {
                    if (id.is_string()) o.selectedTrackIds.push_back(id.get<std::string>());
                o.folder = str(a, "folder", ctx.projectFolder.empty() ? std::string() : (ctx.projectFolder / "Exports").string());
                o.baseName = str(a, "name", ctx.project.name);
+               o.mp3.bitrateKbps = static_cast<int>(num(a, "bitrate", 320));
+               o.mp3.vbr = str(a, "mp3Mode", "cbr") == "vbr";
+               o.mp3.vbrQuality = static_cast<int>(num(a, "vbrQuality", 2));
+               if (a.contains("metadata") && a["metadata"].is_object()) {
+                   const json& m = a["metadata"];
+                   o.mp3.title = m.value("title", ctx.project.name);
+                   o.mp3.artist = m.value("artist", "");
+                   o.mp3.album = m.value("album", "");
+                   o.mp3.year = m.value("year", "");
+                   o.mp3.comment = m.value("comment", "");
+                   o.mp3.track = m.value("track", "");
+                   o.mp3.genre = m.value("genre", "");
+               } else {
+                   o.mp3.title = ctx.project.name;
+               }
                auto res = exporting::exportProject(ctx.runtime->engine(), *ctx.runtime, ctx.project, o);
                if (!res.ok) return fail(ctx, res.error);
                json files = json::array();
