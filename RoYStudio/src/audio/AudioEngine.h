@@ -119,7 +119,7 @@ private:
     RenderGraph* levelGraph_ = nullptr;
     const int* levelJobs_ = nullptr;
     int levelCount_ = 0;
-    void workerLoop(int index) noexcept;
+    void workerLoop(int index, uint32_t startTicket) noexcept;
 
     double sampleRate_ = 48000.0;
     int maxBlock_ = 512;

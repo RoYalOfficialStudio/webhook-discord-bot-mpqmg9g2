@@ -42,6 +42,8 @@ endif()
 add_library(roy_thirdparty_headers INTERFACE)
 target_include_directories(roy_thirdparty_headers SYSTEM INTERFACE third_party third_party/clap/include)
 
+include(cmake/vst3sdk.cmake)
+
 # ---------------------------------------------------------------- core library
 file(GLOB_RECURSE ROY_CORE_SOURCES CONFIGURE_DEPENDS
   src/*.cpp src/*.h)

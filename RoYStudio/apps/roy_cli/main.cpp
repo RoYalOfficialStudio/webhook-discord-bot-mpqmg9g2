@@ -39,6 +39,7 @@ int usage(int code) {
         "  roy_cli check <project.roy>                        Project Assistant findings\n"
         "  roy_cli recovery <project.roy>                     crash-recovery status\n"
         "  roy_cli scan-plugins [--db file] [--force] [--retry] [--timeout ms] [paths...]\n"
+        "  roy_cli selftest <folder>                          headless workflow check (new/tracks/beat/export/save/reopen/recovery)\n"
         "  roy_cli plugins <INSTALLED|AVAILABLE|FAILED|BLACKLISTED|FAVORITES|RECENT|INSTRUMENTS|EFFECTS|DUPLICATES> [--db file]\n",
         ROY_VERSION_STRING);
     return code;
@@ -208,6 +209,67 @@ int main(int argc, char** argv) {
         }
         print(o.ctx->result);
         return 0;
+    }
+
+    if (cmd == "selftest" && a.size() >= 2) {
+        int failed = 0;
+        std::string report;
+        auto step = [&](const char* name, bool ok, const std::string& detail = {}) {
+            const std::string line = std::format("[{}] {}{}{}\n", ok ? "PASS" : "FAIL", name, detail.empty() ? "" : " - ", detail);
+            std::fputs(line.c_str(), stdout);
+            report += line;
+            if (!ok) ++failed;
+        };
+        const fs::path root = a[1];
+        std::error_code ec;
+        fs::create_directories(root, ec);
+        fs::path file;
+        {
+            Project p = makeNewProject("CLI Selftest", 48000.0, 128.0);
+            ProjectSession s;
+            step("create project", s.create(root, p, &err), err);
+            file = s.file();
+            s.close();
+        }
+        json saved;
+        {
+            Opened o;
+            step("open project", o.open(file, err), err);
+            auto run = [&](const std::string& id, const json& args) {
+                const bool ok = o.registry.execute(*o.ctx, id, args);
+                step(id.c_str(), ok, ok ? "" : o.ctx->error);
+                return o.ctx->result;
+            };
+            const std::string beat = run("AddTrack", {{"type", "beat"}, {"name", "Drums"}}).value("id", "");
+            const std::string pat = run("AddPattern", {{"name", "A"}}).value("id", "");
+            run("SetRowPattern", {{"patternId", pat}, {"voice", "kick"}, {"text", "x...x...x...x..."}});
+            run("AddPatternClip", {{"trackId", beat}, {"patternId", pat}, {"lengthBeats", 8.0}});
+            const std::string syn = run("AddTrack", {{"type", "midi"}, {"name", "808"}, {"instrument", "roy.808"}}).value("id", "");
+            const std::string clip = run("AddMidiClip", {{"trackId", syn}, {"lengthBeats", 8.0}}).value("id", "");
+            run("AddNote", {{"clipId", clip}, {"pitch", 36}, {"lengthBeats", 2.0}});
+            run("CreateMasterChain", {{"preset", "streaming"}});
+            auto ex = run("Export", {{"format", "wav"}, {"name", "cli_selftest"}});
+            const std::string wav = ex.contains("files") && !ex["files"].empty() ? ex["files"][0].value("path", "") : "";
+            step("export file exists", !wav.empty() && fs::exists(wav), wav);
+            step("undo", o.undo->undo());
+            step("redo", o.undo->redo());
+            step("save", o.save(err), err);
+            saved = projectToJson(o.project);
+        }
+        {
+            Opened o;
+            step("reopen", o.open(file, err), err);
+            json again = projectToJson(o.project);
+            saved.erase("modifiedAt");
+            again.erase("modifiedAt");
+            step("reopened project identical", saved == again);
+        }
+        const auto info = ProjectSession::inspect(file);
+        step("clean close (no crash lock)", !info.lockFound && !info.crashed);
+        const std::string summary = std::format("CLI SELFTEST {} ({} failed)\n", failed ? "FAILED" : "PASSED", failed);
+        std::fputs(summary.c_str(), stdout);
+        files::atomicWrite(root / "cli_selftest_report.txt", report + summary);
+        return failed ? 1 : 0;
     }
 
     if (cmd == "recovery" && a.size() >= 2) {

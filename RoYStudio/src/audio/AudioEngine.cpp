@@ -111,10 +111,13 @@ void AudioEngine::setWorkerThreads(int n) {
         workers_.back()->go.store(ticket_, std::memory_order_relaxed);
         workers_.back()->finished.store(ticket_, std::memory_order_relaxed);
     }
-    for (int i = 0; i < n; ++i) workers_[static_cast<size_t>(i)]->thread = std::thread([this, i] { workerLoop(i); });
+    // The start ticket is captured HERE, not read by the new thread: work may be posted
+    // before the thread runs, and it must not mistake that ticket for "already seen".
+    const uint32_t startTicket = ticket_;
+    for (int i = 0; i < n; ++i) workers_[static_cast<size_t>(i)]->thread = std::thread([this, i, startTicket] { workerLoop(i, startTicket); });
 }
 
-void AudioEngine::workerLoop(int index) noexcept {
+void AudioEngine::workerLoop(int index, uint32_t startTicket) noexcept {
 #ifdef _WIN32
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 #else
@@ -123,7 +126,7 @@ void AudioEngine::workerLoop(int index) noexcept {
     pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp); // needs rtprio rights; ignored otherwise
 #endif
     Worker& w = *workers_[static_cast<size_t>(index)];
-    uint32_t last = w.go.load(std::memory_order_acquire);
+    uint32_t last = startTicket;
     for (;;) {
         // Levels of one block follow each other within microseconds: spin briefly before
         // sleeping so the next level does not pay the OS wake-up latency.

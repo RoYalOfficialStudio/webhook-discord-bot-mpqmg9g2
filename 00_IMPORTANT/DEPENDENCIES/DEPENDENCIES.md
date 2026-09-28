@@ -10,6 +10,8 @@ from unknown sources. Hashes below were computed after download.
 | CLAP | 1.2.2 | https://github.com/free-audio/clap (git tag `1.2.2`, commit 27f20f81dec40b930d79ef429fd35dcc2d45db5b) | MIT | Plugin format headers (hosting + test plugins) | commit hash above | `include/` copied into `third_party/clap/` |
 | Dear ImGui | 1.92.9 | https://github.com/ocornut/imgui (git tag `v1.92.9`, commit 01380c579715e62fb9a8d6ec0502c4ea83bfde6e) | MIT | GUI toolkit (core + Win32/DX11 + GLFW/OpenGL3 backends) | `imgui.cpp`: 91fb4ad056cdb9127e827a68342143a81ec08ea6797ca27a5c13142c62c6a324, `imgui.h`: 74c114582c8dafd7063b9d96c6dc0abebdcae2b807f67be18c6235ef9c136b57 | Source files copied into `third_party/imgui/` (unmodified) |
 
+| Steinberg VST3 SDK | 3.8.1 (tag `v3.8.1_build_84`, commit 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96; base fcf9da0b, pluginterfaces 4f547e8e, public.sdk 586dc5e6) | https://github.com/steinbergmedia/vst3sdk (+ official submodules vst3_base, vst3_pluginterfaces, vst3_public_sdk) | MIT (LICENSE.txt included in third_party/vst3sdk) | VST3 hosting in RoYPluginHost + RoY VST3 test plugins | git commits above | Sources copied into `third_party/vst3sdk/` (AAX/AU/AUv3/InterAppAudio wrappers, samples, testsuite and VSTGUI not included); static libraries |
+
 ## Toolchain (not shipped)
 | Tool | Version | Source |
 |---|---|---|
@@ -22,6 +24,5 @@ from unknown sources. Hashes below were computed after download.
 | Xvfb | system | Ubuntu 24.04 package | MIT/X11 | Headless display for GUI screenshots |
 
 ## Not used / pending decisions
-- **VST3 SDK** (Steinberg, MIT since 3.8): not yet vendored. Needed for VST3 *loading*; the scanner reads VST3 bundles without loading them.
-- **MP3 encoding**: requires an encoder (e.g. LAME, LGPL). Not added – needs an explicit licensing decision.
+- **MP3 encoding**: approved by the owner on 2026-09-28 (LAME or equivalent, licence-compatible, documented).
 - **Stem separation models** (e.g. Demucs, MIT code / model weights with their own terms): not added.
