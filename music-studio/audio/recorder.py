@@ -19,11 +19,21 @@ def list_input_devices() -> list[dict]:
     ]
 
 
+def list_output_devices() -> list[dict]:
+    devices = sd.query_devices()
+    return [
+        {"index": i, "name": d["name"], "channels": d["max_output_channels"]}
+        for i, d in enumerate(devices)
+        if d["max_output_channels"] > 0
+    ]
+
+
 @dataclass
 class Recorder:
     samplerate: int = 44100
     channels: int = 1
-    device: int | None = None
+    device: int | None = None  # microphone (input); None = system default
+    output_device: int | None = None  # headphones/speakers for monitoring; None = system default
     monitor: bool = False  # hear yourself live through the output device while recording
     monitor_gain: float = 0.8
 
@@ -77,21 +87,29 @@ class Recorder:
         self._chunks = []
         self._level = 0.0
         self._frames_recorded = 0
-        if self.monitor:
-            self._stream = sd.Stream(
-                samplerate=self.samplerate,
-                channels=(self.channels, 2),
-                device=(self.device, None),
-                callback=self._monitor_callback,
-            )
-        else:
-            self._stream = sd.InputStream(
-                samplerate=self.samplerate,
-                channels=self.channels,
-                device=self.device,
-                callback=self._callback,
-            )
-        self._stream.start()
+        try:
+            if self.monitor:
+                stream = sd.Stream(
+                    samplerate=self.samplerate,
+                    channels=(self.channels, 2),
+                    device=(self.device, self.output_device),
+                    callback=self._monitor_callback,
+                )
+            else:
+                stream = sd.InputStream(
+                    samplerate=self.samplerate,
+                    channels=self.channels,
+                    device=self.device,
+                    callback=self._callback,
+                )
+            stream.start()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not open the audio device ({exc}). Check Devices... "
+                f"and make sure the microphone{' and headphones' if self.monitor else ''} "
+                f"are connected and not in use by another app."
+            ) from exc
+        self._stream = stream
         self._start_time = time.monotonic()
         self._recording = True
 

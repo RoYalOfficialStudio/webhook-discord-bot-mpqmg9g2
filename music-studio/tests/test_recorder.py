@@ -2,15 +2,44 @@ import os
 import sys
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import audio.recorder as recorder_module
 from audio.recorder import Recorder
 
 
 def test_monitor_defaults_off():
     rec = Recorder(samplerate=22050, channels=1)
     assert rec.monitor is False
+    assert rec.output_device is None
+
+
+def test_start_wraps_device_errors_in_clear_runtime_error(monkeypatch):
+    class _BrokenInputStream:
+        def __init__(self, *a, **k):
+            raise OSError("Error querying device -1")
+
+    monkeypatch.setattr(recorder_module.sd, "InputStream", _BrokenInputStream)
+    rec = Recorder(samplerate=22050, channels=1)
+
+    with pytest.raises(RuntimeError, match="Could not open the audio device"):
+        rec.start()
+    assert not rec.is_recording
+
+
+def test_start_with_monitor_wraps_device_errors_too(monkeypatch):
+    class _BrokenStream:
+        def __init__(self, *a, **k):
+            raise OSError("Invalid device combination")
+
+    monkeypatch.setattr(recorder_module.sd, "Stream", _BrokenStream)
+    rec = Recorder(samplerate=22050, channels=1, monitor=True)
+
+    with pytest.raises(RuntimeError, match="headphones"):
+        rec.start()
+    assert not rec.is_recording
 
 
 def test_monitor_callback_writes_stereo_passthrough_from_mono_input():

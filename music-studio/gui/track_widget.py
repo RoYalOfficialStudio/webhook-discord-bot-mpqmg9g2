@@ -30,6 +30,7 @@ class TrackWidget(QFrame):
         super().__init__(parent)
         self.track = track
         self.recorder = Recorder(samplerate=track.sr, channels=1)
+        self.output_device: int | None = None
         self.setObjectName("trackCard")
         self._accent = TRACK_COLORS[color_index % len(TRACK_COLORS)]
         self.setStyleSheet(f"QFrame#trackCard {{ border-left: 4px solid {self._accent}; }}")
@@ -296,7 +297,12 @@ class TrackWidget(QFrame):
 
     def _toggle_record(self) -> None:
         if not self.recorder.is_recording:
-            self.recorder.start()
+            try:
+                self.recorder.start()
+            except RuntimeError as exc:
+                self.record_btn.setChecked(False)
+                QMessageBox.warning(self, "Recording failed", str(exc))
+                return
             self.record_btn.setText("⏹ Stop")
             self.waveform.set_audio(None)
             self._meter_timer.start()
@@ -332,7 +338,17 @@ class TrackWidget(QFrame):
     def _play(self) -> None:
         if len(self.track.audio) == 0:
             return
-        sd.play(self.track.rendered(), self.track.sr)
+        try:
+            sd.play(self.track.rendered(), self.track.sr, device=self.output_device)
+        except Exception as exc:
+            QMessageBox.warning(self, "Playback failed", str(exc))
+
+    def stop_recording_if_active(self) -> None:
+        """Make sure a running recording/monitor stream is torn down before
+        this widget goes away — otherwise the mic stream keeps running."""
+        if self.recorder.is_recording:
+            self._meter_timer.stop()
+            self.recorder.stop()
 
     def _open_effects(self) -> None:
         dialog = EffectsDialog(self.track.effects, self)

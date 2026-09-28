@@ -19,6 +19,16 @@ erweiterbare Basis dafür.
 - **Wellenform zum Schneiden**: Bereich per Drag auf der Wellenform markieren
   (wie in FL Studios Playlist) und mit **✂ Cut Selection** direkt heraus-
   schneiden — der Track wird sichtbar kürzer, der Rest rückt zusammen.
+- **⚙ Devices...** – Mikrofon (Eingabe) und Kopfhörer/Lautsprecher (Ausgabe)
+  gezielt auswählen statt nur Systemstandard, inkl. **🔊 Test Output**-Button
+  zum Prüfen, ob der gewählte Ausgang tatsächlich klingt. Behebt "ich höre
+  mich nicht", wenn Windows/macOS ein anderes Standardgerät nutzt als
+  erwartet. Auswahl wird gespeichert und gilt für Aufnahme, Monitor und
+  Wiedergabe.
+- **Verbesserte Abspielleiste**: Fortschrittsanzeige mit Zeit (elapsed/total),
+  **Seek-Regler** zum Springen an eine beliebige Stelle im Mixdown, und ein
+  separater **Preview-Lautstärkeregler** (beeinflusst nur die Wiedergabe hier,
+  nicht die exportierte Datei).
 - **Autotune / Pitch-Correction** – mit allen gängigen Reglern:
   - Tonart + 12 Skalen (Dur, natürlich/harmonisch/melodisch Moll, Dorisch,
     Phrygisch, Lydisch, Mixolydisch, Lokrisch, Pentatonik, Blues, Chromatisch)
@@ -105,28 +115,32 @@ python main.py
 
 ## Bedienung
 
-1. **+ Add Track** – neuen leeren Track anlegen.
-2. **Record** – Mikrofonaufnahme starten/stoppen (verwendet dein
-   Standard-Eingabegerät). **🎧** daneben aktiviert Live-Monitoring (dich
-   selbst hören während der Aufnahme).
-3. **Wellenform** – nach der Aufnahme/dem Laden per Drag einen Bereich
+1. **⚙ Devices...** – zuerst Mikrofon und Kopfhörer/Lautsprecher auswählen
+   und mit **🔊 Test Output** prüfen, dass der Ausgang tatsächlich klingt.
+2. **+ Add Track** – neuen leeren Track anlegen.
+3. **Record** – Mikrofonaufnahme starten/stoppen. **🎧** daneben aktiviert
+   Live-Monitoring (dich selbst hören während der Aufnahme, vor dem
+   Aufnehmen aktivieren).
+4. **Wellenform** – nach der Aufnahme/dem Laden per Drag einen Bereich
    markieren, dann **✂ Cut Selection** zum Herausschneiden oder
    **Clear Selection** zum Abbrechen der Auswahl.
-4. **Load File** – vorhandene Audiodatei in den Track laden (WAV, MP3, FLAC,
+5. **Load File** – vorhandene Audiodatei in den Track laden (WAV, MP3, FLAC,
    OGG, AIFF, M4A/AAC, WMA).
-5. **Effects / Autotune...** – EQ, Delay, Reverb, Compressor, Autotune und
+6. **Effects / Autotune...** – EQ, Delay, Reverb, Compressor, Autotune und
    Voice FX (De-Esser, Doubler) für diesen Track einstellen. Im Autotune-Tab
    oben das Preset-Dropdown nutzen, um eigene oder mitgelieferte Einstellungen
    zu laden/speichern/löschen.
-6. **Autotune-Zeile** direkt am Track – schneller Ein/Aus-Schalter plus
+7. **Autotune-Zeile** direkt am Track – schneller Ein/Aus-Schalter plus
    Strength/Speed, für schnelle Anpassungen ohne Dialog.
-7. **Vol/Pan-Regler** und **Mute/Solo** wie in jedem DAW-Mixer.
-8. **Play Mix** – aktuellen Mixdown anhören, **Stop** zum Abbrechen.
-9. **🎤 Add Harmony...** – aus einer Lead-Stimme automatisch neue
-   Harmonie-Spuren erzeugen (Terz/Quinte/... über oder unter der Lead).
-10. **Export Mixdown...** – fertigen Track als WAV/MP3/FLAC/OGG/AIFF/M4A/WMA
-   exportieren.
-11. **Save/Open Project...** – Session in einen Ordner speichern bzw. laden.
+8. **Vol/Pan-Regler** und **Mute/Solo** wie in jedem DAW-Mixer.
+9. **Play Mix** – aktuellen Mixdown anhören; die Abspielleiste zeigt
+   Fortschritt/Zeit, per Seek-Regler an eine Stelle springen, **Stop** zum
+   Abbrechen. **Preview Vol** regelt nur die Lautstärke hier, nicht den Export.
+10. **🎤 Add Harmony...** – aus einer Lead-Stimme automatisch neue
+    Harmonie-Spuren erzeugen (Terz/Quinte/... über oder unter der Lead).
+11. **Export Mixdown...** – fertigen Track als WAV/MP3/FLAC/OGG/AIFF/M4A/WMA
+    exportieren.
+12. **Save/Open Project...** – Session in einen Ordner speichern bzw. laden.
 
 ## Architektur
 
@@ -139,29 +153,43 @@ music-studio/
     harmony.py     Harmonie-Generator (diatonische Transposition der Lead-Stimme)
     presets.py     Autotune-Presets speichern/laden/löschen (~/.music_studio/presets)
     io_formats.py  Laden/Exportieren aller Audioformate (WAV/MP3/FLAC/OGG/...)
+    settings.py    Geräte-Auswahl speichern/laden (~/.music_studio/settings.json)
     mixer.py       Track/Mixer-Klassen, Rendering, Export
     project.py     Speichern/Laden von Projekten
   gui/
     theme.py           Dark-Theme (Farben, Stylesheet)
-    main_window.py     Hauptfenster, Transport, Track-Liste, Harmonie-Aktion
+    main_window.py     Hauptfenster, Transport, Abspielleiste (Seek/Zeit/Vol),
+                       Track-Liste, Harmonie-Aktion
     track_widget.py    Eine Track-Zeile (Record/Load/Vol/Pan/Mute/Solo, Meter,
-                       Wellenform, Autotune-Schnellregler)
+                       Wellenform, Autotune-Schnellregler, Monitor)
     waveform_widget.py Wellenform-Vorschau + Auswahl/Cut per Drag
     effects_dialog.py  Effekt-Editor (EQ/Delay/Reverb/Compressor/Autotune/Voice FX)
     harmony_dialog.py  Auswahl-Dialog für den Harmonie-Generator
+    devices_dialog.py  Mikrofon/Ausgabegerät auswählen + Testton
   tests/
     test_effects.py    DSP-Effekte-Tests
     test_autotune.py   Pitch-Correction-Tests (Skalen, Humanize, Formant, Referenz)
     test_presets.py    Preset-Speichern/Laden-Tests
     test_io_formats.py Format-Roundtrip-Tests (WAV/FLAC immer, MP3 falls ffmpeg da ist)
     test_voice_fx.py   Doubler/De-Esser/Harmonie-Tests
-    test_recorder.py   Monitor-Callback-Tests
+    test_recorder.py   Monitor-Callback- und Fehlerbehandlungs-Tests
+    test_settings.py   Geräte-Einstellungen-Tests
   main.py          Einstiegspunkt
 ```
 
 Alle Effekte sind von Grund auf mit numpy/scipy implementiert (RBJ-Biquad-EQ,
 Schroeder-Reverb, Hüllkurven-Kompressor) — keine externen Audio-Plugin-SDKs
 oder Cloud-Dienste nötig, alles läuft lokal und offline.
+
+## Behobene Bugs
+
+- Fehler beim Öffnen von Mikrofon/Ausgabegerät (falsches Gerät, Gerät von
+  anderer App belegt, o.ä.) scheiterten bisher lautlos — jetzt gibt es einen
+  klaren Dialog mit der genauen Fehlermeldung, statt dass einfach "nichts
+  passiert".
+- Eine Spur mit laufender Aufnahme/Monitoring entfernen ließ das
+  Mikrofon-Stream im Hintergrund weiterlaufen — wird jetzt beim Entfernen
+  sauber gestoppt.
 
 ## Grenzen (bewusst nicht enthalten)
 
