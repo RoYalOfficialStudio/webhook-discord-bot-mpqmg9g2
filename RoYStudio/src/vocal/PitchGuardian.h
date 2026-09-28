@@ -38,6 +38,10 @@ struct PitchGuardianSettings {
     double assistThresholdCents = 25.0;
     double chromaticToleranceCents = 30.0;
     double minConfidence = 0.75;      // below: correction fades out
+    // ASSIST: syllables shorter than this are treated as spoken, not sung, and left alone.
+    // For rap-like takes (analysis.rapIndicator > 0.6) the limit is raised to rapMinNoteSeconds.
+    double minNoteSeconds = 0.10;
+    double rapMinNoteSeconds = 0.20;
 };
 
 struct NoteCorrection {

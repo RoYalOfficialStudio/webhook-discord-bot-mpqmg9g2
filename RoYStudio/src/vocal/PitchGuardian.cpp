@@ -106,6 +106,14 @@ CorrectionPlan planCorrection(const PitchTrack& track, const PitchAnalysis& a, c
             plan.notes.push_back(nc);
             continue;
         }
+        if (s.mode == GuardianMode::Assist) {
+            const double minDur = a.rapIndicator > 0.6 ? s.rapMinNoteSeconds : s.minNoteSeconds;
+            if (note.duration() < minDur) {
+                nc.reason = std::format("short syllable ({:.0f} ms) - spoken, left natural", note.duration() * 1000.0);
+                plan.notes.push_back(nc);
+                continue;
+            }
+        }
         Target t = chooseTarget(note.medianMidi, s);
         nc.toMidi = t.midi;
         nc.reason = t.reason;

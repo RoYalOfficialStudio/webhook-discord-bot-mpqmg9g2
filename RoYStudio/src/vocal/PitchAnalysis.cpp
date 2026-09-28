@@ -76,6 +76,53 @@ PitchAnalysis analyzePitch(const PitchTrack& t, const PitchAnalysisSettings& s) 
         slideSeg.push_back(false);
     };
 
+    // Legato: a sustained change of the mean pitch level (window >= one vibrato period)
+    // splits a span; the glide between the two levels becomes its own slide segment.
+    auto splitLevels = [&](size_t b, size_t e) {
+        const size_t w = std::max<size_t>(4, static_cast<size_t>(0.22 / hop));
+        if (e < b + 2 * w + 2) {
+            splitSteady(b, e);
+            return;
+        }
+        std::vector<double> pre(e - b + 2, 0.0);
+        for (size_t k = b; k <= e; ++k) pre[k - b + 1] = pre[k - b] + p[k];
+        auto mean = [&](size_t a, size_t z) { return (pre[z - b + 1] - pre[a - b]) / static_cast<double>(z - a + 1); };
+        size_t cur = b;
+        size_t j = b + w;
+        while (j + w <= e) {
+            const double l1 = mean(j - w, j - 1), l2 = mean(j, j + w - 1);
+            if (std::fabs(l2 - l1) < 0.7) {
+                ++j;
+                continue;
+            }
+            // strongest change nearby
+            size_t best = j;
+            double bestD = std::fabs(l2 - l1);
+            for (size_t q = j + 1; q + w <= e && q < j + w; ++q) {
+                const double d = std::fabs(mean(q, q + w - 1) - mean(q - w, q - 1));
+                if (d > bestD) {
+                    bestD = d;
+                    best = q;
+                }
+            }
+            const double L1 = mean(best - w, best - 1), L2 = mean(best, best + w - 1);
+            // transition region: frames not yet near either level
+            size_t rs = best, re = best;
+            while (rs > cur + 1 && std::fabs(p[rs - 1] - L1) > 0.3) --rs;
+            while (re + 1 <= e && std::fabs(p[re + 1] - L2) > 0.3 && re + 1 < best + w) ++re;
+            if (rs > cur) splitSteady(cur, rs - 1);
+            if (static_cast<double>(re - rs + 1) * hop >= 0.04) {
+                segs.push_back({rs, re});
+                slideSeg.push_back(true);
+                cur = re + 1;
+            } else {
+                cur = rs;
+            }
+            j = std::max(cur + w, re + 1);
+        }
+        if (cur <= e) splitSteady(cur, e);
+    };
+
     const int slopeHalf = std::max(2, static_cast<int>(0.025 / hop));
     size_t i = 0;
     while (i < n) {
@@ -110,24 +157,34 @@ PitchAnalysis analyzePitch(const PitchTrack& t, const PitchAnalysisSettings& s) 
         for (size_t g = 0; g < groups.size(); ++g) {
             const auto& G = groups[g];
             if (std::fabs(G.change) < 1.0 || static_cast<double>(G.e - G.b + 1) * hop < 0.04) continue;
-            // vibrato alternates direction quickly; a slide does not
-            bool oscillates = false;
-            for (size_t h = 0; h < groups.size(); ++h) {
-                if (h == g || groups[h].dir == G.dir || std::fabs(groups[h].change) < 0.3) continue;
-                const double gap = groups[h].b > G.e ? static_cast<double>(groups[h].b - G.e) * hop
-                                                     : static_cast<double>(G.b - std::min(G.b, groups[h].e)) * hop;
-                if (gap < 0.15) oscillates = true;
+            // A slide moves the pitch LEVEL; vibrato swings around an unchanged centre.
+            // Compare the mean pitch over ~one vibrato period before and after the group.
+            const size_t ctx = std::max<size_t>(3, static_cast<size_t>(0.2 / hop));
+            auto meanRange = [&](size_t a, size_t b2) {
+                double sum = 0, cnt = 0;
+                for (size_t q = a; q <= b2; ++q) {
+                    sum += p[q];
+                    cnt += 1;
+                }
+                return cnt > 0 ? sum / cnt : 0.0;
+            };
+            const size_t bb = G.b >= i + ctx ? G.b - ctx : i;
+            const size_t ae = std::min(runEnd, G.e + ctx);
+            if (G.b == bb || G.e == ae) { // at a run edge: fall back to the size of the move
+                if (std::fabs(G.change) >= 1.5) slides.push_back({G.b, G.e});
+                continue;
             }
-            if (!oscillates) slides.push_back({G.b, G.e});
+            const double before = meanRange(bb, G.b - 1), after = meanRange(G.e + 1, ae);
+            if (std::fabs(after - before) >= 0.8 && (after - before) * G.dir > 0) slides.push_back({G.b, G.e});
         }
         size_t cur = i;
         for (auto [b, e] : slides) {
-            if (b > cur) splitSteady(cur, b - 1);
+            if (b > cur) splitLevels(cur, b - 1);
             segs.push_back({b, e});
             slideSeg.push_back(true);
             cur = e + 1;
         }
-        if (cur <= runEnd) splitSteady(cur, runEnd);
+        if (cur <= runEnd) splitLevels(cur, runEnd);
         i = runEnd + 1;
     }
 
