@@ -180,11 +180,16 @@ TEST_CASE("gmb11", "export mixdown WAV/FLAC, SRC, normalisation, selection") {
     auto rs = exporting::exportProject(r.engine, *r.rt, r.p, o);
     REQUIRE(rs.ok);
     CHECK_NEAR(rs.renderedSeconds, 1.0, 1e-6);
-    // MP3 is honestly unavailable
+    // MP3 (LAME) export of the same selection; an invalid bitrate is rejected with a clear error
     o.format = exporting::Format::Mp3;
+    o.mp3.bitrateKbps = 192;
     auto rm = exporting::exportProject(r.engine, *r.rt, r.p, o);
-    CHECK(!rm.ok);
-    CHECK(rm.error.find("licence") != std::string::npos);
+    REQUIRE_MSG_OK(rm.ok, rm.error);
+    CHECK(rm.files[0].path.extension() == ".mp3");
+    o.mp3.bitrateKbps = 100;
+    auto bad = exporting::exportProject(r.engine, *r.rt, r.p, o);
+    CHECK(!bad.ok);
+    CHECK(bad.error.find("bitrate") != std::string::npos);
 }
 
 TEST_CASE("gmb11", "export tails, plugin delay compensation, stems, instrumental") {
