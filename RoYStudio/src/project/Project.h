@@ -55,6 +55,12 @@ struct AudioClip {
     double fadeOutBeats = 0.0;
     FadeCurve fadeInCurve = FadeCurve::EqualPower;
     FadeCurve fadeOutCurve = FadeCurve::EqualPower;
+    // Vocal A/B: after Pitch Guardian the clip remembers its untouched source (raw) and the
+    // tuned render; assetId is whichever one plays. Neither file is ever modified.
+    std::string rawAssetId;
+    double rawOffsetSec = 0.0;
+    std::string tunedAssetId;
+    bool listeningOriginal() const { return !rawAssetId.empty() && assetId == rawAssetId; }
     double endBeat() const { return startBeat + lengthBeats; }
 };
 

@@ -291,7 +291,7 @@ void drawPlaylist(App& app) {
             if (laneTrack && laneTrack->type == TrackType::Midi) { // Browser -> Sampler (MIDI track)
                 const std::string midiTrack = laneTrack->id;
                 const std::string asset = app.importAsset(path);
-                if (!asset.empty()) app.run("LoadSampleIntoSampler", {{"trackId", midiTrack}, {"assetId", asset}, {"rootNote", 60}});
+                if (!asset.empty()) app.run("LoadSampleIntoSampler", {{"trackId", midiTrack}, {"assetId", asset}, {"rootNote", 60}, {"autoRoot", true}});
                 ImGui::EndDragDropTarget();
                 ImGui::EndChild();
                 return;

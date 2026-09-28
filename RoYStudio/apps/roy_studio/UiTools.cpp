@@ -60,7 +60,7 @@ void drawVocals(App& app) {
     ImGui::Spacing();
     sectionTitle("PITCH GUARDIAN");
     static int mode = 1;
-    static float strength = 0.8f, speed = 25.0f, humanize = 0.2f;
+    static float strength = 0.8f, speed = 25.0f, humanize = 0.2f, vibrato = 1.0f, slide = 1.0f;
     static bool offKey = true, formant = true, chromatic = false;
     const char* modes[] = {"warn", "assist", "lock"};
     ImGui::SetNextItemWidth(160 * dpi);
@@ -71,18 +71,39 @@ void drawVocals(App& app) {
     ImGui::SliderFloat("Speed", &speed, 1, 200, "%.0f ms");
     ImGui::SetNextItemWidth(160 * dpi);
     ImGui::SliderFloat("Humanize", &humanize, 0, 1);
+    ImGui::SetNextItemWidth(160 * dpi);
+    ImGui::SliderFloat("Vibrato preserve", &vibrato, 0, 1);
+    ImGui::SetNextItemWidth(160 * dpi);
+    ImGui::SliderFloat("Slide preserve", &slide, 0, 1);
     ImGui::Checkbox("OFF-KEY FILTER", &offKey);
     ImGui::SameLine();
-    ImGui::Checkbox("Formants", &formant);
+    ImGui::Checkbox("Formant", &formant);
     ImGui::Checkbox("Allow chromatic passing notes", &chromatic);
     ImGui::TextDisabled("Key: %s  (change in PROJECT)", p.key.name().c_str());
-    if (goldButton("Apply Pitch Guardian", ImVec2(-1, 0))) {
-        if (app.run("PitchGuardian", {{"clipId", clip->id}, {"mode", modes[mode]}, {"strength", strength}, {"speedMs", speed}, {"humanize", humanize},
-                                      {"offKeyFilter", offKey}, {"formantPreserve", formant}, {"allowChromatic", chromatic}})) {
+    const json settings = {{"clipId", clip->id}, {"mode", modes[mode]}, {"strength", strength}, {"speedMs", speed}, {"humanize", humanize},
+                           {"vibratoPreserve", vibrato}, {"slidePreserve", slide}, {"offKeyFilter", offKey}, {"formantPreserve", formant},
+                           {"allowChromatic", chromatic}};
+    auto refreshEditor = [&] {
+        if (app.run("PitchEditorData", settings)) {
             app.vocalResult = app.lastResult();
-            app.vocalResult["kind"] = "guardian";
-            app.message(0, std::format("Pitch Guardian: {} notes corrected (original audio kept, undo restores it)", app.vocalResult.value("corrected", 0)));
+            app.vocalResult["kind"] = "editor";
         }
+    };
+    if (ImGui::Button("Preview (changes nothing)", ImVec2(-1, 0))) refreshEditor();
+    if (goldButton("Apply Pitch Guardian", ImVec2(-1, 0))) {
+        if (app.run("PitchGuardian", settings)) {
+            const int corrected = app.lastResult().value("corrected", 0);
+            app.message(0, std::format("Pitch Guardian: {} notes corrected (the original take is kept for A/B, undo restores it)", corrected));
+            refreshEditor();
+        }
+    }
+    // A/B: original take vs. tuned render
+    if (!clip->rawAssetId.empty() && !clip->tunedAssetId.empty()) {
+        const bool orig = clip->listeningOriginal();
+        if (toggleButton("A  ORIGINAL", orig, col::Ivory, ImVec2(ImGui::GetContentRegionAvail().x * 0.5f - 2, 0)) && !orig)
+            app.run("VocalAB", {{"clipId", clip->id}, {"use", "original"}});
+        ImGui::SameLine();
+        if (toggleButton("B  CORRECTED", !orig, col::Gold, ImVec2(-1, 0)) && orig) app.run("VocalAB", {{"clipId", clip->id}, {"use", "corrected"}});
     }
     ImGui::Spacing();
     sectionTitle("ANALYSIS & REPAIR");
@@ -116,7 +137,96 @@ void drawVocals(App& app) {
     ImGui::BeginChild("vocalRight", ImVec2(0, 0), ImGuiChildFlags_Borders);
     const json& r = app.vocalResult;
     const std::string kind = r.is_object() ? r.value("kind", "") : "";
-    if (kind == "pitch" || kind == "guardian") {
+    if (kind == "editor") {
+        sectionTitle("PITCH EDITOR");
+        const json counts = r.value("counts", json::object());
+        auto legend = [&](const char* name, ImU32 c) {
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(c), "%s %d", name, counts.value(name, 0));
+            ImGui::SameLine();
+        };
+        const ImU32 cIn = col::Green, cOff = col::Red, cUnc = col::rgb(0x8A8A99), cCor = col::Gold;
+        legend("IN_SCALE", cIn);
+        legend("OFF_KEY", cOff);
+        legend("UNCERTAIN", cUnc);
+        legend("CORRECTED", cCor);
+        ImGui::TextDisabled("| key %s | editing the ORIGINAL take - the file is never changed", r.value("key", "").c_str());
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 o = ImGui::GetCursorScreenPos();
+        const float W = ImGui::GetContentRegionAvail().x, H = std::max(260.0f * dpi, ImGui::GetContentRegionAvail().y * 0.55f);
+        dl->AddRectFilled(o, ImVec2(o.x + W, o.y + H), col::Obsidian, 4);
+        const double dur = std::max(1e-3, r.value("duration", 1.0));
+        const json notes = r.value("notes", json::array()), curve = r.value("curve", json::array());
+        double lo = 127, hi = 0;
+        for (auto& n : notes) {
+            lo = std::min({lo, n.value("detected", 60.0), n.value("target", 60.0)});
+            hi = std::max({hi, n.value("detected", 60.0), n.value("target", 60.0)});
+        }
+        if (lo > hi) lo = 55, hi = 72;
+        lo = std::floor(lo) - 2;
+        hi = std::ceil(hi) + 2;
+        auto X = [&](double t) { return o.x + static_cast<float>(t / dur) * W; };
+        auto Y = [&](double m) { return o.y + H - static_cast<float>((m - lo) / std::max(1.0, hi - lo)) * H; };
+        // key grid: in-key rows tinted, note names on C
+        for (int k = static_cast<int>(lo); k <= static_cast<int>(hi); ++k) {
+            const float y0 = Y(k + 0.5), y1 = Y(k - 0.5);
+            if (p.key.contains(k)) dl->AddRectFilled(ImVec2(o.x, y0), ImVec2(o.x + W, y1), col::rgb(0x201D14));
+            dl->AddLine(ImVec2(o.x, y1), ImVec2(o.x + W, y1), col::rgb(0x18181C));
+            if (k % 12 == 0) dl->AddText(ImVec2(o.x + 2, y0), col::IvoryDim, std::format("C{}", k / 12 - 1).c_str());
+        }
+        // waveform in the lower band
+        const json wmin = r.value("waveMin", json::array()), wmax = r.value("waveMax", json::array());
+        const float wy = o.y + H - 34 * dpi, wh = 30 * dpi;
+        for (size_t i = 0; i < wmin.size() && i < wmax.size(); ++i) {
+            const float x = o.x + static_cast<float>(i) / static_cast<float>(wmin.size()) * W;
+            dl->AddLine(ImVec2(x, wy - wmax[i].get<float>() * wh), ImVec2(x, wy - wmin[i].get<float>() * wh), col::rgb(0x55555F));
+        }
+        // notes: detected (outline) and target (filled), colour = status, cents label
+        for (auto& n : notes) {
+            const std::string st = n.value("status", "");
+            const ImU32 c = st == "CORRECTED" ? cCor : st == "OFF_KEY" ? cOff : st == "UNCERTAIN" ? cUnc : cIn;
+            const float x0 = X(n.value("start", 0.0)), x1 = std::max(x0 + 3, X(n.value("end", 0.0)));
+            const double det = n.value("detected", 60.0), tgt = n.value("target", det);
+            dl->AddRect(ImVec2(x0, Y(det) - 4), ImVec2(x1, Y(det) + 4), c, 2, 0, 1.5f);
+            if (st == "CORRECTED") {
+                dl->AddRectFilled(ImVec2(x0, Y(tgt) - 4), ImVec2(x1, Y(tgt) + 4), col::rgb(0xD4AF37, 170), 2);
+                dl->AddLine(ImVec2((x0 + x1) * 0.5f, Y(det)), ImVec2((x0 + x1) * 0.5f, Y(tgt)), cCor);
+            }
+            if (x1 - x0 > 28)
+                dl->AddText(ImVec2(x0 + 2, Y(det) - 18 * dpi), c, std::format("{}{:+.0f}c", n.value("note", ""), n.value("cents", 0.0)).c_str());
+        }
+        // pitch curve, brightness = confidence
+        for (size_t i = 1; i < curve.size(); ++i) {
+            const auto& a0 = curve[i - 1];
+            const auto& a1 = curve[i];
+            if (a0[1].is_null() || a1[1].is_null()) continue;
+            const float conf = a1[2].get<float>();
+            dl->AddLine(ImVec2(X(a0[0].get<double>()), Y(a0[1].get<double>())), ImVec2(X(a1[0].get<double>()), Y(a1[1].get<double>())),
+                        col::rgb(0xFFFFF0, static_cast<int>(60 + 195 * std::clamp(conf, 0.0f, 1.0f))), 1.2f * dpi);
+        }
+        ImGui::Dummy(ImVec2(W, H));
+        if (ImGui::BeginTable("editnotes", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImVec2(0, 0))) {
+            for (const char* h : {"time", "detected", "target", "cents", "confidence", "status", "why"}) ImGui::TableSetupColumn(h);
+            ImGui::TableHeadersRow();
+            for (auto& n : notes) {
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%.2f s", n.value("start", 0.0));
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(n.value("note", "").c_str());
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(n.value("targetNote", "").c_str());
+                ImGui::TableNextColumn();
+                ImGui::Text("%+.0f", n.value("cents", 0.0));
+                ImGui::TableNextColumn();
+                ImGui::Text("%.2f", n.value("confidence", 0.0));
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(n.value("status", "").c_str());
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(n.value("reason", "").c_str());
+            }
+            ImGui::EndTable();
+        }
+    } else if (kind == "pitch" || kind == "guardian") {
         sectionTitle(kind == "pitch" ? "PITCH ANALYSIS" : "PITCH GUARDIAN RESULT");
         if (kind == "pitch") ImGui::Text("In tune: %.0f %%   rap indicator %.2f", r.value("inTuneRatio", 0.0) * 100, r.value("rapIndicator", 0.0));
         // note graph: each note as a bar at its pitch, colour = cents deviation

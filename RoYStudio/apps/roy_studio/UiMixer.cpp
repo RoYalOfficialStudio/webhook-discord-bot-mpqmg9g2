@@ -222,7 +222,7 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
     if (ImGui::IsItemDeactivatedAfterEdit()) app.run(master ? "SetChannelPan" : "SetChannelPan", {{"channelId", ch.id}, {"master", master}, {"pan", pan}});
     // fader + meter
     float gain = ch.gainDb;
-    const float faderH = bottomH - ImGui::GetFrameHeight() * 3.2f;
+    const float faderH = bottomH - ImGui::GetFrameHeight() * (master ? 3.2f : 4.4f); // room for solo safe / delete bus
     ImGui::VSliderFloat("##fader", ImVec2(width * 0.42f, faderH), &gain, -60.0f, 12.0f, "%.1f dB");
     if (ImGui::IsItemActive() && params) params->gainDb.store(gain);
     if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetChannelGain", {{"channelId", ch.id}, {"master", master}, {"gainDb", gain}});

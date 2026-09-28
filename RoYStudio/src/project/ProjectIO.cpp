@@ -74,12 +74,18 @@ AudioAsset assetFrom(const json& j) {
 }
 
 json toJ(const AudioClip& c) {
-    return {{"id", c.id}, {"assetId", c.assetId}, {"name", c.name}, {"color", c.color}, {"startBeat", c.startBeat},
+    json j = {{"id", c.id}, {"assetId", c.assetId}, {"name", c.name}, {"color", c.color}, {"startBeat", c.startBeat},
             {"lengthBeats", c.lengthBeats}, {"sourceOffsetSec", c.sourceOffsetSec}, {"stretch", c.stretch},
             {"pitchSemitones", c.pitchSemitones}, {"gainDb", c.gainDb}, {"muted", c.muted}, {"locked", c.locked},
             {"reversed", c.reversed}, {"groupId", c.groupId}, {"fadeInBeats", c.fadeInBeats},
             {"fadeOutBeats", c.fadeOutBeats}, {"fadeInCurve", static_cast<int>(c.fadeInCurve)},
             {"fadeOutCurve", static_cast<int>(c.fadeOutCurve)}};
+    if (!c.rawAssetId.empty()) {
+        j["rawAssetId"] = c.rawAssetId;
+        j["rawOffsetSec"] = c.rawOffsetSec;
+        j["tunedAssetId"] = c.tunedAssetId;
+    }
+    return j;
 }
 AudioClip audioClipFrom(const json& j) {
     AudioClip c;
@@ -101,6 +107,9 @@ AudioClip audioClipFrom(const json& j) {
     c.fadeOutBeats = get<double>(j, "fadeOutBeats", 0.0);
     c.fadeInCurve = static_cast<FadeCurve>(std::clamp(get<int>(j, "fadeInCurve", 1), 0, 3));
     c.fadeOutCurve = static_cast<FadeCurve>(std::clamp(get<int>(j, "fadeOutCurve", 1), 0, 3));
+    c.rawAssetId = get<std::string>(j, "rawAssetId", "");
+    c.rawOffsetSec = get<double>(j, "rawOffsetSec", 0.0);
+    c.tunedAssetId = get<std::string>(j, "tunedAssetId", "");
     return c;
 }
 

@@ -389,6 +389,7 @@ void drawBeats(App& app) {
     ImGui::EndChild();
     ImGui::SameLine();
     ImGui::BeginChild("808lab", ImVec2(0, 0), ImGuiChildFlags_Borders);
+    ImGui::BeginChild("808params", ImVec2(340 * dpi, 0));
     sectionTitle("808 LAB");
     int n808 = 0;
     for (auto& t : p.tracks) {
@@ -420,6 +421,73 @@ void drawBeats(App& app) {
         if (goldButton("Create 808 track"))
             app.run("AddTrack", {{"type", "midi"}, {"name", "808"}, {"instrument", "roy.808"}, {"role", "808"}});
     }
+    ImGui::EndChild();
+    ImGui::SameLine();
+    ImGui::BeginChild("808analyzer", ImVec2(0, 0));
+    sectionTitle("KICK <-> 808 ANALYZER");
+    static json report;
+    if (goldButton("Analyze kick vs 808")) {
+        if (app.run("AnalyzeKick808", json::object())) report = app.lastResult();
+        else report = json{{"error", app.lastError()}};
+    }
+    if (report.contains("error")) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Red), "%s", report["error"].get<std::string>().c_str());
+    if (report.contains("visual")) {
+        const json& v = report["visual"];
+        ImGui::Text("kick %.0f Hz | 808 %.0f Hz | 808 starts %.0f ms after the kick", report.value("kickFundamentalHz", 0.0),
+                    report.value("bassFundamentalHz", 0.0), report.value("offsetMs", 0.0));
+        const double fo = v.value("frequencyOverlap", 0.0), to = v.value("timingOverlapMs", 0.0), pc = v.value("phaseCorrelation", 0.0);
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(fo > 0.5 ? col::Orange : col::Green), "frequency overlap %.0f %%", fo * 100);
+        ImGui::SameLine();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(to > 80 ? col::Orange : col::Green), "| timing overlap %.0f ms", to);
+        ImGui::SameLine();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(pc < 0 ? col::Red : col::Green), "| phase correlation %+.2f", pc);
+        // plot: series of (x, y) with a shared y range; `fill` shades the area both curves share
+        auto plot = [&](const char* id, const json& xs, std::initializer_list<std::pair<const json*, ImU32>> series, float yMin, float yMax,
+                        bool logX, bool fillShared) {
+            const ImVec2 size(ImGui::GetContentRegionAvail().x, 110 * dpi);
+            const ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + size.x, a.y + size.y);
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            dl->AddRectFilled(a, b, col::Panel2, 3);
+            ImGui::InvisibleButton(id, size);
+            if (!xs.is_array() || xs.size() < 2) return;
+            const double x0 = xs.front().get<double>(), x1 = xs.back().get<double>();
+            auto X = [&](double x) {
+                const double t = logX ? std::log(x / x0) / std::log(x1 / x0) : (x - x0) / (x1 - x0);
+                return a.x + static_cast<float>(t) * size.x;
+            };
+            auto Y = [&](double y) { return b.y - static_cast<float>((std::clamp(y, double(yMin), double(yMax)) - yMin) / (yMax - yMin)) * size.y; };
+            if (fillShared && series.size() >= 2) {
+                const json& s1 = *series.begin()->first;
+                const json& s2 = *(series.begin() + 1)->first;
+                for (size_t i = 0; i + 1 < xs.size() && i < s1.size() && i < s2.size(); ++i) {
+                    if (s1[i].is_null() || s2[i].is_null()) continue;
+                    const double m = std::min(s1[i].get<double>(), s2[i].get<double>());
+                    dl->AddRectFilled(ImVec2(X(xs[i].get<double>()), Y(m)), ImVec2(X(xs[i + 1].get<double>()), b.y), col::rgb(0xFF8C00, 70));
+                }
+            }
+            for (auto& [sp, color] : series) {
+                const json& sv = *sp;
+                for (size_t i = 0; i + 1 < xs.size() && i + 1 < sv.size(); ++i) {
+                    if (sv[i].is_null() || sv[i + 1].is_null()) continue;
+                    dl->AddLine(ImVec2(X(xs[i].get<double>()), Y(sv[i].get<double>())), ImVec2(X(xs[i + 1].get<double>()), Y(sv[i + 1].get<double>())),
+                                color, 1.5f * dpi);
+                }
+            }
+            dl->AddText(ImVec2(a.x + 4, a.y + 2), col::IvoryDim, id);
+        };
+        const json kE = v["kickEnvDb"], bE = v["bassEnvDb"], corr = v["correlation"];
+        plot("low-band envelopes (dB, time)  gold = kick  orange = 808  shaded = both sound", v["timeMs"], {{&kE, col::Gold}, {&bE, col::Orange}}, -48, 0, false, true);
+        plot("phase correlation over time (+1 in phase, -1 cancels)", v["timeMs"], {{&corr, col::Green}}, -1, 1, false, false);
+        const json kS = v["kickSpecDb"], bS = v["bassSpecDb"];
+        plot("spectrum 20-400 Hz  gold = kick  orange = 808  shaded = shared", v["freqHz"], {{&kS, col::Gold}, {&bS, col::Orange}}, -60, 0, true, true);
+        for (auto& sug : report.value("suggestions", json::array())) {
+            ImGui::Bullet();
+            ImGui::TextWrapped("%s", sug.value("description", std::string()).c_str());
+        }
+        if (report.value("suggestions", json::array()).empty()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Green), "No kick/808 conflict found.");
+        ImGui::TextDisabled("Measurement only - nothing in the project is changed.");
+    }
+    ImGui::EndChild();
     ImGui::EndChild();
 }
 

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <limits>
 
 namespace roy::beat {
 
@@ -172,6 +173,156 @@ CollisionReport analyzeKick808(const std::vector<float>& kickIn, const std::vect
                                                                : std::format("Delaying the 808 by {:.1f} ms increases the low end.", r.bestBassDelayMs)),
                                  {{"invertPolarity", r.invertBassHelps}, {"delayMs", r.bestBassDelayMs}}});
     }
+    return r;
+}
+
+// ---------------------------------------------------------------- visual analyzer
+nlohmann::json Kick808Visual::toJson() const {
+    auto arr = [](const std::vector<float>& v) {
+        nlohmann::json a = nlohmann::json::array();
+        for (float x : v) a.push_back(std::isfinite(x) ? nlohmann::json(std::round(x * 100.0f) / 100.0f) : nlohmann::json(nullptr));
+        return a;
+    };
+    return {{"timeMs", arr(timeMs)}, {"kickEnvDb", arr(kickEnvDb)}, {"bassEnvDb", arr(bassEnvDb)}, {"correlation", arr(correlation)},
+            {"freqHz", arr(freqHz)}, {"kickSpecDb", arr(kickSpecDb)}, {"bassSpecDb", arr(bassSpecDb)},
+            {"frequencyOverlap", frequencyOverlap}, {"timingOverlapMs", timingOverlapMs}, {"phaseCorrelation", phaseCorrelation}};
+}
+
+Kick808Visual analyzeKick808Visual(const std::vector<float>& kickIn, const std::vector<float>& bassIn, double sr, double bassOffset,
+                                   double lengthSec) {
+    Kick808Visual v;
+    const size_t len = static_cast<size_t>(std::max(0.05, lengthSec) * sr);
+    const int64_t off = static_cast<int64_t>(std::llround(bassOffset * sr));
+    std::vector<float> kick(len, 0.0f), bass(len, 0.0f);
+    for (size_t i = 0; i < std::min(len, kickIn.size()); ++i) kick[i] = kickIn[i];
+    for (size_t i = 0; i < bassIn.size(); ++i) {
+        const int64_t d = off + static_cast<int64_t>(i);
+        if (d >= 0 && static_cast<size_t>(d) < len) bass[static_cast<size_t>(d)] = bassIn[i];
+    }
+    auto kl = lowBand(kick, sr), bl = lowBand(bass, sr);
+    // envelopes + running correlation
+    const size_t hop = std::max<size_t>(1, static_cast<size_t>(0.005 * sr)), cw = static_cast<size_t>(0.02 * sr);
+    std::vector<double> ek, eb;
+    const size_t ew = static_cast<size_t>(0.025 * sr); // RMS window longer than one period of a 40 Hz sub
+    for (size_t i = 0; i + hop <= len; i += hop) {
+        double a = 0, b = 0;
+        const size_t e0 = i >= ew / 2 ? i - ew / 2 : 0, e1 = std::min(len, e0 + ew);
+        for (size_t k = e0; k < e1; ++k) {
+            a += static_cast<double>(kl[k]) * kl[k];
+            b += static_cast<double>(bl[k]) * bl[k];
+        }
+        ek.push_back(a / static_cast<double>(std::max<size_t>(1, e1 - e0)));
+        eb.push_back(b / static_cast<double>(std::max<size_t>(1, e1 - e0)));
+        double sxy = 0, sxx = 0, syy = 0;
+        for (size_t k = i; k < std::min(len, i + cw); ++k) {
+            sxy += static_cast<double>(kl[k]) * bl[k];
+            sxx += static_cast<double>(kl[k]) * kl[k];
+            syy += static_cast<double>(bl[k]) * bl[k];
+        }
+        const bool sounding = sxx > 1e-9 && syy > 1e-9;
+        v.correlation.push_back(sounding ? static_cast<float>(sxy / std::sqrt(sxx * syy)) : std::numeric_limits<float>::quiet_NaN());
+        v.timeMs.push_back(static_cast<float>(1000.0 * static_cast<double>(i) / sr));
+    }
+    const double pk = std::max({1e-20, *std::max_element(ek.begin(), ek.end()), *std::max_element(eb.begin(), eb.end())});
+    const double pkK = std::max(1e-20, *std::max_element(ek.begin(), ek.end()));
+    const double pkB = std::max(1e-20, *std::max_element(eb.begin(), eb.end()));
+    double both = 0, num = 0, den = 0;
+    for (size_t i = 0; i < ek.size(); ++i) {
+        v.kickEnvDb.push_back(static_cast<float>(10.0 * std::log10(ek[i] / pk + 1e-12)));
+        v.bassEnvDb.push_back(static_cast<float>(10.0 * std::log10(eb[i] / pk + 1e-12)));
+        const bool k20 = ek[i] > pkK * 0.01, b20 = eb[i] > pkB * 0.01;
+        if (k20 && b20) {
+            both += 5.0;
+            if (std::isfinite(v.correlation[i])) {
+                const double w = std::min(ek[i], eb[i]);
+                num += w * v.correlation[i];
+                den += w;
+            }
+        }
+    }
+    v.timingOverlapMs = both;
+    v.phaseCorrelation = den > 0 ? num / den : 0.0;
+    // spectra of the first 16384 samples (zero padded)
+    const int N = 16384;
+    std::vector<float> ks(N, 0.0f), bs(N, 0.0f);
+    for (int i = 0; i < N && static_cast<size_t>(i) < len; ++i) {
+        const double w = 0.5 - 0.5 * std::cos(kTwoPi * i / (std::min<double>(N, static_cast<double>(len)) - 1));
+        ks[static_cast<size_t>(i)] = static_cast<float>(kick[static_cast<size_t>(i)] * w);
+        bs[static_cast<size_t>(i)] = static_cast<float>(bass[static_cast<size_t>(i)] * w);
+    }
+    auto km = dsp::magnitudeSpectrum(ks.data(), N), bm = dsp::magnitudeSpectrum(bs.data(), N);
+    const int bins = 96;
+    std::vector<double> kb(bins), bb(bins);
+    double specPk = 1e-20, shared = 0, kTot = 0;
+    for (int b = 0; b < bins; ++b) {
+        const double f0 = 20.0 * std::pow(20.0, static_cast<double>(b) / bins), f1 = 20.0 * std::pow(20.0, static_cast<double>(b + 1) / bins);
+        const size_t i0 = static_cast<size_t>(f0 * N / sr), i1 = std::max(i0 + 1, static_cast<size_t>(f1 * N / sr));
+        double a = 0, c = 0;
+        for (size_t i = i0; i < i1 && i < km.size(); ++i) {
+            a += static_cast<double>(km[i]) * km[i];
+            c += static_cast<double>(bm[i]) * bm[i];
+        }
+        kb[static_cast<size_t>(b)] = a;
+        bb[static_cast<size_t>(b)] = c;
+        specPk = std::max({specPk, a, c});
+        shared += std::min(a, c);
+        kTot += a;
+        v.freqHz.push_back(static_cast<float>(std::sqrt(f0 * f1)));
+    }
+    for (int b = 0; b < bins; ++b) {
+        v.kickSpecDb.push_back(static_cast<float>(10.0 * std::log10(kb[static_cast<size_t>(b)] / specPk + 1e-12)));
+        v.bassSpecDb.push_back(static_cast<float>(10.0 * std::log10(bb[static_cast<size_t>(b)] / specPk + 1e-12)));
+    }
+    v.frequencyOverlap = kTot > 0 ? std::clamp(shared / kTot, 0.0, 1.0) : 0.0;
+    return v;
+}
+
+// ---------------------------------------------------------------- root detection
+nlohmann::json RootDetection::toJson() const {
+    return {{"hz", hz}, {"midiNote", midiNote}, {"cents", cents}, {"confidence", confidence}, {"noteName", noteName}};
+}
+
+RootDetection detectRoot(const float* x, int64_t n, double sr) {
+    RootDetection r;
+    if (!x || n <= 0 || sr <= 0) return r;
+    // settled pitch: windows after the pitch envelope (808s start sharp and drop)
+    const double starts[3] = {0.08, 0.16, 0.26};
+    std::vector<double> est;
+    for (double s0 : starts) {
+        const int64_t a = static_cast<int64_t>(s0 * sr);
+        if (a + static_cast<int64_t>(0.05 * sr) >= n) break;
+        const double f = lowFundamental(x + a, n - a, sr, 0.0);
+        if (f > 0) est.push_back(f);
+    }
+    if (est.empty()) { // very short one-shot: whatever is there
+        const double f = lowFundamental(x, n, sr, 0.01);
+        if (f <= 0) return r;
+        est.push_back(f);
+    }
+    const double hz = est.back(); // the latest window is the most settled
+    double spread = 0;
+    for (double f : est) spread = std::max(spread, std::fabs(1200.0 * std::log2(f / hz)));
+    r.hz = hz;
+    const double m = 69.0 + 12.0 * std::log2(hz / 440.0);
+    r.midiNote = static_cast<int>(std::lround(m));
+    r.cents = (m - r.midiNote) * 100.0;
+    static const char* names[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    r.noteName = std::format("{}{}", names[((r.midiNote % 12) + 12) % 12], r.midiNote / 12 - 1);
+    // tonal share: energy near the fundamental (and 2nd harmonic) vs the whole < 1 kHz band
+    const int N = 16384;
+    std::vector<float> seg(N, 0.0f);
+    const int64_t a = std::min<int64_t>(n - 1, static_cast<int64_t>(starts[0] * sr));
+    for (int i = 0; i < N && a + i < n; ++i) seg[static_cast<size_t>(i)] = x[a + i];
+    auto mag = dsp::magnitudeSpectrum(seg.data(), N);
+    double tonal = 0, total = 0;
+    for (size_t b = 1; b < mag.size() && b * sr / N < 1000.0; ++b) {
+        const double f = b * sr / N, e = static_cast<double>(mag[b]) * mag[b];
+        total += e;
+        for (int h = 1; h <= 2; ++h)
+            if (std::fabs(1200.0 * std::log2(f / (hz * h))) < 60.0) tonal += e;
+    }
+    const double share = total > 0 ? tonal / total : 0.0;
+    r.confidence = std::clamp(share * (1.0 - std::min(1.0, spread / 100.0)), 0.0, 1.0);
     return r;
 }
 

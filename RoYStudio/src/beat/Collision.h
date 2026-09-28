@@ -31,6 +31,32 @@ struct CollisionReport {
 CollisionReport analyzeKick808(const std::vector<float>& kick, const std::vector<float>& bass, double sampleRate,
                                double bassOffsetSec = 0.0);
 
+// Curves for the visual KICK <-> 808 analyzer (UI). Time axis in 5 ms hops from the kick
+// start, spectrum on a log axis 20..400 Hz. All values are measurements, nothing is changed.
+struct Kick808Visual {
+    std::vector<float> timeMs, kickEnvDb, bassEnvDb; // low band (<150 Hz) envelopes, dB re. the louder peak
+    std::vector<float> correlation;                  // running low-band correlation (20 ms window), NaN when silent
+    std::vector<float> freqHz, kickSpecDb, bassSpecDb; // magnitude spectra, dB re. the louder peak
+    double frequencyOverlap = 0; // shared spectral energy / kick spectral energy (0..1)
+    double timingOverlapMs = 0;  // time both envelopes are within 20 dB of their own peak
+    double phaseCorrelation = 0; // energy-weighted correlation while both sound (-1..1)
+    nlohmann::json toJson() const;
+};
+Kick808Visual analyzeKick808Visual(const std::vector<float>& kick, const std::vector<float>& bass, double sampleRate,
+                                   double bassOffsetSec = 0.0, double lengthSec = 0.6);
+
+// ROOT DETECTION for 808 / bass one-shots: measures the pitch in three windows after
+// the attack (pitch envelopes settle), reports the settled note and how stable it is.
+struct RootDetection {
+    double hz = 0;
+    int midiNote = -1;
+    double cents = 0;       // deviation of hz from midiNote
+    double confidence = 0;  // 0..1 (window agreement + tonal energy share)
+    std::string noteName;   // "C#1"
+    nlohmann::json toJson() const;
+};
+RootDetection detectRoot(const float* x, int64_t n, double sampleRate);
+
 // Fundamental (Hz) of a low-frequency one-shot (kick/808), searching 25..250 Hz.
 double lowFundamental(const float* x, int64_t n, double sampleRate, double skipSeconds = 0.01);
 

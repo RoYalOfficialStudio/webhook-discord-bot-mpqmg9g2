@@ -1,6 +1,9 @@
 // Beat Lab commands: patterns, steps, swing, pattern clips (drum programming).
 #include "commands/Commands.h"
+#include "beat/Collision.h"
 #include "beat/StepSequencer.h"
+#include "core/AudioBuffer.h"
+#include "instruments/Drums.h"
 #include "core/Files.h"
 
 #include <algorithm>
@@ -41,9 +44,123 @@ PatternRow* rowArg(CommandContext& ctx, Pattern& p, const json& a) {
     ctx.error = "pattern row not found";
     return nullptr;
 }
+// Renders a one-shot (note on at 0, off after holdSec) of an instrument, mono (L+R)/2.
+std::vector<float> renderOneShot(Processor& inst, int note, float velocity, double sr, double holdSec, double lengthSec) {
+    const int block = 256;
+    inst.prepare(sr, block);
+    AudioBuffer buf(2, block);
+    const int64_t total = static_cast<int64_t>(lengthSec * sr), offAt = static_cast<int64_t>(holdSec * sr);
+    std::vector<float> out;
+    out.reserve(static_cast<size_t>(total));
+    for (int64_t pos = 0; pos < total; pos += block) {
+        buf.clear();
+        std::vector<NoteEvent> ev;
+        if (pos == 0) {
+            NoteEvent e;
+            e.note = static_cast<int16_t>(note);
+            e.velocity = velocity;
+            ev.push_back(e);
+        }
+        if (offAt >= pos && offAt < pos + block) {
+            NoteEvent e;
+            e.type = NoteEvent::NoteOff;
+            e.offset = static_cast<int>(offAt - pos);
+            e.note = static_cast<int16_t>(note);
+            ev.push_back(e);
+        }
+        auto blk = buf.block();
+        inst.process(blk, nullptr, ev.data(), static_cast<int>(ev.size()));
+        const int n = static_cast<int>(std::min<int64_t>(block, total - pos));
+        for (int i = 0; i < n; ++i) out.push_back(0.5f * (buf.channel(0)[i] + buf.channel(1)[i]));
+    }
+    return out;
+}
 } // namespace
 
 void registerBeatCommands(CommandRegistry& r) {
+    // KICK <-> 808 analyzer on the project's own sounds: the kick row of the beat track
+    // (its sample or drum voice) and the 808 track's instrument with its current settings,
+    // offset as arranged (first 808 note vs. the kick hit before it). Measures only.
+    r.add({"AnalyzeKick808", "Analyze Kick vs 808", "Beat", "", false, false, [](CommandContext& ctx, const json& a) {
+               if (!ctx.runtime) return fail(ctx, "no audio runtime");
+               const double sr = ctx.runtime->engine().sampleRate() > 0 ? ctx.runtime->engine().sampleRate() : 48000.0;
+               Project& p = ctx.project;
+               const Track* beatTrack = nullptr;
+               const Track* bassTrack = nullptr;
+               for (auto& t : p.tracks) {
+                   if (t.type == TrackType::Beat && (!beatTrack || t.id == str(a, "beatTrackId"))) beatTrack = &t;
+                   if (t.instrument && t.instrument->typeId == "roy.808" && (!bassTrack || t.id == str(a, "bassTrackId"))) bassTrack = &t;
+               }
+               if (!beatTrack || !bassTrack) return fail(ctx, "needs a beat track with a kick and an 808 track");
+               // kick sound
+               const PatternRow* kickRow = nullptr;
+               const Pattern* kickPat = nullptr;
+               for (auto& pc : beatTrack->patternClips)
+                   if (const Pattern* pat = p.findPattern(pc.patternId))
+                       for (auto& row : pat->rows)
+                           if (row.voice == "kick" && !kickRow) {
+                               kickRow = &row;
+                               kickPat = pat;
+                           }
+               if (!kickRow)
+                   for (auto& pat : p.patterns)
+                       for (auto& row : pat.rows)
+                           if (row.voice == "kick" && !kickRow) {
+                               kickRow = &row;
+                               kickPat = &pat;
+                           }
+               if (!kickRow) return fail(ctx, "no kick row found");
+               auto drums = std::unique_ptr<Processor>(ProcessorFactory::instance().create("roy.drums"));
+               if (!drums) return fail(ctx, "drum instrument unavailable");
+               if (beatTrack->instrument && beatTrack->instrument->typeId == "roy.drums") drums->loadState(beatTrack->instrument->state);
+               if (!kickRow->sampleAssetId.empty())
+                   if (auto* d = dynamic_cast<RoyDrums*>(drums.get())) d->setSample(kickRow->note, ctx.runtime->asset(p, kickRow->sampleAssetId));
+               const auto kick = renderOneShot(*drums, kickRow->note, std::clamp(kickRow->volume, 0.1f, 1.0f), sr, 0.05, 0.8);
+               // 808 sound: first note of the 808 track (or C1)
+               int bassNote = 36;
+               double bassBeat = -1, bassLen = 1.0;
+               for (auto& c : bassTrack->midiClips)
+                   for (auto& n : c.notes)
+                       if (!n.muted && (bassBeat < 0 || c.startBeat + n.startBeat < bassBeat)) {
+                           bassBeat = c.startBeat + n.startBeat;
+                           bassNote = n.pitch;
+                           bassLen = n.lengthBeats;
+                       }
+               auto bass808 = std::unique_ptr<Processor>(ProcessorFactory::instance().create("roy.808"));
+               if (!bass808) return fail(ctx, "808 instrument unavailable");
+               bass808->loadState(bassTrack->instrument->state);
+               const double holdSec = std::clamp(p.tempo.beatToSeconds(bassBeat < 0 ? 0 : bassBeat + bassLen) -
+                                                     p.tempo.beatToSeconds(bassBeat < 0 ? 0 : bassBeat), 0.05, 2.0);
+               const auto bass = renderOneShot(*bass808, bassNote, 1.0f, sr, holdSec, 1.2);
+               // arranged offset: 808 start relative to the latest kick hit at or before it (within one beat)
+               double offset = num(a, "offsetMs", -1.0) >= 0 ? num(a, "offsetMs", 0.0) / 1000.0 : 0.0;
+               if (num(a, "offsetMs", -1.0) < 0 && bassBeat >= 0) {
+                   double best = -1;
+                   for (auto& pc : beatTrack->patternClips)
+                       if (const Pattern* pat = p.findPattern(pc.patternId))
+                           for (auto& n : expandPatternClip(*pat, pc, 1))
+                               if (n.note == kickRow->note && n.beat <= bassBeat + 1e-9 && bassBeat - n.beat <= 1.0) best = std::max(best, n.beat);
+                   if (best >= 0) offset = p.tempo.beatToSeconds(bassBeat) - p.tempo.beatToSeconds(best);
+               }
+               const auto report = beat::analyzeKick808(kick, bass, sr, offset);
+               const auto visual = beat::analyzeKick808Visual(kick, bass, sr, offset);
+               ctx.result = report.toJson();
+               ctx.result["visual"] = visual.toJson();
+               ctx.result["offsetMs"] = offset * 1000.0;
+               ctx.result["kickNote"] = kickRow->note;
+               ctx.result["bassNote"] = bassNote;
+               ctx.result["patternName"] = kickPat ? kickPat->name : "";
+               return true;
+           }});
+    r.add({"DetectRoot", "Detect Root Note", "Beat", "", false, false, [](CommandContext& ctx, const json& a) {
+               if (!ctx.runtime) return fail(ctx, "no audio runtime");
+               auto data = ctx.runtime->asset(ctx.project, str(a, "assetId"));
+               if (!data || data->channels.empty() || data->channels[0].empty()) return fail(ctx, "asset not found or empty");
+               const auto rd = beat::detectRoot(data->channels[0].data(), static_cast<int64_t>(data->channels[0].size()), data->sampleRate);
+               if (rd.midiNote < 0) return fail(ctx, "no clear pitch found");
+               ctx.result = rd.toJson();
+               return true;
+           }});
     r.add({"AddPattern", "New Pattern", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
                const int steps = static_cast<int>(num(a, "steps", 16));
                if (steps != 16 && steps != 32 && steps != 64) return fail(ctx, "steps must be 16, 32 or 64");
@@ -138,6 +255,17 @@ void registerBeatCommands(CommandRegistry& r) {
                                              {"loVel", 1}, {"hiVel", 127}, {"start", 0}, {"end", -1}, {"loop", 0}, {"loopStart", 0},
                                              {"loopEnd", -1}, {"oneShot", a.value("oneShot", false)}, {"reverse", false}, {"gainDb", 0.0},
                                              {"tune", 0.0}, {"pan", 0.0}, {"choke", 0}});
+               if (a.value("autoRoot", false) && ctx.runtime) { // tune the zone from the detected root note
+                   if (auto data = ctx.runtime->asset(ctx.project, asset); data && !data->channels.empty()) {
+                       const auto rd = beat::detectRoot(data->channels[0].data(), static_cast<int64_t>(data->channels[0].size()), data->sampleRate);
+                       if (rd.midiNote >= 0 && rd.confidence > 0.2) {
+                           auto& z = slot.state["zones"].back();
+                           z["root"] = rd.midiNote;
+                           z["tune"] = -rd.cents / 100.0; // play in tune, not just on the nearest note
+                           ctx.result["root"] = rd.toJson();
+                       }
+                   }
+               }
                t->instrument = slot;
                ctx.result["id"] = slot.id;
                return true;

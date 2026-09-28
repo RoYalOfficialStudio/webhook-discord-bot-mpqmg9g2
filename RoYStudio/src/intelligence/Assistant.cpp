@@ -149,7 +149,11 @@ std::vector<Finding> checkProject(const Project& p, const fs::path& folder, bool
     std::vector<Finding> out;
     std::set<std::string> used;
     for (auto& t : p.tracks) {
-        for (auto& c : t.audioClips) used.insert(c.assetId);
+        for (auto& c : t.audioClips) {
+            used.insert(c.assetId);
+            if (!c.rawAssetId.empty()) used.insert(c.rawAssetId);     // vocal A/B: original ...
+            if (!c.tunedAssetId.empty()) used.insert(c.tunedAssetId); // ... and tuned render
+        }
         for (auto& k : t.takes) used.insert(k.assetId);
         for (auto& c : t.patternClips)
             if (const Pattern* pat = p.findPattern(c.patternId))

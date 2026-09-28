@@ -134,9 +134,14 @@ if(ROY_BUILD_TESTS)
   file(GLOB ROY_TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
   add_executable(roy_tests ${ROY_TEST_SOURCES})
   target_link_libraries(roy_tests PRIVATE roy_core)
+  # MOCK external stem-separation engine (tests the AdvancedStemSeparator adapter only)
+  add_executable(roy_test_stem_engine tests/tools/roy_test_stem_engine.cpp)
+  target_link_libraries(roy_test_stem_engine PRIVATE roy_core)
+  set_target_properties(roy_test_stem_engine PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test_plugins)
   target_compile_definitions(roy_tests PRIVATE
     ROY_TEST_PLUGIN_DIR="${CMAKE_BINARY_DIR}/test_plugins"
-    ROY_PLUGIN_HOST_EXE="$<TARGET_FILE:roy_plugin_host>")
-  add_dependencies(roy_tests roy_plugin_host roy_mp3lame ${ROY_TEST_PLUGINS})
+    ROY_PLUGIN_HOST_EXE="$<TARGET_FILE:roy_plugin_host>"
+    ROY_TEST_STEM_ENGINE="$<TARGET_FILE:roy_test_stem_engine>")
+  add_dependencies(roy_tests roy_plugin_host roy_mp3lame roy_test_stem_engine ${ROY_TEST_PLUGINS})
   add_test(NAME roy_tests COMMAND roy_tests)
 endif()

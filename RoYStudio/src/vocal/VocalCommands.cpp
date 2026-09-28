@@ -79,6 +79,8 @@ bool replaceClipAudio(CommandContext& ctx, AudioClip& c, const vocal::Channels& 
     ctx.project.assets.push_back(a);
     c.assetId = a.id;
     c.sourceOffsetSec = 0.0;
+    c.rawAssetId.clear(); // processed audio is the new source; callers that keep A/B set it again
+    c.tunedAssetId.clear();
     ctx.result["assetId"] = a.id;
     ctx.result["file"] = file.string();
     return true;
@@ -119,9 +121,17 @@ void registerVocalCommands(CommandRegistry& r) {
                AudioClip* c = ctx.project.findAudioClip(str(a, "clipId"), &owner);
                if (!c) return fail(ctx, "audio clip not found");
                if (c->locked) return fail(ctx, "clip is locked");
+               // Always start from the untouched source: re-tuning never stacks corrections.
+               AudioClip source = *c;
+               if (!c->rawAssetId.empty()) {
+                   source.assetId = c->rawAssetId;
+                   source.sourceOffsetSec = c->rawOffsetSec;
+               }
+               const std::string rawId = source.assetId;
+               const double rawOffset = source.sourceOffsetSec;
                vocal::Channels audio;
                double sr = 48000;
-               if (!clipAudio(ctx, *c, audio, sr)) return false;
+               if (!clipAudio(ctx, source, audio, sr)) return false;
                auto s = guardianSettings(ctx.project, a);
                auto res = vocal::runPitchGuardian(audio, sr, s);
                json notes = json::array();
@@ -137,7 +147,11 @@ void registerVocalCommands(CommandRegistry& r) {
                ctx.result["warnings"] = warnings;
                ctx.result["corrected"] = corrected;
                if (s.mode == vocal::GuardianMode::Off || s.mode == vocal::GuardianMode::Warn || !res.plan.any()) return true; // analysis only
-               return replaceClipAudio(ctx, *c, res.audio, sr, std::format("tuned_{}", vocal::guardianModeId(s.mode)));
+               if (!replaceClipAudio(ctx, *c, res.audio, sr, std::format("tuned_{}", vocal::guardianModeId(s.mode)))) return false;
+               c->rawAssetId = rawId;
+               c->rawOffsetSec = rawOffset;
+               c->tunedAssetId = c->assetId;
+               return true;
            }});
     r.add({"PitchAnalysis", "Analyse Pitch", "Vocal", "", false, false, [](CommandContext& ctx, const json& a) {
                AudioClip* c = ctx.project.findAudioClip(str(a, "clipId"));
@@ -158,6 +172,95 @@ void registerVocalCommands(CommandRegistry& r) {
                json issues = json::array();
                for (auto& t : vocal::tuningIssues(an, ctx.project.key, num(a, "thresholdCents", 25.0))) issues.push_back(t.text);
                ctx.result["issues"] = issues;
+               return true;
+           }});
+    // Everything the pitch editor draws: waveform, pitch curve, detected vs. target notes with
+    // cents, confidence and a status (IN_SCALE / OFF_KEY / UNCERTAIN / CORRECTED) - computed
+    // from the ORIGINAL take with the given Pitch Guardian settings. Changes nothing.
+    r.add({"PitchEditorData", "Pitch Editor Data", "Vocal", "", false, false, [](CommandContext& ctx, const json& a) {
+               AudioClip* c = ctx.project.findAudioClip(str(a, "clipId"));
+               if (!c) return fail(ctx, "audio clip not found");
+               AudioClip source = *c;
+               if (!c->rawAssetId.empty()) {
+                   source.assetId = c->rawAssetId;
+                   source.sourceOffsetSec = c->rawOffsetSec;
+               }
+               vocal::Channels audio;
+               double sr = 48000;
+               if (!clipAudio(ctx, source, audio, sr)) return false;
+               auto s = guardianSettings(ctx.project, a);
+               const auto track = vocal::detectPitch(audio, sr);
+               const auto an = vocal::analyzePitch(track);
+               const auto plan = vocal::planCorrection(track, an, s);
+               // waveform (min/max per column of the mono sum)
+               const size_t len = audio.empty() ? 0 : audio[0].size();
+               const int cols = std::clamp(static_cast<int>(num(a, "columns", 800)), 16, 4096);
+               json wmin = json::array(), wmax = json::array();
+               for (int k = 0; k < cols; ++k) {
+                   const size_t i0 = len * static_cast<size_t>(k) / static_cast<size_t>(cols);
+                   const size_t i1 = std::max(i0 + 1, len * static_cast<size_t>(k + 1) / static_cast<size_t>(cols));
+                   float lo = 0, hi = 0;
+                   for (size_t i = i0; i < i1 && i < len; ++i) {
+                       float v = 0;
+                       for (auto& ch : audio) v += ch[i];
+                       v /= static_cast<float>(std::max<size_t>(1, audio.size()));
+                       lo = std::min(lo, v);
+                       hi = std::max(hi, v);
+                   }
+                   wmin.push_back(std::round(lo * 1000.0f) / 1000.0f);
+                   wmax.push_back(std::round(hi * 1000.0f) / 1000.0f);
+               }
+               // pitch curve (<= 2000 points)
+               json curve = json::array();
+               const size_t step = std::max<size_t>(1, track.frames.size() / 2000);
+               for (size_t i = 0; i < track.frames.size(); i += step) {
+                   const auto& f = track.frames[i];
+                   curve.push_back({std::round(f.time * 1000.0) / 1000.0, f.voiced ? json(std::round(f.midi * 100.0) / 100.0) : json(nullptr),
+                                    std::round(f.confidence * 100.0) / 100.0});
+               }
+               // notes with target and status
+               std::vector<const vocal::NoteCorrection*> byNote(an.notes.size(), nullptr);
+               for (auto& nc : plan.notes)
+                   if (nc.note < byNote.size()) byNote[nc.note] = &nc;
+               json notes = json::array();
+               int inScale = 0, offKey = 0, uncertain = 0, correctedN = 0;
+               for (size_t i = 0; i < an.notes.size(); ++i) {
+                   const auto& n = an.notes[i];
+                   const auto* nc = byNote[i];
+                   std::string status;
+                   if (nc && nc->corrected) status = "CORRECTED", ++correctedN;
+                   else if (n.meanConfidence < s.minConfidence) status = "UNCERTAIN", ++uncertain;
+                   else if (!s.key.contains(n.nearestNote)) status = "OFF_KEY", ++offKey;
+                   else status = "IN_SCALE", ++inScale;
+                   const double target = nc && nc->corrected ? nc->toMidi : n.medianMidi;
+                   notes.push_back({{"start", n.start}, {"end", n.end}, {"detected", n.medianMidi}, {"target", target},
+                                    {"note", noteName(n.nearestNote)}, {"targetNote", noteName(static_cast<int>(std::lround(target)))},
+                                    {"cents", n.centsFromNearest}, {"confidence", n.meanConfidence}, {"kind", vocal::frameKindName(n.kind)},
+                                    {"status", status}, {"reason", nc ? nc->reason : std::string()}, {"shift", nc ? nc->shift : 0.0}});
+               }
+               ctx.result = {{"duration", static_cast<double>(len) / sr}, {"waveMin", wmin}, {"waveMax", wmax}, {"curve", curve},
+                             {"notes", notes}, {"key", s.key.name()}, {"settings", settingsJson(s)},
+                             {"counts", {{"IN_SCALE", inScale}, {"OFF_KEY", offKey}, {"UNCERTAIN", uncertain}, {"CORRECTED", correctedN}}},
+                             {"ab", {{"available", !c->rawAssetId.empty() && !c->tunedAssetId.empty()},
+                                     {"listening", c->listeningOriginal() ? "original" : "corrected"}}}};
+               return true;
+           }});
+    // A/B: play the untouched original or the tuned render (switches the clip's source only).
+    r.add({"VocalAB", "Vocal A/B", "Vocal", "", true, true, [](CommandContext& ctx, const json& a) {
+               AudioClip* c = ctx.project.findAudioClip(str(a, "clipId"));
+               if (!c) return fail(ctx, "audio clip not found");
+               if (c->rawAssetId.empty() || c->tunedAssetId.empty()) return fail(ctx, "no tuned version yet - apply Pitch Guardian first");
+               const std::string use = str(a, "use", c->listeningOriginal() ? "corrected" : "original");
+               if (use == "original") {
+                   c->assetId = c->rawAssetId;
+                   c->sourceOffsetSec = c->rawOffsetSec;
+               } else if (use == "corrected") {
+                   c->assetId = c->tunedAssetId;
+                   c->sourceOffsetSec = 0.0;
+               } else {
+                   return fail(ctx, "use must be 'original' or 'corrected'");
+               }
+               ctx.result["listening"] = use;
                return true;
            }});
     r.add({"VocalDoctor", "Vocal Doctor", "Vocal", "", false, false, [](CommandContext& ctx, const json& a) {

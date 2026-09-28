@@ -24,7 +24,9 @@ Bass808::Bass808()
                   {"keyLock", "808 Key Lock", 0, 1, 0, "", 2},
                   {"keyRoot", "Key Root", 0, 11, 0, "", 12},
                   {"keyScale", "Key Scale", 0, 12, 2, "", 13},
-                  {"volume", "Volume", -60, 12, -6, "dB"}}) {}
+                  {"volume", "Volume", -60, 12, -6, "dB"},
+                  {"startPhase", "Start Phase", 0, 360, 0, "deg"},
+                  {"phaseReset", "Phase Reset", 0, 1, 1, "", 2}}) {}
 
 void Bass808::prepare(double sr, int maxBlock) {
     Processor::prepare(sr, maxBlock);
@@ -37,6 +39,9 @@ void Bass808::reset() {
     tone_.reset();
     dc_.reset();
     phase_ = 0;
+    lastOut_ = 0;
+    declickPending_ = false;
+    declickLeft_ = 0;
     gate_ = false;
     heldCount_ = 0;
     sinceTrigger_ = 1e9;
@@ -67,6 +72,10 @@ void Bass808::handleEvent(const NoteEvent& e) noexcept {
         const bool slide = e.slide || (p(Legato) > 0.5f && gate_);
         target_ = note + p(Tune) + e.detune;
         if (!slide || !env_.active()) {
+            if (p(PhaseReset) > 0.5f) {
+                if (env_.active()) declickPending_ = true; // retrigger while sounding: smooth the jump
+                phase_ = p(StartPhase) / 360.0;
+            }
             pitch_ = target_;
             env_.noteOn();
             sinceTrigger_ = 0;
@@ -101,6 +110,7 @@ void Bass808::render(const AudioBlock& io, int start, int end) noexcept {
     for (int i = start; i < end; ++i) {
         if (!env_.active()) {
             sinceTrigger_ += dt;
+            lastOut_ = 0.0f;
             continue;
         }
         pitch_ = glideCoef_ > 0 ? target_ + (pitch_ - target_) * glideCoef_ : target_;
@@ -125,6 +135,16 @@ void Bass808::render(const AudioBlock& io, int start, int end) noexcept {
         }
         float y = tone_.process(static_cast<float>(x));
         y = dc_.process(y);
+        if (declickPending_) {
+            declickOffset_ = lastOut_ - y;
+            declickLeft_ = std::max(1, static_cast<int>(0.002 * sr));
+            declickPending_ = false;
+        }
+        if (declickLeft_ > 0) {
+            y += declickOffset_ * static_cast<float>(declickLeft_) / static_cast<float>(std::max(1, static_cast<int>(0.002 * sr)));
+            --declickLeft_;
+        }
+        lastOut_ = y;
         y *= vol;
         if (clip) y = std::tanh(y * 1.2f) / std::tanh(1.2f);
         L[i] += y;
