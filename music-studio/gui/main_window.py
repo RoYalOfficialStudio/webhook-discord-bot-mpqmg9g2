@@ -156,9 +156,7 @@ class MainWindow(QMainWindow):
 
     def _apply_settings_to_tracks(self) -> None:
         for widget in self.track_widgets:
-            widget.recorder.device = self.settings.input_device
-            widget.recorder.output_device = self.settings.output_device
-            widget.output_device = self.settings.output_device
+            widget.apply_devices(self.settings.input_device, self.settings.output_device)
 
     def play_mix(self) -> None:
         master = self.mixer.render()
@@ -271,9 +269,7 @@ class MainWindow(QMainWindow):
 
     def _add_track_widget(self, track: Track) -> None:
         widget = TrackWidget(track, color_index=len(self.track_widgets))
-        widget.recorder.device = self.settings.input_device
-        widget.recorder.output_device = self.settings.output_device
-        widget.output_device = self.settings.output_device
+        widget.apply_devices(self.settings.input_device, self.settings.output_device)
         widget.removed.connect(self._remove_track)
         self.track_widgets.append(widget)
         self.track_layout.insertWidget(self.track_layout.count() - 1, widget)

@@ -13,9 +13,12 @@ erweiterbare Basis dafür.
   Internetverbindung nötig — mit **Pegelanzeige**, **Aufnahme-Timer** und
   **Wellenform-Vorschau**, damit immer sichtbar ist, wie viel und wie laut
   gerade aufgenommen wurde.
-  - **🎧 Monitor**: sich selbst live über Kopfhörer/Lautsprecher hören
-    während der Aufnahme (vor dem Aufnehmen aktivieren; bei Lautsprechern statt
-    Kopfhörer kann es zu Rückkopplung/Echo kommen).
+  - **🎧 Monitor**: sich selbst live über Kopfhörer/Lautsprecher hören —
+    **auch ohne Aufnahme**, z.B. um Lautstärke/Sound einzustellen und sich
+    abzumischen. Kann jederzeit an/aus, auch mitten in einer Aufnahme; nach
+    dem Stoppen einer Aufnahme läuft das Monitoring weiter. Die Pegelanzeige
+    zeigt dabei live, wie laut das Mikro ankommt. (Kopfhörer nutzen — mit
+    Lautsprechern kann es zu Rückkopplung kommen.)
 - **Wellenform zum Schneiden**: Bereich per Drag auf der Wellenform markieren
   (wie in FL Studios Playlist) und mit **✂ Cut Selection** direkt heraus-
   schneiden — der Track wird sichtbar kürzer, der Rest rückt zusammen.
@@ -118,9 +121,9 @@ python main.py
 1. **⚙ Devices...** – zuerst Mikrofon und Kopfhörer/Lautsprecher auswählen
    und mit **🔊 Test Output** prüfen, dass der Ausgang tatsächlich klingt.
 2. **+ Add Track** – neuen leeren Track anlegen.
-3. **Record** – Mikrofonaufnahme starten/stoppen. **🎧** daneben aktiviert
-   Live-Monitoring (dich selbst hören während der Aufnahme, vor dem
-   Aufnehmen aktivieren).
+3. **🎧 Monitor** – dich selbst live hören, unabhängig von der Aufnahme (zum
+   Einstellen/Abmischen). **Rec** – Mikrofonaufnahme starten/stoppen; geht
+   mit oder ohne Monitor.
 4. **Wellenform** – nach der Aufnahme/dem Laden per Drag einen Bereich
    markieren, dann **✂ Cut Selection** zum Herausschneiden oder
    **Clear Selection** zum Abbrechen der Auswahl.

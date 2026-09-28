@@ -56,11 +56,11 @@ class TrackWidget(QFrame):
         self.record_btn.clicked.connect(self._toggle_record)
         top.addWidget(self.record_btn)
 
-        self.monitor_btn = QPushButton("🎧")
+        self.monitor_btn = QPushButton("🎧 Monitor")
         self.monitor_btn.setCheckable(True)
         self.monitor_btn.setToolTip(
-            "Monitor: hear yourself live through your speakers/headphones while recording.\n"
-            "Turn this off if you get feedback/echo, or use headphones."
+            "Monitor: hear yourself live through your headphones/speakers — works on its own\n"
+            "(to dial in your sound/mix) or together with Rec. Use headphones to avoid feedback."
         )
         self.monitor_btn.toggled.connect(self._on_monitor_toggle)
         top.addWidget(self.monitor_btn)
@@ -231,7 +231,16 @@ class TrackWidget(QFrame):
         self.pan_label.setText(self._pan_text(self.track.pan))
 
     def _on_monitor_toggle(self, checked: bool) -> None:
-        self.recorder.monitor = checked
+        try:
+            self.recorder.set_monitor(checked)
+        except RuntimeError as exc:
+            self.monitor_btn.blockSignals(True)
+            self.monitor_btn.setChecked(not checked)
+            self.monitor_btn.blockSignals(False)
+            QMessageBox.warning(self, "Monitor failed", str(exc))
+            return
+        if checked and not self._meter_timer.isActive():
+            self._meter_timer.start()
 
     def _on_selection_changed(self) -> None:
         seconds = self.waveform.get_selection_seconds(self.track.sr)
@@ -288,12 +297,13 @@ class TrackWidget(QFrame):
         self.autotune_speed_label.setText(f"{fx.autotune_speed:.2f}")
 
     def _update_meter(self) -> None:
-        if not self.recorder.is_recording:
+        if not (self.recorder.is_recording or self.recorder.is_monitoring):
             self._meter_timer.stop()
             self.level_meter.setValue(0)
             return
         self.level_meter.setValue(int(min(1.0, self.recorder.level) * 100))
-        self.time_label.setText(_format_time(self.recorder.elapsed_seconds))
+        if self.recorder.is_recording:
+            self.time_label.setText(_format_time(self.recorder.elapsed_seconds))
 
     def _toggle_record(self) -> None:
         if not self.recorder.is_recording:
@@ -308,8 +318,9 @@ class TrackWidget(QFrame):
             self._meter_timer.start()
         else:
             audio = self.recorder.stop()
-            self._meter_timer.stop()
-            self.level_meter.setValue(0)
+            if not self.recorder.is_monitoring:
+                self._meter_timer.stop()
+                self.level_meter.setValue(0)
             self.track.audio = audio.flatten() if audio.ndim > 1 and audio.shape[1] == 1 else audio
             self.record_btn.setText("⏺ Rec")
             self.record_btn.setChecked(False)
@@ -343,12 +354,27 @@ class TrackWidget(QFrame):
         except Exception as exc:
             QMessageBox.warning(self, "Playback failed", str(exc))
 
+    def apply_devices(self, input_device: int | None, output_device: int | None) -> None:
+        """Switch devices; if we're only monitoring (not mid-take), reopen the
+        streams right away so the new headphones/mic take effect immediately."""
+        self.recorder.device = input_device
+        self.recorder.output_device = output_device
+        self.output_device = output_device
+        if self.recorder.is_monitoring and not self.recorder.is_recording:
+            self.recorder.set_monitor(False)
+            try:
+                self.recorder.set_monitor(True)
+            except RuntimeError as exc:
+                self.monitor_btn.blockSignals(True)
+                self.monitor_btn.setChecked(False)
+                self.monitor_btn.blockSignals(False)
+                QMessageBox.warning(self, "Monitor failed", str(exc))
+
     def stop_recording_if_active(self) -> None:
-        """Make sure a running recording/monitor stream is torn down before
-        this widget goes away — otherwise the mic stream keeps running."""
-        if self.recorder.is_recording:
-            self._meter_timer.stop()
-            self.recorder.stop()
+        """Make sure any running recording/monitor streams are torn down before
+        this widget goes away — otherwise the mic/output streams keep running."""
+        self._meter_timer.stop()
+        self.recorder.close()
 
     def _open_effects(self) -> None:
         dialog = EffectsDialog(self.track.effects, self)
