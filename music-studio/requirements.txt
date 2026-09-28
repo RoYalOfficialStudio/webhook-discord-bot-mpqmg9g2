@@ -4,7 +4,11 @@ scipy>=1.10
 librosa>=0.10
 soundfile>=0.12
 sounddevice>=0.4.6
+pydub>=0.25
 pytest>=7.4
 
-# Optional, only needed for MP3 export (also requires ffmpeg on your system PATH):
-# pydub>=0.25
+# pydub needs a system ffmpeg install to read/write MP3, M4A/AAC, WMA, etc.
+# WAV/FLAC/OGG/AIFF work without it. Install ffmpeg with:
+#   Windows: winget install ffmpeg   (or from https://ffmpeg.org/download.html)
+#   macOS:   brew install ffmpeg
+#   Linux:   sudo apt install ffmpeg

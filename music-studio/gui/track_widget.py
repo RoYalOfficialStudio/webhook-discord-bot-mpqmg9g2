@@ -4,19 +4,15 @@ import numpy as np
 import sounddevice as sd
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QSlider,
-    QLineEdit, QFileDialog, QFrame,
+    QLineEdit, QFileDialog, QFrame, QMessageBox,
 )
 from PySide6.QtCore import Qt, Signal
 
 from audio.recorder import Recorder
 from audio.mixer import Track
+from audio.io_formats import load_audio, LOAD_FILTER
 from .effects_dialog import EffectsDialog
 from .theme import TRACK_COLORS
-
-try:
-    import soundfile as sf
-except ImportError:  # pragma: no cover
-    sf = None
 
 
 class TrackWidget(QFrame):
@@ -158,12 +154,14 @@ class TrackWidget(QFrame):
             self.changed.emit()
 
     def _load_file(self) -> None:
-        if sf is None:
-            return
-        path, _ = QFileDialog.getOpenFileName(self, "Load audio", "", "Audio files (*.wav *.flac *.ogg)")
+        path, _ = QFileDialog.getOpenFileName(self, "Load audio", "", LOAD_FILTER)
         if not path:
             return
-        audio, sr = sf.read(path, dtype="float32")
+        try:
+            audio, sr = load_audio(path)
+        except RuntimeError as exc:
+            QMessageBox.warning(self, "Load failed", str(exc))
+            return
         self.track.audio = audio
         self.track.sr = sr
         self.recorder.samplerate = sr

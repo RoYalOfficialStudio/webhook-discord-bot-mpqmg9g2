@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import sounddevice as sd
 from PySide6.QtWidgets import (
@@ -10,6 +12,7 @@ from PySide6.QtCore import Qt
 
 from audio.mixer import Mixer, Track, EffectSettings
 from audio.project import save_project, load_project
+from audio.io_formats import EXPORT_FILTER
 from .track_widget import TrackWidget
 
 DEFAULT_SR = 44100
@@ -105,11 +108,14 @@ class MainWindow(QMainWindow):
         sd.play(master, self.mixer.sr)
 
     def export_mix(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export mixdown", "mixdown.wav", "WAV (*.wav);;MP3 (*.mp3)"
+        path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export mixdown", "mixdown.wav", EXPORT_FILTER
         )
         if not path:
             return
+        if "." not in os.path.basename(path):
+            ext = selected_filter.split("*")[1].rstrip(")").lower() if "*" in selected_filter else ".wav"
+            path += ext
         progress = QProgressDialog("Rendering mixdown...", None, 0, len(self.mixer.tracks), self)
         progress.setWindowModality(Qt.WindowModal)
         progress.setMinimumDuration(0)

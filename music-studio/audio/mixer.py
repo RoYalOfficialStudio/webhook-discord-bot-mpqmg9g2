@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
-import soundfile as sf
 
 from .effects import ParametricEQ, apply_delay, apply_reverb, apply_compressor, apply_limiter
 from .autotune import autotune
+from .io_formats import export_audio
 
 
 def _to_stereo(y: np.ndarray) -> np.ndarray:
@@ -152,29 +152,7 @@ class Mixer:
         master = apply_limiter(master)
         return master.astype(np.float32)
 
-    def export(self, path: str, fmt: str | None = None,
+    def export(self, path: str,
                progress_cb: Callable[[int, int], None] | None = None) -> None:
         master = self.render(progress_cb=progress_cb)
-        if fmt is None:
-            fmt = "MP3" if path.lower().endswith(".mp3") else None
-        if path.lower().endswith(".mp3"):
-            self._export_mp3(path, master)
-        else:
-            sf.write(path, master, self.sr)
-
-    def _export_mp3(self, path: str, master: np.ndarray) -> None:
-        try:
-            from pydub import AudioSegment
-        except ImportError as exc:
-            raise RuntimeError(
-                "MP3 export needs the 'pydub' package and ffmpeg installed on your system."
-            ) from exc
-
-        pcm16 = (np.clip(master, -1.0, 1.0) * 32767).astype(np.int16)
-        segment = AudioSegment(
-            pcm16.tobytes(),
-            frame_rate=self.sr,
-            sample_width=2,
-            channels=pcm16.shape[1],
-        )
-        segment.export(path, format="mp3")
+        export_audio(path, master, self.sr)

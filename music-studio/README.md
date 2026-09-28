@@ -33,8 +33,10 @@ erweiterbare Basis dafür.
   - Kompressor (Attack/Release/Ratio/Threshold/Makeup-Gain)
 - **Mehrspur-Mixer**: beliebig viele Tracks, je mit Lautstärke, Panorama,
   Mute/Solo, eigener Effektkette.
-- **Export**: Mixdown als WAV (immer) oder MP3 (mit `pydub` + installiertem
-  `ffmpeg`).
+- **Alle gängigen Audioformate** zum Laden und Exportieren: WAV, MP3, FLAC,
+  OGG, AIFF, M4A/AAC, WMA. WAV/FLAC/OGG/AIFF funktionieren direkt; MP3/M4A/AAC/
+  WMA brauchen zusätzlich ein installiertes `ffmpeg` auf dem System (siehe
+  Installation).
 - **Projekte speichern/laden**: Tracks + Einstellungen als Ordner mit
   `project.json` + WAV-Dateien.
 
@@ -54,6 +56,10 @@ Setup) — kein Python, kein PowerShell auf deinem Rechner nötig:
    (Weiter/Weiter/Fertig), erstellt Startmenü- und optional Desktop-Icon.
 4. Danach einfach "Offline Music Studio" im Startmenü öffnen.
 
+Hinweis: WAV/FLAC/OGG/AIFF funktionieren im Installer direkt. Für MP3/M4A/AAC/
+WMA zusätzlich einmalig `ffmpeg` installieren (z.B. `winget install ffmpeg`),
+da das nicht mitinstalliert wird.
+
 ### Manuell mit Python (Entwickler / Mac / Linux)
 
 ```bash
@@ -63,11 +69,13 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Für MP3-Export zusätzlich:
+Für MP3/M4A/AAC/WMA (laden **und** exportieren) zusätzlich `ffmpeg` systemweit
+installieren (WAV/FLAC/OGG/AIFF brauchen das nicht):
 
 ```bash
-pip install pydub
-# und ffmpeg systemweit installieren (z.B. `apt install ffmpeg` / `brew install ffmpeg`)
+# Windows (PowerShell):  winget install ffmpeg
+# macOS:                 brew install ffmpeg
+# Linux:                 sudo apt install ffmpeg
 ```
 
 ## Starten
@@ -81,13 +89,15 @@ python main.py
 1. **+ Add Track** – neuen leeren Track anlegen.
 2. **Record** – Mikrofonaufnahme starten/stoppen (verwendet dein
    Standard-Eingabegerät).
-3. **Load File** – vorhandene WAV/FLAC/OGG-Datei in den Track laden.
+3. **Load File** – vorhandene Audiodatei in den Track laden (WAV, MP3, FLAC,
+   OGG, AIFF, M4A/AAC, WMA).
 4. **Effects / Autotune...** – EQ, Delay, Reverb, Compressor und Autotune für
    diesen Track einstellen. Im Autotune-Tab oben das Preset-Dropdown nutzen,
    um eigene oder mitgelieferte Einstellungen zu laden/speichern/löschen.
 5. **Vol/Pan-Regler** und **Mute/Solo** wie in jedem DAW-Mixer.
 6. **Play Mix** – aktuellen Mixdown anhören, **Stop** zum Abbrechen.
-7. **Export Mixdown...** – fertigen Track als WAV/MP3 exportieren.
+7. **Export Mixdown...** – fertigen Track als WAV/MP3/FLAC/OGG/AIFF/M4A/WMA
+   exportieren.
 8. **Save/Open Project...** – Session in einen Ordner speichern bzw. laden.
 
 ## Architektur
@@ -99,6 +109,7 @@ music-studio/
     effects.py     EQ, Delay, Reverb, Compressor, Limiter (numpy/scipy)
     autotune.py    Pitch-Detection (librosa pYIN) + Pitch-Correction
     presets.py     Autotune-Presets speichern/laden/löschen (~/.music_studio/presets)
+    io_formats.py  Laden/Exportieren aller Audioformate (WAV/MP3/FLAC/OGG/...)
     mixer.py       Track/Mixer-Klassen, Rendering, Export
     project.py     Speichern/Laden von Projekten
   gui/
@@ -110,6 +121,7 @@ music-studio/
     test_effects.py    DSP-Effekte-Tests
     test_autotune.py   Pitch-Correction-Tests (Skalen, Humanize, Formant, Referenz)
     test_presets.py    Preset-Speichern/Laden-Tests
+    test_io_formats.py Format-Roundtrip-Tests (WAV/FLAC immer, MP3 falls ffmpeg da ist)
   main.py          Einstiegspunkt
 ```
 

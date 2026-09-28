@@ -33,7 +33,7 @@ jobs:
           pyinstaller --noconfirm --onedir --windowed --name OfflineMusicStudio
           --collect-all librosa --collect-all resampy --collect-all numba
           --collect-all llvmlite --collect-all soundfile --collect-all sounddevice
-          --collect-all scipy --collect-all PySide6
+          --collect-all scipy --collect-all PySide6 --collect-all pydub
           main.py
 
       - name: Install Inno Setup
