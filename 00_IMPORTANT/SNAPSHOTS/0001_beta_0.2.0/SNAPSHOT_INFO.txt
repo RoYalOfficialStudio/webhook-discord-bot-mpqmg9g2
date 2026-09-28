@@ -1,0 +1,10 @@
+SNAPSHOT 0001 - RoY Studio 0.2.0 BETA (BETA gate passed)
+created:   2026-09-28T22:48:19Z
+branch:    claude/bold-franklin-fybkj5 (pushed to origin)
+commit:    1f6ecf88f00a04811c8466ede456312d08864541
+tree sha256 (git archive --format=tar 1f6ecf88f00a04811c8466ede456312d08864541 | sha256sum):
+           31e821ea278dbf2a8c068c491faabfdade9535b6baad637d5ac45ab801729a67
+restore:   git checkout 1f6ecf88f00a04811c8466ede456312d08864541      (or: git archive 1f6ecf88f00a04811c8466ede456312d08864541 | tar -x -C <folder>)
+test kit:  RoYStudio-0.2.0-win64.zip built from this commit (not stored in git, rebuild with
+           cmake --build build-win --target package), sha256 91866c302df3ef1aeb82fc8bf3460742a689e6243603c3d0fdfe5c1e4f2ff160
+verified:  Linux 190/190, Wine 189/189, ASan/UBSan, TSan, GUI/CLI self-tests, test kit 189/189
