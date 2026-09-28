@@ -130,6 +130,11 @@ void dialogs(App& app) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
+        if (ImGui::Button("Open (Safe Mode)")) {
+            app.openProject(g_openPath, OpenMode::Normal, true);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
         if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }

@@ -39,9 +39,11 @@ int processTimeoutMs();
 // Crash events since the last call (message thread).
 std::vector<CrashEvent> takeCrashEvents();
 
-// "clap:<module path>|<plugin id>"
+// "clap:<module path>|<plugin id>" / "vst3:<bundle path>|<class id>"
 std::string makeClapTypeId(const std::string& modulePath, const std::string& pluginId);
-bool parseClapTypeId(const std::string& typeId, std::string& modulePath, std::string& pluginId);
+std::string makeVst3TypeId(const std::string& modulePath, const std::string& classId);
+// format = "clap" | "vst3"
+bool parsePluginTypeId(const std::string& typeId, std::string& format, std::string& modulePath, std::string& pluginId);
 
 class Sandbox; // host process + shared memory (Sandbox.cpp)
 
@@ -54,6 +56,7 @@ public:
     ~SandboxedPluginProcessor() override;
 
     std::string typeId() const override { return typeId_; }
+    const std::string& format() const { return format_; }
     std::string displayName() const override { return name_; }
     bool isInstrument() const override { return instrument_; }
     void prepare(double sampleRate, int maxBlockSize) override;
@@ -65,6 +68,14 @@ public:
     void loadState(const json& state) override;
 
     bool alive() const;
+    // Plugin editor window (runs inside the sandbox process). Message thread.
+    bool openEditor(bool alwaysOnTop, std::string* error = nullptr);
+    void closeEditor();
+    json editorState() const;
+    // Index of the parameter last changed by the plugin itself (its GUI / output events), -1 = none.
+    int lastTouchedParam() const { return lastTouched_.load(); }
+    // Parameter changes received from the plugin since the last call (message thread).
+    uint64_t pluginEditCount() const { return pluginEdits_.load(); }
     // Empty when healthy, else "crashed (...)" / "hung (...)".
     std::string problem() const;
     int hostPid() const;
@@ -73,8 +84,11 @@ public:
 
 private:
     SandboxedPluginProcessor(std::vector<ParamInfo> params);
-    std::string typeId_, name_;
+    std::string typeId_, name_, format_;
     bool instrument_ = false;
+    std::vector<std::pair<uint32_t, int>> idToIndex_; // sorted by plugin param id (lookup on the audio thread)
+    std::atomic<int> lastTouched_{-1};
+    std::atomic<uint64_t> pluginEdits_{0};
     std::unique_ptr<plugins::Sandbox> box_;
     std::vector<uint32_t> clapIds_;
     std::unique_ptr<float[]> lastSent_;
@@ -87,7 +101,7 @@ private:
     mutable json lastState_ = json::object(); // last good state, used after a crash
 };
 
-// Registers the "clap:" prefix with the ProcessorFactory. Idempotent.
+// Registers the "clap:" and "vst3:" prefixes with the ProcessorFactory. Idempotent.
 void registerPluginProcessors();
 
 } // namespace roy

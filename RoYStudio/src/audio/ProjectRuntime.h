@@ -50,6 +50,10 @@ public:
     // Drops the instance of a slot so the next rebuild() creates a fresh one
     // (plugin crash recovery). The old instance lives until its graph is retired.
     void forgetProcessor(const std::string& slotId) { processors_.erase(slotId); }
+    // SAFE MODE: third-party plugins (clap:/vst3:) are not loaded; their slots are bypassed
+    // and their saved state stays untouched in the project.
+    void setSafeMode(bool on) { safeMode_ = on; }
+    bool safeMode() const { return safeMode_; }
     // All live processors by slot id (status views).
     std::vector<std::pair<std::string, std::shared_ptr<Processor>>> allProcessors() const;
 
@@ -77,6 +81,7 @@ private:
     DeriveFn derive_;
     uint64_t graphVersion_ = 0;
     int lastLatency_ = 0;
+    bool safeMode_ = false;
     std::map<std::string, int> arrival_;
 };
 

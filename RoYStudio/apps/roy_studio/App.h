@@ -48,7 +48,8 @@ public:
 
     // ---- project lifecycle ------------------------------------------------------
     bool newProject(const fs::path& parent, const std::string& name, double bpm);
-    bool openProject(const fs::path& file, OpenMode mode = OpenMode::Normal);
+    // safeMode: third-party plugins are not loaded (their state stays in the project)
+    bool openProject(const fs::path& file, OpenMode mode = OpenMode::Normal, bool safeMode = false);
     bool save();
     void closeProject();
     bool hasProject() const { return project_ != nullptr; }

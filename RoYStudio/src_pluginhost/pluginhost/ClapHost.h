@@ -1,11 +1,12 @@
 #pragma once
 // In-process CLAP loader. Used ONLY inside the sandbox process (RoYPluginHost):
 // the DAW itself never loads third-party plugin code into its own address space.
+#include "pluginhost/EditorWindow.h"
+#include "pluginhost/HostedPlugin.h"
+
 #include <clap/clap.h>
-#include <nlohmann/json.hpp>
 
 #include <atomic>
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,7 +22,6 @@ public:
     static std::unique_ptr<Module> load(const std::string& path, std::string* error);
     const clap_plugin_factory_t* factory() const { return factory_; }
     const std::string& path() const { return path_; }
-    // Descriptors of all plugins in the module (JSON, see describe()).
     json describeAll() const;
 
 private:
@@ -43,40 +43,39 @@ struct ParamDesc {
     uint32_t flags;
 };
 
-// One plugin instance with a minimal, honest clap_host implementation.
-class Instance {
+// One CLAP plugin instance with an honest minimal clap_host (gui, timer-support,
+// posix-fd-support, params, latency, state) implementing HostedPlugin.
+class Instance final : public pluginhost::HostedPlugin {
 public:
-    ~Instance();
+    ~Instance() override;
     static std::unique_ptr<Instance> create(Module& m, const std::string& pluginId, std::string* error);
 
     const clap_plugin_t* plugin() const { return plugin_; }
-    const clap_plugin_descriptor_t* descriptor() const { return plugin_->desc; }
     bool instrument() const { return instrument_; }
     int inputChannels() const { return inChannels_; }
     int outputChannels() const { return outChannels_; }
     const std::vector<ParamDesc>& params() const { return params_; }
-    json info() const;
 
-    // Main thread.
-    bool activate(double sampleRate, uint32_t maxFrames);
-    void deactivate();
-    bool active() const { return active_; }
-    uint32_t latency() const;
-    // Clears the plugin's internal buffers/voices (host guarantees the audio thread is idle).
-    void reset();
+    json info() override;
+    bool activate(double sampleRate, uint32_t maxFrames) override;
+    uint32_t latency() override;
+    void reset() override;
+    bool saveState(std::vector<uint8_t>& out) override;
+    bool loadState(const std::vector<uint8_t>& in) override;
+    json paramValues() override;
+    int32_t process(pluginipc::Block& b) noexcept override;
+    void idle() override;
+    bool editorSupported() override;
+    bool openEditor(bool alwaysOnTop, std::string* error) override;
+    void closeEditor() override;
+    json editorState() override;
+    void shutdown() override;
+
     double paramValue(clap_id id) const;
-    bool saveState(std::vector<uint8_t>& out);
-    bool loadState(const std::vector<uint8_t>& in);
-    // Runs pending on_main_thread callbacks requested by the plugin.
-    void idle();
-
-    // Audio thread. `in`/`out` are 2 channels each (in may be null for instruments).
-    int32_t process(float* const* in, float* const* out, uint32_t frames, const clap_input_events_t* events,
-                    const clap_event_transport_t* transport) noexcept;
-    void stopProcessingIfStarted() noexcept;
 
 private:
     Instance() = default;
+    void deactivate();
     static const void* hostGetExtension(const clap_host_t*, const char*);
     static void hostRequestRestart(const clap_host_t*);
     static void hostRequestProcess(const clap_host_t*);
@@ -87,13 +86,32 @@ private:
     const clap_plugin_params_t* paramsExt_ = nullptr;
     const clap_plugin_state_t* stateExt_ = nullptr;
     const clap_plugin_latency_t* latencyExt_ = nullptr;
+    const clap_plugin_gui_t* guiExt_ = nullptr;
+    const clap_plugin_timer_support_t* timerExt_ = nullptr;
+    const clap_plugin_posix_fd_support_t* fdExt_ = nullptr;
     std::vector<ParamDesc> params_;
     bool instrument_ = false;
     int inChannels_ = 0, outChannels_ = 2;
     bool active_ = false;
     bool processing_ = false;
     std::atomic<bool> callbackRequested_{false};
+    std::atomic<bool> restartRequested_{false};
     int64_t steady_ = 0;
+    double sampleRate_ = 48000;
+    uint32_t maxFrames_ = 512;
+
+    // GUI
+    pluginhost::EditorWindow window_;
+    pluginhost::RunLoop runLoop_;
+    bool guiCreated_ = false;
+    bool closeRequested_ = false;
+    std::vector<std::pair<clap_id, int>> timerIds_; // clap timer id -> runloop id
+    std::vector<std::pair<int, int>> fdIds_;        // fd -> runloop id
+    friend struct HostExt;
+
+    // audio-thread scratch (preallocated)
+    struct EventStore;
+    std::unique_ptr<EventStore> events_;
 };
 
 } // namespace roy::clap

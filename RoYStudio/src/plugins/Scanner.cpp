@@ -350,7 +350,14 @@ fs::path moduleBinary(const Module& m) {
     std::error_code ec;
     if (!fs::is_directory(m.path, ec)) return m.path;
     const fs::path contents = m.path / "Contents";
-    for (const char* sub : {"x86_64-win", "x86_64-linux", "aarch64-linux", "arm64-win", "MacOS"}) {
+#ifdef _WIN32
+    const char* subs[] = {"x86_64-win", "arm64ec-win", "arm64-win", "x86-win"};
+#elif defined(__APPLE__)
+    const char* subs[] = {"MacOS"};
+#else
+    const char* subs[] = {"x86_64-linux", "aarch64-linux", "i386-linux"};
+#endif
+    for (const char* sub : subs) { // only binaries for THIS platform count
         const fs::path d = contents / sub;
         if (!fs::is_directory(d, ec)) continue;
         for (auto& e : fs::directory_iterator(d, ec))
@@ -362,7 +369,7 @@ fs::path moduleBinary(const Module& m) {
 void scanVst3(const Module& m, PluginRecord base, std::vector<PluginRecord>& out) {
     base.format = "vst3";
     base.status = "unsupported";
-    base.error = "VST3 hosting requires the Steinberg VST3 SDK, which is not bundled in this build (detected only)";
+    base.error = "bundle contains no loadable binary for this platform (detected from moduleinfo.json only)";
     const fs::path info = m.path / "Contents" / "Resources" / "moduleinfo.json";
     if (auto text = files::readAll(info)) {
         json j = parseLenientJson(*text);
@@ -445,7 +452,7 @@ ScanReport scanPlugins(PluginDatabase& db, const ScanOptions& options) {
         std::vector<PluginRecord> found;
         const auto s0 = std::chrono::steady_clock::now();
 
-        if (m.format == "vst3") {
+        if (m.format == "vst3" && bin.empty()) {
             scanVst3(m, base, found);
         } else if (base.arch != "unknown" && base.arch != "universal" && base.arch != myArch) {
             base.status = "wrong_arch";
@@ -496,7 +503,7 @@ ScanReport scanPlugins(PluginDatabase& db, const ScanOptions& options) {
                             for (auto& f : p.value("features", json::array())) rec.features.push_back(f.get<std::string>());
                             rec.category = p.value("instrument", false) ? "instrument" : "effect";
                             rec.paramCount = p.value("paramCount", 0);
-                            rec.typeId = makeClapTypeId(path, rec.id);
+                            rec.typeId = m.format == "vst3" ? makeVst3TypeId(path, rec.id) : makeClapTypeId(path, rec.id);
                             rec.status = p.value("instantiates", false) ? "ok" : "failed";
                             rec.error = p.value("error", "");
                             found.push_back(rec);

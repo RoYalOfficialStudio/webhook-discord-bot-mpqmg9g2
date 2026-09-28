@@ -90,7 +90,7 @@ TEST_CASE("plugins", "scanner: CLAP detection, categories, database views, resca
     CHECK(g->vendor == "RoY Studio (test)");
     CHECK(g->version == "1.2.0");
     CHECK(g->category == "effect");
-    CHECK(g->paramCount == 1);
+    CHECK(g->paramCount == 2);
     CHECK(g->arch == plugins::hostArch());
     CHECK(g->duplicateOf.empty() != db.find(plugins::makeClapTypeId((dir / "sub" / "gain_copy.clap").string(), "com.roystudio.test.gain"))->duplicateOf.empty());
 
@@ -223,7 +223,7 @@ TEST_CASE("plugins", "sandboxed CLAP effect processes audio in a separate proces
     CHECK(proc->hostPid() > 0 && proc->hostPid() != currentProcessId());
     CHECK(proc->displayName() == "RoY Test Gain");
     CHECK(!proc->isInstrument());
-    REQUIRE(proc->numParams() == 1);
+    REQUIRE(proc->numParams() == 2);
     CHECK(proc->paramInfo(0).name == "Gain");
     double maxErr = 0;
     for (size_t i = 0; i < dry[0].size(); ++i) maxErr = std::max(maxErr, static_cast<double>(std::fabs(wet[0][i] - 0.5f * dry[0][i])));
@@ -238,8 +238,8 @@ TEST_CASE("plugins", "sandboxed CLAP effect processes audio in a separate proces
     // opaque plugin state is saved into the project and restored into a new instance
     s.rt.captureProcessorStates(s.p);
     const PluginSlot& ps = s.p.findChannel(s.channelId)->inserts[0];
-    REQUIRE(ps.state.contains("clap"));
-    CHECK(!ps.state["clap"]["state"].get<std::string>().empty());
+    REQUIRE(ps.state.contains("plugin"));
+    CHECK(!ps.state["plugin"]["state"].get<std::string>().empty());
     auto fresh = SandboxedPluginProcessor::create(type);
     REQUIRE(fresh != nullptr);
     CHECK_NEAR(fresh->getParam(0), 1.0, 1e-9);

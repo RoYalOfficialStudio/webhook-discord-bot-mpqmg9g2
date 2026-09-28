@@ -6,6 +6,7 @@
 #include "commands/Commands.h"
 #include "intelligence/Arrangement.h"
 #include "intelligence/Assistant.h"
+#include "plugins/Sandbox.h"
 
 #include <set>
 
@@ -115,6 +116,7 @@ TEST_CASE("gmb12", "vocal DNA learns the own voice and flags deviations") {
 
 TEST_CASE("gmb12", "project assistant findings") {
     registerBuiltinProcessors();
+    registerPluginProcessors(); // "vst3:"/"clap:" prefixes registered: a missing module must still be reported
     auto dir = tempDir("assistant");
     Project p = makeNewProject("check");
     AudioAsset a;

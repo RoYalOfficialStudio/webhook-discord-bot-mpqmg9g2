@@ -6,6 +6,7 @@
 #include <clap/clap.h>
 #include "plugins/SharedMemory.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -75,8 +76,12 @@ std::vector<CrashEvent> takeCrashEvents() {
 
 std::string makeClapTypeId(const std::string& modulePath, const std::string& pluginId) { return "clap:" + modulePath + "|" + pluginId; }
 
-bool parseClapTypeId(const std::string& typeId, std::string& modulePath, std::string& pluginId) {
-    if (typeId.rfind("clap:", 0) != 0) return false;
+std::string makeVst3TypeId(const std::string& modulePath, const std::string& classId) { return "vst3:" + modulePath + "|" + classId; }
+
+bool parsePluginTypeId(const std::string& typeId, std::string& format, std::string& modulePath, std::string& pluginId) {
+    if (typeId.rfind("clap:", 0) == 0) format = "clap";
+    else if (typeId.rfind("vst3:", 0) == 0) format = "vst3";
+    else return false;
     const auto bar = typeId.rfind('|');
     if (bar == std::string::npos || bar < 6) return false;
     modulePath = typeId.substr(5, bar - 5);
@@ -91,7 +96,8 @@ public:
 
     ~Sandbox() { shutdown(); }
 
-    bool launch(const std::string& module, const std::string& pluginId, const std::string& typeId, json& info, std::string* error) {
+    bool launch(const std::string& format, const std::string& module, const std::string& pluginId, const std::string& typeId, json& info,
+                std::string* error) {
         typeId_ = typeId;
         name_ = pluginId;
         shmName_ = ipc::uniqueIpcName("plug");
@@ -104,7 +110,7 @@ public:
             return false;
         }
         const std::string exe = hostExecutable();
-        if (!child_.start(exe, {"--host", module, pluginId, shmName_}, error)) return false;
+        if (!child_.start(exe, {"--host", format, module, pluginId, shmName_}, error)) return false;
         std::string line;
         if (!child_.readLine(line, 15000)) {
             child_.wait(200);
@@ -271,15 +277,15 @@ SandboxedPluginProcessor::SandboxedPluginProcessor(std::vector<ParamInfo> params
 SandboxedPluginProcessor::~SandboxedPluginProcessor() = default;
 
 std::unique_ptr<SandboxedPluginProcessor> SandboxedPluginProcessor::create(const std::string& typeId, std::string* error) {
-    std::string module, id;
-    if (!plugins::parseClapTypeId(typeId, module, id)) {
-        if (error) *error = "not a CLAP type id: " + typeId;
+    std::string format, module, id;
+    if (!plugins::parsePluginTypeId(typeId, format, module, id)) {
+        if (error) *error = "not a plugin type id: " + typeId;
         return nullptr;
     }
     auto box = std::make_unique<plugins::Sandbox>();
     json info;
     std::string err;
-    if (!box->launch(module, id, typeId, info, &err)) {
+    if (!box->launch(format, module, id, typeId, info, &err)) {
         log::error("plugins", "cannot load {}: {}", typeId, err);
         if (error) *error = err;
         return nullptr;
@@ -293,13 +299,17 @@ std::unique_ptr<SandboxedPluginProcessor> SandboxedPluginProcessor::create(const
         pi.minValue = p.value("min", 0.0f);
         pi.maxValue = p.value("max", 1.0f);
         pi.defaultValue = p.value("default", 0.0f);
-        pi.steps = p.value("stepped", false) ? static_cast<int>(pi.maxValue - pi.minValue) + 1 : 0;
+        pi.steps = p.value("steps", p.value("stepped", false) ? static_cast<int>(pi.maxValue - pi.minValue) + 1 : 0);
+        pi.unit = p.value("units", "");
         params.push_back(pi);
         ids.push_back(p["id"].get<uint32_t>());
     }
     std::unique_ptr<SandboxedPluginProcessor> proc(new SandboxedPluginProcessor(params));
     proc->typeId_ = typeId;
+    proc->format_ = format;
     proc->name_ = info.value("name", id);
+    for (size_t k = 0; k < ids.size(); ++k) proc->idToIndex_.push_back({ids[k], static_cast<int>(k)});
+    std::sort(proc->idToIndex_.begin(), proc->idToIndex_.end());
     proc->instrument_ = info.value("instrument", false);
     proc->clapIds_ = ids;
     proc->lastSent_ = std::make_unique<float[]>(std::max<size_t>(1, ids.size()));
@@ -369,11 +379,23 @@ void SandboxedPluginProcessor::process(const AudioBlock& io, const AudioBlock* s
                 }
             }
         b->numParamChanges = np;
+        b->numOutParams = 0;
         b->tempo = tempo_.load(std::memory_order_relaxed);
         b->transportFlags = 1;
         if (!box_->process(++seq_, timeoutUs)) {
             log::audioEvent(log::Level::Error, "plugin sandbox failed during process - plugin bypassed");
             return;
+        }
+        // plugin -> RoY parameter changes (edited in the plugin GUI, or output by the plugin)
+        for (uint32_t k = 0; k < std::min(b->numOutParams, pipc::kMaxParamChanges); ++k) {
+            const uint32_t pid = b->outParams[k].paramId;
+            auto it = std::lower_bound(idToIndex_.begin(), idToIndex_.end(), std::make_pair(pid, -1));
+            if (it == idToIndex_.end() || it->first != pid) continue;
+            const float v = static_cast<float>(b->outParams[k].value);
+            setParam(it->second, v);
+            lastSent_[static_cast<size_t>(it->second)] = getParam(it->second); // do not echo it back
+            lastTouched_.store(it->second, std::memory_order_relaxed);
+            pluginEdits_.fetch_add(1, std::memory_order_relaxed);
         }
         for (int c = 0; c < io.numChannels && c < 2; ++c) {
             float* dst = io.channel(c) + start;
@@ -389,22 +411,24 @@ json SandboxedPluginProcessor::saveState() const {
     json j = Processor::saveState();
     json r;
     if (box_->state() == plugins::Sandbox::Running && box_->call({{"cmd", "state.save"}}, r)) {
-        j["clap"] = {{"state", r.value("state", "")}, {"pluginName", name_}};
+        j["plugin"] = {{"format", format_}, {"state", r.value("state", "")}, {"pluginName", name_}};
         std::lock_guard<std::mutex> lk(stateMutex_);
         lastState_ = j;
         return j;
     }
     // Host crashed: keep the last good opaque state so nothing is lost.
     std::lock_guard<std::mutex> lk(stateMutex_);
-    if (lastState_.contains("clap")) j["clap"] = lastState_["clap"];
+    if (lastState_.contains("plugin")) j["plugin"] = lastState_["plugin"];
     return j;
 }
 
 void SandboxedPluginProcessor::loadState(const json& state) {
     if (!state.is_object()) return;
-    if (state.contains("clap") && state["clap"].is_object()) {
+    // "plugin" (current) or "clap" (projects saved by early alpha builds)
+    const char* key = state.contains("plugin") ? "plugin" : "clap";
+    if (state.contains(key) && state[key].is_object()) {
         json r;
-        if (box_->call({{"cmd", "state.load"}, {"state", state["clap"].value("state", "")}}, r) && r.contains("values")) {
+        if (box_->call({{"cmd", "state.load"}, {"state", state[key].value("state", "")}}, r) && r.contains("values")) {
             for (size_t i = 0; i < clapIds_.size(); ++i) {
                 auto key = std::to_string(clapIds_[i]);
                 if (r["values"].contains(key)) {
@@ -417,8 +441,29 @@ void SandboxedPluginProcessor::loadState(const json& state) {
         }
         std::lock_guard<std::mutex> lk(stateMutex_);
         lastState_ = state;
+        if (!lastState_.contains("plugin")) lastState_["plugin"] = state[key];
     }
     Processor::loadState(state);
+}
+
+bool SandboxedPluginProcessor::openEditor(bool alwaysOnTop, std::string* error) {
+    json r;
+    if (!box_->call({{"cmd", "editor.open"}, {"alwaysOnTop", alwaysOnTop}}, r, 10000)) {
+        if (error) *error = r.is_object() ? r.value("error", std::string("editor could not be opened")) : "plugin host not responding";
+        return false;
+    }
+    return true;
+}
+
+void SandboxedPluginProcessor::closeEditor() {
+    json r;
+    box_->call({{"cmd", "editor.close"}}, r);
+}
+
+json SandboxedPluginProcessor::editorState() const {
+    json r;
+    if (!box_->call({{"cmd", "editor.state"}}, r)) return {{"open", false}, {"available", false}};
+    return r.value("editor", json::object());
 }
 
 bool SandboxedPluginProcessor::alive() const { return box_->state() == plugins::Sandbox::Running; }
@@ -429,9 +474,9 @@ void SandboxedPluginProcessor::killHostForTest() { box_->killForTest(); }
 void registerPluginProcessors() {
     static std::once_flag once;
     std::call_once(once, [] {
-        ProcessorFactory::instance().addPrefix("clap:", [](const std::string& typeId) -> std::unique_ptr<Processor> {
-            return SandboxedPluginProcessor::create(typeId);
-        });
+        auto creator = [](const std::string& typeId) -> std::unique_ptr<Processor> { return SandboxedPluginProcessor::create(typeId); };
+        ProcessorFactory::instance().addPrefix("clap:", creator);
+        ProcessorFactory::instance().addPrefix("vst3:", creator);
     });
 }
 

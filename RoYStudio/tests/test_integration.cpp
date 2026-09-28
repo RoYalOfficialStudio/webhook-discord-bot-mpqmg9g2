@@ -289,7 +289,7 @@ TEST_CASE("integration", "definition of done: full production workflow survives 
 
     // ---- SAVE + AUTOSAVE -------------------------------------------------------------------------------
     s.rt->captureProcessorStates(s.p);
-    CHECK(s.p.findSlot(clapSlot)->state.contains("clap"));
+    CHECK(s.p.findSlot(clapSlot)->state.contains("plugin"));
     REQUIRE(s.session.autosave(s.p, true));
     REQUIRE(s.session.save(s.p, &err));
     const std::string saved = projectToJson(s.p).dump();

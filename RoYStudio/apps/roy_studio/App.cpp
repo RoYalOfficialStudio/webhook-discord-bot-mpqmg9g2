@@ -131,6 +131,7 @@ void App::onProjectChanged(bool structural) {
 
 bool App::newProject(const fs::path& parent, const std::string& name, double bpm) {
     closeProject();
+    runtime_->setSafeMode(false);
     auto p = std::make_unique<Project>(makeNewProject(name, engine_.sampleRate(), bpm));
     std::string err;
     if (!session_.create(parent, *p, &err)) {
@@ -143,8 +144,9 @@ bool App::newProject(const fs::path& parent, const std::string& name, double bpm
     return true;
 }
 
-bool App::openProject(const fs::path& file, OpenMode mode) {
+bool App::openProject(const fs::path& file, OpenMode mode, bool safeMode) {
     closeProject();
+    runtime_->setSafeMode(safeMode);
     auto p = std::make_unique<Project>();
     std::string err;
     if (!session_.open(file, *p, mode, &err)) {
@@ -153,7 +155,7 @@ bool App::openProject(const fs::path& file, OpenMode mode) {
     }
     project_ = std::move(p);
     attachProject();
-    message(0, (session_.openedFromRecovery() ? "RECOVERED " : "opened ") + file.string());
+    message(safeMode ? 1 : 0, (safeMode ? "SAFE MODE (plugins not loaded): " : "") + std::string(session_.openedFromRecovery() ? "RECOVERED " : "opened ") + file.string());
     return true;
 }
 

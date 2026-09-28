@@ -64,4 +64,10 @@ std::filesystem::path tempDir(const std::string& name);
         const bool roy_ok_ = std::fabs(roy_a_ - roy_b_) <= static_cast<double>(tol);           \
         roytest::recordCheck(roy_ok_, std::format("{} ~= {} ({} vs {}, tol {})", #a, #b, roy_a_, roy_b_, static_cast<double>(tol)), __FILE__, __LINE__); \
     } while (0)
+#define REQUIRE_MSG_OK(expr, msg)                                                              \
+    do {                                                                                       \
+        const bool roy_ok_ = static_cast<bool>(expr);                                          \
+        roytest::recordCheck(roy_ok_, std::string(#expr) + " :: " + (msg), __FILE__, __LINE__); \
+        if (!roy_ok_) throw roytest::Failure{"REQUIRE failed: " #expr};                        \
+    } while (0)
 #define CHECK_MSG(expr, msg) roytest::recordCheck(static_cast<bool>(expr), std::string(#expr) + " :: " + (msg), __FILE__, __LINE__)

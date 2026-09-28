@@ -52,6 +52,38 @@ void registerPluginCommands(CommandRegistry& r) {
                if (!sp || !sp->alive()) return fail(ctx, "plugin could not be restarted (see log)");
                return true;
            }});
+    r.add({"OpenPluginEditor", "Open Plugin Editor", "Plugins", "", false, false, [](CommandContext& ctx, const json& a) {
+               if (!ctx.runtime) return fail(ctx, "audio runtime not available");
+               auto* sp = dynamic_cast<SandboxedPluginProcessor*>(ctx.runtime->processorForSlot(a.value("slotId", "")).get());
+               if (!sp) return fail(ctx, "not a plugin slot (or plugin not loaded)");
+               if (!sp->alive()) return fail(ctx, "PLUGIN CRASHED - restart it first");
+               std::string err;
+               if (!sp->openEditor(a.value("alwaysOnTop", false), &err)) return fail(ctx, err);
+               ctx.result = sp->editorState();
+               return true;
+           }});
+    r.add({"ClosePluginEditor", "Close Plugin Editor", "Plugins", "", false, false, [](CommandContext& ctx, const json& a) {
+               if (!ctx.runtime) return fail(ctx, "audio runtime not available");
+               auto* sp = dynamic_cast<SandboxedPluginProcessor*>(ctx.runtime->processorForSlot(a.value("slotId", "")).get());
+               if (!sp) return fail(ctx, "not a plugin slot");
+               sp->closeEditor(); // the plugin instance keeps running
+               ctx.result = sp->editorState();
+               return true;
+           }});
+    // UI-only slot data (favourite parameters, editor size). Undoable, never recreates the plugin.
+    r.add({"SetSlotUi", "Set Plugin UI Data", "Plugins", "", true, false, [](CommandContext& ctx, const json& a) {
+               PluginSlot* s = ctx.project.findSlot(a.value("slotId", ""));
+               if (!s) {
+                   for (auto& t : ctx.project.tracks)
+                       if (t.instrument && t.instrument->id == a.value("slotId", "")) s = &*t.instrument;
+               }
+               if (!s) return fail(ctx, "slot not found");
+               const std::string key = a.value("key", "");
+               if (key.empty()) return fail(ctx, "key required");
+               if (!s->state.is_object()) s->state = json::object();
+               s->state["ui"][key] = a.value("value", json());
+               return true;
+           }});
 }
 
 } // namespace roy

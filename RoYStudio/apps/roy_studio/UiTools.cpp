@@ -194,7 +194,9 @@ void drawVocals(App& app) {
 void drawPlugins(App& app) {
     const float dpi = ImGui::GetFontSize() / 15.0f;
     static int view = 1;
-    const char* views[] = {"INSTALLED", "AVAILABLE", "FAILED", "BLACKLISTED", "FAVORITES", "RECENT", "INSTRUMENTS", "EFFECTS", "DUPLICATES"};
+    const char* views[] = {"AVAILABLE", "INSTRUMENTS", "EFFECTS", "VST3", "CLAP", "FAVORITES", "RECENT", "FAILED", "BLACKLISTED", "DUPLICATES", "INSTALLED"};
+    const int nViews = 11;
+    static char psearch[96] = "";
     if (app.scanning()) {
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "Scanning plugins out of process...");
     } else {
@@ -206,12 +208,27 @@ void drawPlugins(App& app) {
     }
     ImGui::SameLine();
     ImGui::TextDisabled("%s", app.scanSummary().c_str());
-    for (int i = 0; i < 9; ++i) {
+    for (int i = 0; i < nViews; ++i) {
         if (i) ImGui::SameLine();
         if (toggleButton(views[i], view == i, col::Gold)) view = i;
     }
+    ImGui::SetNextItemWidth(300);
+    ImGui::InputTextWithHint("##plugsearch", "search name, vendor, tag...", psearch, sizeof(psearch));
     auto& db = app.pluginDb();
-    const json rows = db.view(views[view]);
+    const std::string vname = views[view];
+    json all = db.view(vname == "VST3" || vname == "CLAP" ? "AVAILABLE" : vname);
+    json rows = json::array();
+    std::string q = psearch;
+    std::transform(q.begin(), q.end(), q.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    for (auto& r : all) {
+        if (vname == "VST3" && r.value("format", "") != "vst3") continue;
+        if (vname == "CLAP" && r.value("format", "") != "clap") continue;
+        std::string hay = r.value("name", "") + " " + r.value("vendor", "") + " " + r.value("category", "");
+        for (auto& f : r.value("features", json::array())) hay += " " + f.get<std::string>();
+        std::transform(hay.begin(), hay.end(), hay.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+        if (!q.empty() && hay.find(q) == std::string::npos) continue;
+        rows.push_back(r);
+    }
     const float tableH = ImGui::GetContentRegionAvail().y * 0.6f;
     if (ImGui::BeginTable("plugins", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable,
                           ImVec2(0, tableH))) {
@@ -266,7 +283,7 @@ void drawPlugins(App& app) {
         }
         ImGui::EndTable();
     }
-    ImGui::TextDisabled("CLAP plugins run in their own RoYPluginHost process. VST3 bundles are detected; loading them needs the VST3 SDK (not included in this build).");
+    ImGui::TextDisabled("Every VST3 / CLAP plugin runs in its own RoYPluginHost process: a crash never takes RoY Studio down.");
     sectionTitle("RUNNING PLUGINS");
     if (app.hasProject() && ImGui::BeginTable("running", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders)) {
         for (const char* h : {"Plugin", "Where", "Host PID", "Status", ""}) ImGui::TableSetupColumn(h);
@@ -287,7 +304,15 @@ void drawPlugins(App& app) {
             if (sp->alive()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Green), "running");
             else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Red), "PLUGIN CRASHED - %s", sp->problem().c_str());
             ImGui::TableNextColumn();
-            if (!sp->alive() && ImGui::SmallButton("restart")) app.run("RestartPlugin", {{"slotId", slot}});
+            if (sp->alive()) {
+                if (ImGui::SmallButton("editor")) app.run("OpenPluginEditor", {{"slotId", slot}});
+            } else {
+                if (ImGui::SmallButton("restart")) app.run("RestartPlugin", {{"slotId", slot}});
+                ImGui::SameLine();
+                if (ImGui::SmallButton("disable")) app.run("BypassInsert", {{"slotId", slot}, {"bypass", true}});
+                ImGui::SameLine();
+                if (ImGui::SmallButton("remove")) app.run("RemoveInsert", {{"slotId", slot}});
+            }
             ImGui::PopID();
         }
         ImGui::EndTable();

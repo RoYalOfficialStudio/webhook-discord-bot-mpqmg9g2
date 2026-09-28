@@ -18,7 +18,7 @@
 namespace roy::pluginipc {
 
 constexpr uint32_t kMagic = 0x524F5950; // 'ROYP'
-constexpr uint32_t kVersion = 1;
+constexpr uint32_t kVersion = 2;
 constexpr uint32_t kMaxFrames = 4096;
 constexpr uint32_t kMaxEvents = 1024;
 constexpr uint32_t kMaxParamChanges = 512;
@@ -64,10 +64,13 @@ struct alignas(64) Block {
     uint32_t transportFlags; // bit0 playing
     double tempo;
     int64_t steadyTime;
+    int64_t songPosSamples;   // timeline position of the first frame
+    uint32_t numOutParams;    // plugin -> RoY: parameter changes (automation from the plugin GUI / plugin itself)
     float in[2][kMaxFrames];
     float out[2][kMaxFrames];
     Event events[kMaxEvents];
     ParamChange params[kMaxParamChanges];
+    ParamChange outParams[kMaxParamChanges];
 };
 
 static_assert(std::atomic<uint32_t>::is_always_lock_free, "lock-free atomics required in shared memory");

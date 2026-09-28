@@ -5,9 +5,8 @@
 //   timeout. A module that crashes or hangs the scanner is QUARANTINED: it is
 //   recorded as failed and skipped on later scans until the user retries it.
 //   Plugin files are never moved, modified or deleted.
-// * VST3 bundles are detected and described from moduleinfo.json when present;
-//   loading VST3 needs the Steinberg VST3 SDK, which this build does not bundle,
-//   so they are listed with status "unsupported" (honest, not hidden).
+// * VST3 bundles are scanned out of process the same way (VST3 SDK hosting in RoYPluginHost).
+//   Bundles without a binary for this platform are listed as "unsupported" from moduleinfo.json.
 #include <nlohmann/json.hpp>
 
 #include <cstdint>

@@ -10,51 +10,104 @@
 namespace roy::gui {
 
 namespace {
-// Generic parameter editor for any processor (built-in or sandboxed plugin).
+// Generic parameter editor for any processor (built-in or sandboxed plugin):
+// search, favourites (stored as UI data in the slot), last touched parameter -> automation.
 void paramEditor(App& app, const std::string& slotId) {
     auto proc = app.runtime().processorForSlot(slotId);
     if (!proc) {
-        ImGui::TextDisabled("processor not available");
+        if (app.runtime().safeMode()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "SAFE MODE: plugin not loaded (state kept)");
+        else ImGui::TextDisabled("processor not available");
         return;
     }
     const float dpi = ImGui::GetFontSize() / 15.0f;
+    MixerChannel* owner = nullptr;
+    PluginSlot* slot = app.project().findSlot(slotId, &owner);
     if (auto* sp = dynamic_cast<SandboxedPluginProcessor*>(proc.get())) {
         if (!sp->alive()) {
             ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Red), "PLUGIN CRASHED: %s", sp->problem().c_str());
-            if (goldButton("Restart plugin")) app.run("RestartPlugin", {{"slotId", slotId}});
+            if (goldButton("RESTART")) app.run("RestartPlugin", {{"slotId", slotId}});
+            ImGui::SameLine();
+            if (ImGui::Button("DISABLE")) app.run("BypassInsert", {{"slotId", slotId}, {"bypass", true}});
+            ImGui::SameLine();
+            if (ImGui::Button("REMOVE")) app.run("RemoveInsert", {{"slotId", slotId}});
+            ImGui::TextDisabled("The project keeps playing: the slot passes audio through. Reopen with File > Open (Safe Mode) if a plugin keeps crashing.");
             return;
         }
-        ImGui::TextDisabled("sandboxed plugin (pid %d) | latency %d samples", sp->hostPid(), sp->latencySamples());
-    }
-    for (int i = 0; i < proc->numParams(); ++i) {
-        const auto& pi = proc->paramInfo(i);
-        float v = proc->getParam(i);
-        ImGui::PushID(i);
-        ImGui::SetNextItemWidth(240 * dpi);
-        bool edited = false;
-        if (pi.steps == 2) {
-            bool b = v > 0.5f;
-            if (ImGui::Checkbox(pi.name.c_str(), &b)) {
-                proc->setParam(i, b ? 1.0f : 0.0f);
-                edited = true;
-            }
-        } else if (pi.steps > 2) {
-            int k = static_cast<int>(std::lround(v));
-            if (ImGui::SliderInt(pi.name.c_str(), &k, static_cast<int>(pi.minValue), static_cast<int>(pi.maxValue))) proc->setParam(i, static_cast<float>(k));
-            edited = ImGui::IsItemDeactivatedAfterEdit();
-        } else {
-            if (ImGui::SliderFloat(pi.name.c_str(), &v, pi.minValue, pi.maxValue, pi.unit.empty() ? "%.2f" : ("%.2f " + pi.unit).c_str()))
-                proc->setParam(i, v); // live, lock-free
-            edited = ImGui::IsItemDeactivatedAfterEdit();
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-                proc->setParam(i, pi.defaultValue);
-                edited = true;
+        ImGui::TextDisabled("%s plugin in sandbox (pid %d) | latency %d samples", sp->format() == "vst3" ? "VST3" : "CLAP", sp->hostPid(), sp->latencySamples());
+        static bool onTop = false;
+        if (goldButton("OPEN EDITOR")) app.run("OpenPluginEditor", {{"slotId", slotId}, {"alwaysOnTop", onTop}});
+        ImGui::SameLine();
+        if (ImGui::Button("Close editor")) app.run("ClosePluginEditor", {{"slotId", slotId}});
+        ImGui::SameLine();
+        ImGui::Checkbox("Always on top", &onTop);
+        const int lt = sp->lastTouchedParam();
+        if (lt >= 0 && lt < proc->numParams()) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "Last touched: %s", proc->paramInfo(lt).name.c_str());
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Automate") && owner) {
+                const double b = app.positionBeats();
+                const float v = proc->getParam(lt);
+                app.run("CreateAutomation", {{"channelId", owner->id}, {"slotId", slotId}, {"paramId", proc->paramInfo(lt).id}, {"points", {{b, v}, {b + 4.0, v}}}});
             }
         }
-        if (edited) app.run("SetParam", {{"slotId", slotId}, {"paramId", pi.id}, {"value", proc->getParam(i)}});
-        ImGui::PopID();
     }
-    ImGui::TextDisabled("right-click a slider: default value");
+    static char search[64] = "";
+    ImGui::SetNextItemWidth(200 * dpi);
+    ImGui::InputTextWithHint("##psearch", "search parameters...", search, sizeof(search));
+    std::string q = search;
+    std::transform(q.begin(), q.end(), q.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+    json favs = slot && slot->state.is_object() && slot->state.contains("ui") ? slot->state["ui"].value("favorites", json::array()) : json::array();
+    auto isFav = [&](const std::string& id) {
+        for (auto& f : favs)
+            if (f.is_string() && f.get<std::string>() == id) return true;
+        return false;
+    };
+    ImGui::BeginChild("params", ImVec2(0, 0));
+    for (int pass = 0; pass < 2; ++pass) // favourites first
+        for (int i = 0; i < proc->numParams(); ++i) {
+            const auto& pi = proc->paramInfo(i);
+            const bool fav = isFav(pi.id);
+            if ((pass == 0) != fav) continue;
+            std::string name = pi.name;
+            std::transform(name.begin(), name.end(), name.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
+            if (!q.empty() && name.find(q) == std::string::npos) continue;
+            float v = proc->getParam(i);
+            ImGui::PushID(i);
+            if (slot && toggleButton(fav ? "*" : "+", fav, col::Gold, ImVec2(20 * dpi, 0))) {
+                json nf = json::array();
+                for (auto& f : favs)
+                    if (!(f.is_string() && f.get<std::string>() == pi.id)) nf.push_back(f);
+                if (!fav) nf.push_back(pi.id);
+                app.run("SetSlotUi", {{"slotId", slotId}, {"key", "favorites"}, {"value", nf}});
+            }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(240 * dpi);
+            bool edited = false;
+            if (pi.steps == 2) {
+                bool b = v > 0.5f;
+                if (ImGui::Checkbox(pi.name.c_str(), &b)) {
+                    proc->setParam(i, b ? pi.maxValue : pi.minValue);
+                    edited = true;
+                }
+            } else if (pi.steps > 2 && pi.maxValue - pi.minValue > 1.5f) {
+                int k = static_cast<int>(std::lround(v));
+                if (ImGui::SliderInt(pi.name.c_str(), &k, static_cast<int>(pi.minValue), static_cast<int>(pi.maxValue))) proc->setParam(i, static_cast<float>(k));
+                edited = ImGui::IsItemDeactivatedAfterEdit();
+            } else {
+                if (ImGui::SliderFloat(pi.name.c_str(), &v, pi.minValue, pi.maxValue, pi.unit.empty() ? "%.3f" : ("%.3f " + pi.unit).c_str()))
+                    proc->setParam(i, v); // live, lock-free
+                edited = ImGui::IsItemDeactivatedAfterEdit();
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                    proc->setParam(i, pi.defaultValue);
+                    edited = true;
+                }
+            }
+            if (edited) app.run("SetParam", {{"slotId", slotId}, {"paramId", pi.id}, {"value", proc->getParam(i)}});
+            ImGui::PopID();
+        }
+    ImGui::TextDisabled("right-click a slider: default value | + / *: favourite");
+    ImGui::EndChild();
 }
 
 void addInsertMenu(App& app, const std::string& channelId) {
@@ -66,9 +119,9 @@ void addInsertMenu(App& app, const std::string& channelId) {
     }
     auto fx = app.pluginDb().effects();
     if (!fx.empty()) {
-        sectionTitle("PLUGINS (sandboxed)");
+        sectionTitle("PLUGINS (VST3 / CLAP, sandboxed)");
         for (auto* r : fx)
-            if (ImGui::MenuItem(std::format("{}  ({})", r->name, r->vendor).c_str())) {
+            if (ImGui::MenuItem(std::format("{}  [{}]  {}", r->name, r->format == "vst3" ? "VST3" : "CLAP", r->vendor).c_str())) {
                 if (app.run("AddInsert", {{"channelId", channelId}, {"typeId", r->typeId}, {"name", r->name}})) {
                     app.pluginDb().markUsed(r->typeId);
                     app.savePluginDb();

@@ -84,6 +84,7 @@ std::string opaqueStateOf(const PluginSlot& slot) {
     if (!slot.state.is_object()) return {};
     json j = slot.state;
     j.erase("params");
+    j.erase("ui"); // UI-only data (favourite parameters, editor size) never recreates an instance
     return j.dump();
 }
 } // namespace
@@ -104,6 +105,10 @@ std::shared_ptr<Processor> ProjectRuntime::ensureProcessor(const Project& projec
     }
     // New slot, changed type or changed opaque state: a fresh instance (the old
     // one stays alive in the current graph until that graph is retired).
+    if (safeMode_ && (slot.typeId.rfind("clap:", 0) == 0 || slot.typeId.rfind("vst3:", 0) == 0)) {
+        warnings_.push_back(std::format("SAFE MODE: plugin '{}' ({}) not loaded - slot bypassed", slot.name, slot.typeId));
+        return nullptr;
+    }
     auto proc = std::shared_ptr<Processor>(ProcessorFactory::instance().create(slot.typeId));
     if (!proc) {
         warnings_.push_back(std::format("processor type '{}' ({}) is not available - slot bypassed", slot.typeId, slot.name));

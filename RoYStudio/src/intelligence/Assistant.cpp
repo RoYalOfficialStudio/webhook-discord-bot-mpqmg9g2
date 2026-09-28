@@ -2,6 +2,7 @@
 #include "audio/Processor.h"
 #include "core/Math.h"
 #include "dsp/Analysis.h"
+#include "plugins/Sandbox.h"
 #include "vocal/PitchAnalysis.h"
 #include "vocal/PitchDetector.h"
 
@@ -131,6 +132,19 @@ std::vector<DnaDeviation> compareToDna(const VocalDna& d, const std::vector<std:
 }
 
 // ---------------------------------------------------------------- project assistant
+namespace {
+// Built-in types must be registered; plugin types (clap:/vst3:) must point to an existing module.
+bool processorAvailable(const std::string& typeId) {
+    std::string format, module, id;
+    if (plugins::parsePluginTypeId(typeId, format, module, id)) {
+        std::error_code ec;
+        return fs::exists(module, ec);
+    }
+    if (typeId.rfind("clap:", 0) == 0 || typeId.rfind("vst3:", 0) == 0) return false; // malformed plugin id
+    return ProcessorFactory::instance().has(typeId);
+}
+} // namespace
+
 std::vector<Finding> checkProject(const Project& p, const fs::path& folder, bool dirty, size_t backups) {
     std::vector<Finding> out;
     std::set<std::string> used;
@@ -168,12 +182,12 @@ std::vector<Finding> checkProject(const Project& p, const fs::path& folder, bool
             if (!ch->outputChannelId.empty() && !p.findChannel(ch->outputChannelId))
                 out.push_back({"bad_route", "problem", std::format("track '{}' routes to a missing bus - it plays through the master", t.name), "RouteChannel", {{"channelId", ch->id}, {"output", ""}}});
         }
-        if (t.instrument && !ProcessorFactory::instance().has(t.instrument->typeId))
+        if (t.instrument && !processorAvailable(t.instrument->typeId))
             out.push_back({"missing_plugin", "problem", std::format("instrument '{}' on '{}' is not available", t.instrument->typeId, t.name), "", {}});
     }
     for (auto& c : p.channels)
         for (auto& s : c.inserts)
-            if (!ProcessorFactory::instance().has(s.typeId))
+            if (!processorAvailable(s.typeId))
                 out.push_back({"missing_plugin", "problem", std::format("effect '{}' on {} is not available (bypassed)", s.typeId, c.name), "", {}});
     for (auto& a : p.automation)
         if (!p.findChannel(a.channelId)) out.push_back({"dead_automation", "info", "automation lane points to a deleted channel", "DeleteAutomation", {{"laneId", a.id}}});
