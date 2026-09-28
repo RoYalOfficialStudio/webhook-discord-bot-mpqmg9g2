@@ -138,12 +138,23 @@ std::shared_ptr<std::atomic<bool>> ProjectRuntime::monitorFlag(const std::string
 
 void ProjectRuntime::captureProcessorStates(Project& project) const {
     auto capture = [&](PluginSlot& s) {
-        if (auto p = processorForSlot(s.id)) s.state = p->saveState();
+        auto it = processors_.find(s.id);
+        if (it == processors_.end() || !it->second.proc) return;
+        s.state = it->second.proc->saveState();
+        // The instance already holds this state: do not recreate it on the next rebuild.
+        it->second.opaqueState = opaqueStateOf(s);
     };
     for (auto& ch : project.channels)
         for (auto& s : ch.inserts) capture(s);
     for (auto& t : project.tracks)
         if (t.instrument) capture(*t.instrument);
+}
+
+std::vector<std::pair<std::string, std::shared_ptr<Processor>>> ProjectRuntime::allProcessors() const {
+    std::vector<std::pair<std::string, std::shared_ptr<Processor>>> out;
+    for (auto& [id, e] : processors_)
+        if (e.proc) out.emplace_back(id, e.proc);
+    return out;
 }
 
 bool ProjectRuntime::rebuild(const Project& project) {

@@ -47,6 +47,11 @@ public:
 
     // Writes the current processor states back into the project's slots.
     void captureProcessorStates(Project& project) const;
+    // Drops the instance of a slot so the next rebuild() creates a fresh one
+    // (plugin crash recovery). The old instance lives until its graph is retired.
+    void forgetProcessor(const std::string& slotId) { processors_.erase(slotId); }
+    // All live processors by slot id (status views).
+    std::vector<std::pair<std::string, std::shared_ptr<Processor>>> allProcessors() const;
 
     int graphLatencySamples() const { return lastLatency_; }
     // Latency with which a channel's output reaches the master mix without compensation.
@@ -65,7 +70,7 @@ private:
     std::map<std::string, std::shared_ptr<const AudioData>> assets_;
     std::map<std::string, std::shared_ptr<const AudioData>> derivedAssets_;
     struct ProcEntry { std::string typeId; std::shared_ptr<Processor> proc; double sr = 0; int block = 0; std::string opaqueState; };
-    std::map<std::string, ProcEntry> processors_;
+    mutable std::map<std::string, ProcEntry> processors_; // captureProcessorStates refreshes opaqueState
     std::map<std::string, std::shared_ptr<ChannelParams>> params_;
     std::map<std::string, std::shared_ptr<std::atomic<bool>>> monitors_;
     std::vector<std::string> warnings_;

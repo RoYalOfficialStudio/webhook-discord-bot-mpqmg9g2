@@ -711,6 +711,7 @@ void registerCoreCommands(CommandRegistry& r) {
     registerProductionCommands(r);
     registerMasterCommands(r);
     registerIntelligenceCommands(r);
+    registerPluginCommands(r);
 }
 
 } // namespace roy

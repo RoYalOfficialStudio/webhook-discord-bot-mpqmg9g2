@@ -70,5 +70,7 @@ void registerProductionCommands(CommandRegistry& r);
 void registerMasterCommands(CommandRegistry& r);
 // Mix analysis, energy map, sections, project assistant, Vocal DNA. Called by registerCoreCommands.
 void registerIntelligenceCommands(CommandRegistry& r);
+// Plugin status / crash recovery (sandboxed CLAP plugins). Called by registerCoreCommands.
+void registerPluginCommands(CommandRegistry& r);
 
 } // namespace roy
