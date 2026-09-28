@@ -189,6 +189,11 @@ public:
         sr_ = s.sampleRate;
         return AudioEffect::setupProcessing(s);
     }
+    tresult PLUGIN_API setActive(TBool state) SMTG_OVERRIDE {
+        phase_ = 0; // (de)activation resets the processing state, as the VST3 spec expects
+        note_ = -1;
+        return AudioEffect::setActive(state);
+    }
     tresult PLUGIN_API canProcessSampleSize(int32 s) SMTG_OVERRIDE { return s == kSample32 ? kResultTrue : kResultFalse; }
     tresult PLUGIN_API process(ProcessData& d) SMTG_OVERRIDE {
         if (d.inputParameterChanges)

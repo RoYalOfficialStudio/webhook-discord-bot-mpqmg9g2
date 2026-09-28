@@ -1,8 +1,8 @@
 // DEFINITION OF DONE - end-to-end workflow through the command system:
 // NEW PROJECT -> AUDIO DEVICE -> CREATE TRACK -> RECORD VOCAL -> PLAYBACK -> EDIT VOCAL ->
 // PITCH ANALYSIS -> OFF-KEY FILTER -> ADD BEAT -> DRUM PROGRAMMING -> 808 -> MIDI -> PIANO ROLL ->
-// ARRANGEMENT -> MIXER -> EFFECTS (+ sandboxed CLAP plugin) -> AUTOMATION -> MIX -> MASTER ->
-// EXPORT WAV -> SAVE -> CLOSE -> REOPEN -> identical project and identical render.
+// ARRANGEMENT -> MIXER -> EFFECTS (+ sandboxed CLAP and VST3 plugins) -> AUTOMATION -> MIX -> MASTER ->
+// EXPORT WAV + MP3 -> SAVE -> CLOSE -> REOPEN -> identical project, bit-identical WAV, byte-identical MP3.
 // Headless: the audio device is the miniaudio null backend and the "singer" is a synthetic
 // voice (MOCK input, clearly labelled) fed through the real recording path.
 #include "TestFramework.h"
@@ -19,6 +19,7 @@
 #include "record/Takes.h"
 #include "vocal/PitchDetector.h"
 
+#include <fstream>
 #include <thread>
 
 using namespace roy;
@@ -244,6 +245,17 @@ TEST_CASE("integration", "definition of done: full production workflow survives 
     REQUIRE(s.run("AddInsert", {{"channelId", keysCh}, {"typeId", clapType}, {"name", "CLAP Gain"}}));
     const std::string clapSlot = s.id();
     REQUIRE(s.run("SetParam", {{"slotId", clapSlot}, {"paramId", "0"}, {"value", 0.7}}));
+    // VST3 effect on the reverb bus, VST3 instrument on its own track (both sandboxed)
+    const fs::path vst3Bundle = fs::path(ROY_TEST_PLUGIN_DIR) / "RoYTest.vst3";
+    REQUIRE(s.run("AddInsert", {{"channelId", reverbBus}, {"typeId", plugins::makeVst3TypeId(vst3Bundle.string(), "524F590147414950524F433100000001")},
+                                {"name", "VST3 Gain"}, {"params", {{"0", 0.4}}}}));
+    const std::string vst3Slot = s.id();
+    REQUIRE(s.run("AddTrack", {{"type", "midi"}, {"name", "VST3 Lead"}, {"output", musicBus}}));
+    const std::string leadTrack = s.id();
+    REQUIRE(s.run("SetInstrument", {{"trackId", leadTrack}, {"typeId", plugins::makeVst3TypeId(vst3Bundle.string(), "524F590253594E50524F433100000003")}}));
+    REQUIRE(s.run("AddMidiClip", {{"trackId", leadTrack}, {"startBeat", 8.0}, {"lengthBeats", 4.0}}));
+    const std::string leadClip = s.id();
+    REQUIRE(s.run("AddNote", {{"clipId", leadClip}, {"pitch", 69}, {"startBeat", 0.0}, {"lengthBeats", 2.0}}));
     auto clapProc = std::dynamic_pointer_cast<SandboxedPluginProcessor>(s.rt->processorForSlot(clapSlot));
     REQUIRE(clapProc != nullptr);
     CHECK(clapProc->alive());
@@ -279,6 +291,12 @@ TEST_CASE("integration", "definition of done: full production workflow survives 
         CHECK(again[0] == mix1[0]);
         CHECK(again[1] == mix1[1]);
     }
+
+    // ---- EXPORT MP3 -----------------------------------------------------------------------------------
+    REQUIRE(s.run("Export", {{"format", "mp3"}, {"bitrate", 320}, {"name", "dod_mix_mp3"}, {"folder", (folder / "Exports").string()},
+                             {"metadata", {{"title", "DoD Song"}, {"artist", "RoY"}}}}));
+    const fs::path mp3a = s.ctx->result["files"][0]["path"].get<std::string>();
+    CHECK(readWav(mp3a)[0].size() == mix1[0].size()); // gapless: same length as the WAV
 
     // ---- UNDO / REDO ------------------------------------------------------------------------------
     const std::string beforeUndo = projectToJson(s.p).dump();
@@ -325,5 +343,19 @@ TEST_CASE("integration", "definition of done: full production workflow survives 
         for (size_t i = 0; i < mix1[static_cast<size_t>(c)].size(); ++i)
             maxDiff = std::max(maxDiff, static_cast<double>(std::fabs(mix1[static_cast<size_t>(c)][i] - mix2[static_cast<size_t>(c)][i])));
     CHECK_MSG(maxDiff == 0.0, std::format("reopened render differs by {}", maxDiff)); // bit-identical
+    // MP3 of the reopened project is byte-identical to the first one (deterministic render + encoder)
+    REQUIRE(r.run("Export", {{"format", "mp3"}, {"bitrate", 320}, {"name", "dod_mix_mp3_reopened"}, {"folder", (folder / "Exports").string()},
+                             {"metadata", {{"title", "DoD Song"}, {"artist", "RoY"}}}}));
+    const fs::path mp3b = r.ctx->result["files"][0]["path"].get<std::string>();
+    auto bytes = [](const fs::path& f) {
+        std::ifstream in(f, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    CHECK(bytes(mp3a) == bytes(mp3b));
+    // plugin states restored after reopen
+    auto reVst3 = std::dynamic_pointer_cast<SandboxedPluginProcessor>(r.rt->processorForSlot(vst3Slot));
+    REQUIRE(reVst3 != nullptr);
+    CHECK(reVst3->format() == "vst3");
+    CHECK_NEAR(reVst3->getParam(0), 0.4, 1e-6);
     r.session.close();
 }
