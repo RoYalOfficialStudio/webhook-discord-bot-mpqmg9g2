@@ -13,6 +13,12 @@ erweiterbare Basis dafür.
   Internetverbindung nötig — mit **Pegelanzeige**, **Aufnahme-Timer** und
   **Wellenform-Vorschau**, damit immer sichtbar ist, wie viel und wie laut
   gerade aufgenommen wurde.
+  - **🎧 Monitor**: sich selbst live über Kopfhörer/Lautsprecher hören
+    während der Aufnahme (vor dem Aufnehmen aktivieren; bei Lautsprechern statt
+    Kopfhörer kann es zu Rückkopplung/Echo kommen).
+- **Wellenform zum Schneiden**: Bereich per Drag auf der Wellenform markieren
+  (wie in FL Studios Playlist) und mit **✂ Cut Selection** direkt heraus-
+  schneiden — der Track wird sichtbar kürzer, der Rest rückt zusammen.
 - **Autotune / Pitch-Correction** – mit allen gängigen Reglern:
   - Tonart + 12 Skalen (Dur, natürlich/harmonisch/melodisch Moll, Dorisch,
     Phrygisch, Lydisch, Mixolydisch, Lokrisch, Pentatonik, Blues, Chromatisch)
@@ -101,30 +107,33 @@ python main.py
 
 1. **+ Add Track** – neuen leeren Track anlegen.
 2. **Record** – Mikrofonaufnahme starten/stoppen (verwendet dein
-   Standard-Eingabegerät).
-3. **Load File** – vorhandene Audiodatei in den Track laden (WAV, MP3, FLAC,
+   Standard-Eingabegerät). **🎧** daneben aktiviert Live-Monitoring (dich
+   selbst hören während der Aufnahme).
+3. **Wellenform** – nach der Aufnahme/dem Laden per Drag einen Bereich
+   markieren, dann **✂ Cut Selection** zum Herausschneiden oder
+   **Clear Selection** zum Abbrechen der Auswahl.
+4. **Load File** – vorhandene Audiodatei in den Track laden (WAV, MP3, FLAC,
    OGG, AIFF, M4A/AAC, WMA).
-4. **Effects / Autotune...** – EQ, Delay, Reverb, Compressor, Autotune und
+5. **Effects / Autotune...** – EQ, Delay, Reverb, Compressor, Autotune und
    Voice FX (De-Esser, Doubler) für diesen Track einstellen. Im Autotune-Tab
    oben das Preset-Dropdown nutzen, um eigene oder mitgelieferte Einstellungen
    zu laden/speichern/löschen.
-5. **Autotune-Zeile** direkt am Track – schneller Ein/Aus-Schalter plus
+6. **Autotune-Zeile** direkt am Track – schneller Ein/Aus-Schalter plus
    Strength/Speed, für schnelle Anpassungen ohne Dialog.
-6. **Vol/Pan-Regler** und **Mute/Solo** wie in jedem DAW-Mixer. Darüber zeigen
-   Pegelanzeige, Timer und Wellenform, was gerade aufgenommen wurde.
-7. **Play Mix** – aktuellen Mixdown anhören, **Stop** zum Abbrechen.
-8. **🎤 Add Harmony...** – aus einer Lead-Stimme automatisch neue
+7. **Vol/Pan-Regler** und **Mute/Solo** wie in jedem DAW-Mixer.
+8. **Play Mix** – aktuellen Mixdown anhören, **Stop** zum Abbrechen.
+9. **🎤 Add Harmony...** – aus einer Lead-Stimme automatisch neue
    Harmonie-Spuren erzeugen (Terz/Quinte/... über oder unter der Lead).
-9. **Export Mixdown...** – fertigen Track als WAV/MP3/FLAC/OGG/AIFF/M4A/WMA
+10. **Export Mixdown...** – fertigen Track als WAV/MP3/FLAC/OGG/AIFF/M4A/WMA
    exportieren.
-10. **Save/Open Project...** – Session in einen Ordner speichern bzw. laden.
+11. **Save/Open Project...** – Session in einen Ordner speichern bzw. laden.
 
 ## Architektur
 
 ```
 music-studio/
   audio/
-    recorder.py    Mikrofonaufnahme + Pegel/Timer (sounddevice)
+    recorder.py    Mikrofonaufnahme + Pegel/Timer + Live-Monitoring (sounddevice)
     effects.py     EQ, Delay, Reverb, Compressor, Limiter, Doubler, De-Esser
     autotune.py    Pitch-Detection (librosa pYIN) + Pitch-Correction
     harmony.py     Harmonie-Generator (diatonische Transposition der Lead-Stimme)
@@ -137,7 +146,7 @@ music-studio/
     main_window.py     Hauptfenster, Transport, Track-Liste, Harmonie-Aktion
     track_widget.py    Eine Track-Zeile (Record/Load/Vol/Pan/Mute/Solo, Meter,
                        Wellenform, Autotune-Schnellregler)
-    waveform_widget.py Wellenform-Vorschau-Widget
+    waveform_widget.py Wellenform-Vorschau + Auswahl/Cut per Drag
     effects_dialog.py  Effekt-Editor (EQ/Delay/Reverb/Compressor/Autotune/Voice FX)
     harmony_dialog.py  Auswahl-Dialog für den Harmonie-Generator
   tests/
@@ -146,6 +155,7 @@ music-studio/
     test_presets.py    Preset-Speichern/Laden-Tests
     test_io_formats.py Format-Roundtrip-Tests (WAV/FLAC immer, MP3 falls ffmpeg da ist)
     test_voice_fx.py   Doubler/De-Esser/Harmonie-Tests
+    test_recorder.py   Monitor-Callback-Tests
   main.py          Einstiegspunkt
 ```
 

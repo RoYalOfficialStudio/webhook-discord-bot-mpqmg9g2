@@ -24,8 +24,10 @@ class Recorder:
     samplerate: int = 44100
     channels: int = 1
     device: int | None = None
+    monitor: bool = False  # hear yourself live through the output device while recording
+    monitor_gain: float = 0.8
 
-    _stream: sd.InputStream | None = field(default=None, init=False, repr=False)
+    _stream: sd.InputStream | sd.Stream | None = field(default=None, init=False, repr=False)
     _chunks: list[np.ndarray] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _recording: bool = field(default=False, init=False, repr=False)
@@ -58,18 +60,37 @@ class Recorder:
             self._frames_recorded += frames
         self._level = float(np.max(np.abs(indata))) if frames else 0.0
 
+    def _monitor_callback(self, indata, outdata, frames, time_info, status):
+        with self._lock:
+            self._chunks.append(indata.copy())
+            self._frames_recorded += frames
+        self._level = float(np.max(np.abs(indata))) if frames else 0.0
+        out_channels = outdata.shape[1]
+        if indata.shape[1] == out_channels:
+            outdata[:] = indata * self.monitor_gain
+        else:
+            outdata[:] = np.repeat(indata[:, :1], out_channels, axis=1) * self.monitor_gain
+
     def start(self) -> None:
         if self._recording:
             return
         self._chunks = []
         self._level = 0.0
         self._frames_recorded = 0
-        self._stream = sd.InputStream(
-            samplerate=self.samplerate,
-            channels=self.channels,
-            device=self.device,
-            callback=self._callback,
-        )
+        if self.monitor:
+            self._stream = sd.Stream(
+                samplerate=self.samplerate,
+                channels=(self.channels, 2),
+                device=(self.device, None),
+                callback=self._monitor_callback,
+            )
+        else:
+            self._stream = sd.InputStream(
+                samplerate=self.samplerate,
+                channels=self.channels,
+                device=self.device,
+                callback=self._callback,
+            )
         self._stream.start()
         self._start_time = time.monotonic()
         self._recording = True

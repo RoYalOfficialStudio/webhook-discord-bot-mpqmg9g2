@@ -55,6 +55,15 @@ class TrackWidget(QFrame):
         self.record_btn.clicked.connect(self._toggle_record)
         top.addWidget(self.record_btn)
 
+        self.monitor_btn = QPushButton("🎧")
+        self.monitor_btn.setCheckable(True)
+        self.monitor_btn.setToolTip(
+            "Monitor: hear yourself live through your speakers/headphones while recording.\n"
+            "Turn this off if you get feedback/echo, or use headphones."
+        )
+        self.monitor_btn.toggled.connect(self._on_monitor_toggle)
+        top.addWidget(self.monitor_btn)
+
         self.load_btn = QPushButton("📁 Load")
         self.load_btn.clicked.connect(self._load_file)
         top.addWidget(self.load_btn)
@@ -107,10 +116,28 @@ class TrackWidget(QFrame):
         self.time_label.setFixedWidth(70)
         meter_row.addWidget(self.time_label)
 
-        # --- Waveform preview --------------------------------------------------
+        # --- Waveform preview (drag to select, then cut) -----------------------
         self.waveform = WaveformWidget()
         root.addWidget(self.waveform)
         self.waveform.set_audio(track.audio, color=self._accent)
+        self.waveform.selectionChanged.connect(self._on_selection_changed)
+
+        selection_row = QHBoxLayout()
+        root.addLayout(selection_row)
+
+        self.selection_label = QLabel("Drag on the waveform to select a range")
+        self.selection_label.setObjectName("dim")
+        selection_row.addWidget(self.selection_label, 1)
+
+        self.cut_btn = QPushButton("✂ Cut Selection")
+        self.cut_btn.setEnabled(False)
+        self.cut_btn.clicked.connect(self._cut_selection)
+        selection_row.addWidget(self.cut_btn)
+
+        self.clear_selection_btn = QPushButton("Clear Selection")
+        self.clear_selection_btn.setEnabled(False)
+        self.clear_selection_btn.clicked.connect(self.waveform.clear_selection)
+        selection_row.addWidget(self.clear_selection_btn)
 
         bottom = QHBoxLayout()
         root.addLayout(bottom)
@@ -201,6 +228,30 @@ class TrackWidget(QFrame):
     def _on_pan(self, value: int) -> None:
         self.track.pan = value / 100.0
         self.pan_label.setText(self._pan_text(self.track.pan))
+
+    def _on_monitor_toggle(self, checked: bool) -> None:
+        self.recorder.monitor = checked
+
+    def _on_selection_changed(self) -> None:
+        seconds = self.waveform.get_selection_seconds(self.track.sr)
+        has_selection = seconds is not None
+        self.cut_btn.setEnabled(has_selection)
+        self.clear_selection_btn.setEnabled(has_selection)
+        self.selection_label.setText(
+            f"Selection: {seconds:.2f}s" if has_selection else "Drag on the waveform to select a range"
+        )
+
+    def _cut_selection(self) -> None:
+        sel = self.waveform.get_selection_samples()
+        if sel is None:
+            return
+        start, end = sel
+        audio = self.track.audio
+        self.track.audio = np.concatenate([audio[:start], audio[end:]], axis=0)
+        self.waveform.set_audio(self.track.audio, color=self._accent)
+        self.time_label.setText(self._duration_text())
+        self.status_label.setText(self._status_text())
+        self.changed.emit()
 
     def _on_mute(self, checked: bool) -> None:
         self.track.mute = checked
