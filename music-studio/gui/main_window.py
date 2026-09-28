@@ -4,7 +4,7 @@ import numpy as np
 import sounddevice as sd
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QScrollArea,
-    QFileDialog, QLabel, QMessageBox, QProgressDialog,
+    QFileDialog, QLabel, QMessageBox, QProgressDialog, QFrame,
 )
 from PySide6.QtCore import Qt
 
@@ -27,21 +27,33 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         outer = QVBoxLayout(central)
+        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setSpacing(10)
 
-        transport = QHBoxLayout()
-        outer.addLayout(transport)
+        title = QLabel("OFFLINE MUSIC STUDIO")
+        title.setStyleSheet("font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #5ee27a;")
+        outer.addWidget(title)
+
+        transport_frame = QFrame()
+        transport_frame.setObjectName("transportBar")
+        transport = QHBoxLayout(transport_frame)
+        outer.addWidget(transport_frame)
 
         add_btn = QPushButton("+ Add Track")
+        add_btn.setObjectName("primary")
         add_btn.clicked.connect(self.add_track)
         transport.addWidget(add_btn)
 
-        play_btn = QPushButton("Play Mix")
+        play_btn = QPushButton("▶ Play Mix")
+        play_btn.setObjectName("primary")
         play_btn.clicked.connect(self.play_mix)
         transport.addWidget(play_btn)
 
-        stop_btn = QPushButton("Stop")
+        stop_btn = QPushButton("⏹ Stop")
         stop_btn.clicked.connect(sd.stop)
         transport.addWidget(stop_btn)
+
+        transport.addSpacing(16)
 
         export_btn = QPushButton("Export Mixdown...")
         export_btn.clicked.connect(self.export_mix)
@@ -74,7 +86,7 @@ class MainWindow(QMainWindow):
         track = Track(name=f"Track {index}", audio=np.zeros(0, dtype=np.float32), sr=DEFAULT_SR)
         self.mixer.add_track(track)
 
-        widget = TrackWidget(track)
+        widget = TrackWidget(track, color_index=len(self.track_widgets))
         widget.removed.connect(self._remove_track)
         self.track_widgets.append(widget)
         self.track_layout.insertWidget(self.track_layout.count() - 1, widget)
@@ -135,7 +147,7 @@ class MainWindow(QMainWindow):
         self.track_widgets = []
 
         for track in self.mixer.tracks:
-            widget = TrackWidget(track)
+            widget = TrackWidget(track, color_index=len(self.track_widgets))
             widget.removed.connect(self._remove_track)
             self.track_widgets.append(widget)
             self.track_layout.insertWidget(self.track_layout.count() - 1, widget)

@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QFormLayout, QTabWidget, QWidget, QCheckBox,
-    QDoubleSpinBox, QComboBox, QDialogButtonBox, QLabel,
+    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QTabWidget, QWidget, QCheckBox,
+    QDoubleSpinBox, QComboBox, QDialogButtonBox, QLabel, QPushButton, QGridLayout,
+    QInputDialog, QMessageBox,
 )
 
 from audio.effects import EQBand, ParametricEQ
 from audio.autotune import NOTE_NAMES, SCALES
 from audio.mixer import EffectSettings
+from audio import presets as preset_store
 
 
 def _spin(minimum, maximum, value, step=0.1, decimals=2) -> QDoubleSpinBox:
@@ -25,6 +27,7 @@ class EffectsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Track Effects")
         self.effects = effects
+        self._last_preset_name = effects.autotune_preset_name
         if self.effects.eq is None:
             self.effects.eq = ParametricEQ()
 
@@ -109,7 +112,13 @@ class EffectsDialog(QDialog):
 
     def _build_autotune_tab(self) -> QWidget:
         w = QWidget()
-        form = QFormLayout(w)
+        outer = QVBoxLayout(w)
+
+        outer.addLayout(self._build_preset_row())
+
+        form = QFormLayout()
+        outer.addLayout(form)
+
         self.autotune_enabled = QCheckBox("Enable Autotune")
         self.autotune_enabled.setChecked(self.effects.autotune_enabled)
         form.addRow(self.autotune_enabled)
@@ -120,17 +129,125 @@ class EffectsDialog(QDialog):
         form.addRow("Key", self.autotune_key)
 
         self.autotune_scale = QComboBox()
-        self.autotune_scale.addItems(list(SCALES.keys()))
+        self.autotune_scale.addItems(list(SCALES.keys()) + ["custom"])
         self.autotune_scale.setCurrentText(self.effects.autotune_scale)
+        self.autotune_scale.currentTextChanged.connect(self._on_scale_changed)
         form.addRow("Scale", self.autotune_scale)
 
         self.autotune_strength = _spin(0.0, 1.0, self.effects.autotune_strength, step=0.05)
         self.autotune_speed = _spin(0.01, 1.0, self.effects.autotune_speed, step=0.05)
+        self.autotune_humanize = _spin(0.0, 1.0, self.effects.autotune_humanize, step=0.05)
         form.addRow("Strength", self.autotune_strength)
         form.addRow("Retune speed", self.autotune_speed)
+        form.addRow("Humanize (keep natural vibrato)", self.autotune_humanize)
 
-        form.addRow(QLabel("Tip: speed near 1.0 = classic robotic/T-Pain snap."))
+        self.autotune_formant = QCheckBox("Preserve formants (avoid \"chipmunk\" sound)")
+        self.autotune_formant.setChecked(self.effects.autotune_formant_preserve)
+        form.addRow(self.autotune_formant)
+
+        self.autotune_reference = _spin(415.0, 466.0, self.effects.autotune_reference_hz, step=0.5, decimals=1)
+        form.addRow("Reference pitch A4 (Hz)", self.autotune_reference)
+
+        self.autotune_vibrato_depth = _spin(0.0, 2.0, self.effects.autotune_vibrato_depth, step=0.05)
+        self.autotune_vibrato_rate = _spin(0.5, 12.0, self.effects.autotune_vibrato_rate, step=0.1)
+        form.addRow("Vibrato depth (semitones)", self.autotune_vibrato_depth)
+        form.addRow("Vibrato rate (Hz)", self.autotune_vibrato_rate)
+
+        outer.addWidget(self._build_custom_scale_grid())
+        self._on_scale_changed(self.autotune_scale.currentText())
+
+        outer.addWidget(QLabel("Tip: speed near 1.0 = classic robotic/T-Pain snap."))
         return w
+
+    def _build_preset_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Preset:"))
+
+        self.preset_combo = QComboBox()
+        self._reload_preset_list()
+        row.addWidget(self.preset_combo, 1)
+
+        load_btn = QPushButton("Load")
+        load_btn.clicked.connect(self._load_selected_preset)
+        row.addWidget(load_btn)
+
+        save_btn = QPushButton("Save As...")
+        save_btn.clicked.connect(self._save_as_preset)
+        row.addWidget(save_btn)
+
+        delete_btn = QPushButton("Delete")
+        delete_btn.clicked.connect(self._delete_selected_preset)
+        row.addWidget(delete_btn)
+
+        return row
+
+    def _reload_preset_list(self) -> None:
+        current = self.preset_combo.currentText() if hasattr(self, "preset_combo") else ""
+        self.preset_combo.clear()
+        self.preset_combo.addItems(preset_store.list_presets())
+        if current:
+            idx = self.preset_combo.findText(current)
+            if idx >= 0:
+                self.preset_combo.setCurrentIndex(idx)
+
+    def _load_selected_preset(self) -> None:
+        name = self.preset_combo.currentText()
+        if not name:
+            return
+        data = preset_store.load_preset(name)
+        self.autotune_key.setCurrentText(data.get("autotune_key", "C"))
+        self.autotune_scale.setCurrentText(data.get("autotune_scale", "major"))
+        self.autotune_strength.setValue(data.get("autotune_strength", 1.0))
+        self.autotune_speed.setValue(data.get("autotune_speed", 0.35))
+        self.autotune_humanize.setValue(data.get("autotune_humanize", 0.0))
+        self.autotune_formant.setChecked(data.get("autotune_formant_preserve", False))
+        self.autotune_reference.setValue(data.get("autotune_reference_hz", 440.0))
+        self.autotune_vibrato_depth.setValue(data.get("autotune_vibrato_depth", 0.0))
+        self.autotune_vibrato_rate.setValue(data.get("autotune_vibrato_rate", 5.0))
+        custom_notes = data.get("autotune_custom_notes", [])
+        for pc, box in self.custom_note_boxes.items():
+            box.setChecked(pc in custom_notes)
+        self._last_preset_name = name
+
+    def _save_as_preset(self) -> None:
+        name, ok = QInputDialog.getText(self, "Save Preset", "Preset name:")
+        if not ok or not name.strip():
+            return
+        temp = EffectSettings(eq=ParametricEQ())
+        self.apply_to(temp)
+        preset_store.save_preset(name.strip(), temp)
+        self._last_preset_name = name.strip()
+        self._reload_preset_list()
+        idx = self.preset_combo.findText(name.strip())
+        if idx >= 0:
+            self.preset_combo.setCurrentIndex(idx)
+
+    def _delete_selected_preset(self) -> None:
+        name = self.preset_combo.currentText()
+        if not name:
+            return
+        if preset_store.delete_preset(name):
+            self._reload_preset_list()
+        else:
+            QMessageBox.information(self, "Can't delete", "Factory presets can't be deleted.")
+
+    def _build_custom_scale_grid(self) -> QWidget:
+        box = QWidget()
+        grid = QGridLayout(box)
+        grid.addWidget(QLabel("Custom scale notes (used when Scale = custom):"), 0, 0, 1, 6)
+        self.custom_note_boxes = {}
+        selected = set(self.effects.autotune_custom_notes)
+        for i, note in enumerate(NOTE_NAMES):
+            cb = QCheckBox(note)
+            cb.setChecked(i in selected)
+            self.custom_note_boxes[i] = cb
+            grid.addWidget(cb, 1 + i // 6, i % 6)
+        self._custom_scale_box = box
+        return box
+
+    def _on_scale_changed(self, text: str) -> None:
+        if hasattr(self, "_custom_scale_box"):
+            self._custom_scale_box.setEnabled(text == "custom")
 
     def apply_to(self, effects: EffectSettings) -> None:
         effects.eq_enabled = self.eq_enabled.isChecked()
@@ -157,5 +274,12 @@ class EffectsDialog(QDialog):
         effects.autotune_enabled = self.autotune_enabled.isChecked()
         effects.autotune_key = self.autotune_key.currentText()
         effects.autotune_scale = self.autotune_scale.currentText()
+        effects.autotune_custom_notes = [pc for pc, box in self.custom_note_boxes.items() if box.isChecked()]
         effects.autotune_strength = self.autotune_strength.value()
         effects.autotune_speed = self.autotune_speed.value()
+        effects.autotune_humanize = self.autotune_humanize.value()
+        effects.autotune_formant_preserve = self.autotune_formant.isChecked()
+        effects.autotune_reference_hz = self.autotune_reference.value()
+        effects.autotune_vibrato_depth = self.autotune_vibrato_depth.value()
+        effects.autotune_vibrato_rate = self.autotune_vibrato_rate.value()
+        effects.autotune_preset_name = self._last_preset_name

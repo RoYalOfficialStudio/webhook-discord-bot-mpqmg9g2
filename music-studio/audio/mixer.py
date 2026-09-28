@@ -44,8 +44,15 @@ class EffectSettings:
     autotune_enabled: bool = False
     autotune_key: str = "C"
     autotune_scale: str = "major"
+    autotune_custom_notes: list[int] = field(default_factory=list)
     autotune_strength: float = 1.0
     autotune_speed: float = 0.35
+    autotune_humanize: float = 0.0
+    autotune_formant_preserve: bool = False
+    autotune_reference_hz: float = 440.0
+    autotune_vibrato_depth: float = 0.0
+    autotune_vibrato_rate: float = 5.0
+    autotune_preset_name: str = ""
 
 
 @dataclass
@@ -69,8 +76,14 @@ class Track:
                 y, self.sr,
                 key=fx.autotune_key,
                 scale=fx.autotune_scale,
+                custom_notes=fx.autotune_custom_notes,
                 strength=fx.autotune_strength,
                 speed=fx.autotune_speed,
+                humanize=fx.autotune_humanize,
+                formant_preserve=fx.autotune_formant_preserve,
+                reference_hz=fx.autotune_reference_hz,
+                vibrato_depth=fx.autotune_vibrato_depth,
+                vibrato_rate=fx.autotune_vibrato_rate,
             )
         if fx.eq_enabled and fx.eq is not None:
             y = fx.eq.process(y, self.sr)
