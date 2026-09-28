@@ -24,6 +24,7 @@
 namespace roy {
 
 using json = nlohmann::json;
+struct AudioData;
 
 struct ParamInfo {
     std::string id;
@@ -87,6 +88,11 @@ public:
     // Default: all parameters by id. Subclasses may add opaque state.
     virtual json saveState() const;
     virtual void loadState(const json& state);
+
+    // Audio assets the processor needs (e.g. sampler zones). The runtime loads
+    // them and calls setAsset() on the message thread before the processor goes live.
+    virtual std::vector<std::string> requiredAssets() const { return {}; }
+    virtual void setAsset(const std::string& assetId, std::shared_ptr<const AudioData> data) {}
 
     double sampleRate() const { return sampleRate_; }
     int maxBlock() const { return maxBlock_; }

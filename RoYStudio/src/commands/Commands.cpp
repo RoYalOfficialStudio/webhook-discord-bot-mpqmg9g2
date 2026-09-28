@@ -705,6 +705,7 @@ void registerCoreCommands(CommandRegistry& r) {
                return true;
            }});
     registerVocalCommands(r);
+    registerProductionCommands(r);
 }
 
 } // namespace roy

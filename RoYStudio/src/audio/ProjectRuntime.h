@@ -51,14 +51,14 @@ public:
     int graphLatencySamples() const { return lastLatency_; }
 
 private:
-    std::shared_ptr<Processor> ensureProcessor(const PluginSlot& slot, double sr, int maxBlock);
+    std::shared_ptr<Processor> ensureProcessor(const Project& project, const PluginSlot& slot, double sr, int maxBlock);
     std::shared_ptr<const AudioData> derived(const Project& p, const AudioClip& c);
 
     AudioEngine& engine_;
     std::filesystem::path projectDir_;
     std::map<std::string, std::shared_ptr<const AudioData>> assets_;
     std::map<std::string, std::shared_ptr<const AudioData>> derivedAssets_;
-    struct ProcEntry { std::string typeId; std::shared_ptr<Processor> proc; double sr = 0; int block = 0; };
+    struct ProcEntry { std::string typeId; std::shared_ptr<Processor> proc; double sr = 0; int block = 0; std::string opaqueState; };
     std::map<std::string, ProcEntry> processors_;
     std::map<std::string, std::shared_ptr<ChannelParams>> params_;
     std::map<std::string, std::shared_ptr<std::atomic<bool>>> monitors_;

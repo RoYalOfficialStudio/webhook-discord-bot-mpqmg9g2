@@ -109,6 +109,16 @@ std::vector<ScaleType> allScaleTypes() {
     return v;
 }
 
+ScaleType scaleTypeByIndex(int index) {
+    static const ScaleType order[] = {ScaleType::Chromatic, ScaleType::Major, ScaleType::NaturalMinor, ScaleType::HarmonicMinor,
+                                      ScaleType::MelodicMinor, ScaleType::Dorian, ScaleType::Phrygian, ScaleType::Lydian,
+                                      ScaleType::Mixolydian, ScaleType::Locrian, ScaleType::MajorPentatonic,
+                                      ScaleType::MinorPentatonic, ScaleType::Blues};
+    return order[std::clamp(index, 0, 12)];
+}
+
+int scaleTypeCount() { return 13; }
+
 const char* pitchClassName(int pc) {
     static const char* names[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     return names[((pc % 12) + 12) % 12];

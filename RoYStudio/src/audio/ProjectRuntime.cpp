@@ -2,6 +2,7 @@
 #include "core/Log.h"
 #include "core/Math.h"
 #include "dsp/TimeStretch.h"
+#include "instruments/Drums.h"
 #include "io/AudioFile.h"
 
 #include <algorithm>
@@ -77,9 +78,20 @@ std::shared_ptr<const AudioData> ProjectRuntime::derived(const Project& p, const
     return d;
 }
 
-std::shared_ptr<Processor> ProjectRuntime::ensureProcessor(const PluginSlot& slot, double sr, int maxBlock) {
+namespace {
+// Non-parameter part of a slot state (sample maps, plugin chunks, ...).
+std::string opaqueStateOf(const PluginSlot& slot) {
+    if (!slot.state.is_object()) return {};
+    json j = slot.state;
+    j.erase("params");
+    return j.dump();
+}
+} // namespace
+
+std::shared_ptr<Processor> ProjectRuntime::ensureProcessor(const Project& project, const PluginSlot& slot, double sr, int maxBlock) {
+    const std::string opaque = opaqueStateOf(slot);
     auto it = processors_.find(slot.id);
-    if (it != processors_.end() && it->second.typeId == slot.typeId && it->second.proc) {
+    if (it != processors_.end() && it->second.typeId == slot.typeId && it->second.proc && it->second.opaqueState == opaque) {
         auto& e = it->second;
         if (e.sr != sr || e.block != maxBlock) {
             // Sample rate / block size change only happens with the device stopped.
@@ -89,14 +101,21 @@ std::shared_ptr<Processor> ProjectRuntime::ensureProcessor(const PluginSlot& slo
         }
         return e.proc;
     }
+    // New slot, changed type or changed opaque state: a fresh instance (the old
+    // one stays alive in the current graph until that graph is retired).
     auto proc = std::shared_ptr<Processor>(ProcessorFactory::instance().create(slot.typeId));
     if (!proc) {
         warnings_.push_back(std::format("processor type '{}' ({}) is not available - slot bypassed", slot.typeId, slot.name));
         return nullptr;
     }
     proc->loadState(slot.state);
+    for (auto& id : proc->requiredAssets()) {
+        auto data = asset(project, id);
+        if (!data) warnings_.push_back(std::format("{}: sample asset {} missing", slot.name, id));
+        proc->setAsset(id, data);
+    }
     proc->prepare(sr, maxBlock);
-    processors_[slot.id] = ProcEntry{slot.typeId, proc, sr, maxBlock};
+    processors_[slot.id] = ProcEntry{slot.typeId, proc, sr, maxBlock, opaque};
     return proc;
 }
 
@@ -234,7 +253,7 @@ bool ProjectRuntime::rebuild(const Project& project) {
         for (size_t s = 0; s < mc.inserts.size(); ++s) {
             const auto& slot = mc.inserts[s];
             liveSlots.insert(slot.id);
-            auto proc = ensureProcessor(slot, sr, maxBlock);
+            auto proc = ensureProcessor(project, slot, sr, maxBlock);
             if (!proc) continue;
             InsertRef ref;
             ref.processor = proc;
@@ -257,8 +276,15 @@ bool ProjectRuntime::rebuild(const Project& project) {
             gc.inputGain = dbToGain(t.inputGainDb);
             if (t.instrument) {
                 liveSlots.insert(t.instrument->id);
-                gc.instrument = ensureProcessor(*t.instrument, sr, maxBlock);
+                gc.instrument = ensureProcessor(project, *t.instrument, sr, maxBlock);
                 if (gc.instrument) latency += std::max(0, gc.instrument->latencySamples());
+                // Beat Lab sample pads: rows with a sample asset play that sample.
+                if (auto* drums = dynamic_cast<RoyDrums*>(gc.instrument.get())) {
+                    for (auto& pc : t.patternClips)
+                        if (const Pattern* pat = project.findPattern(pc.patternId))
+                            for (auto& row : pat->rows)
+                                drums->setSample(row.note, row.sampleAssetId.empty() ? nullptr : asset(project, row.sampleAssetId));
+                }
             }
             // audio clips
             auto addClip = [&](const AudioClip& c, std::shared_ptr<const AudioData> data) {

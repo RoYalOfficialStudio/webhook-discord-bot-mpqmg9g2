@@ -64,5 +64,7 @@ private:
 void registerCoreCommands(CommandRegistry& r);
 // Vocal Lab commands (Pitch Guardian, Double Magnet, Vocal Doctor, region edits). Called by registerCoreCommands.
 void registerVocalCommands(CommandRegistry& r);
+// Import, sampler slicing, sample analysis, stem separation. Called by registerCoreCommands.
+void registerProductionCommands(CommandRegistry& r);
 
 } // namespace roy

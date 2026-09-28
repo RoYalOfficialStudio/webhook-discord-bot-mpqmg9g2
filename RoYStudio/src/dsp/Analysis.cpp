@@ -97,7 +97,8 @@ std::vector<Onset> detectOnsets(const float* x, int64_t n, double sr, const Onse
         const int64_t env = std::max<int64_t>(1, static_cast<int64_t>(sr * 0.001));
         for (auto& o : out) {
             const int64_t c = static_cast<int64_t>(o.time * sr);
-            const int64_t a = std::max<int64_t>(0, c - 2 * s.hop), b = std::min<int64_t>(n, c + s.hop);
+            // The log-flux peak can precede the transient by up to half a frame: look ahead.
+            const int64_t a = std::max<int64_t>(0, c - s.hop), b = std::min<int64_t>(n, c + s.fftSize / 2 + s.hop);
             std::vector<float> e;
             for (int64_t i = a; i < b; i += env) {
                 float m = 0;
