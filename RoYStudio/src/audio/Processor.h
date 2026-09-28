@@ -73,6 +73,8 @@ public:
                          int numEvents) noexcept = 0;
     virtual int latencySamples() const { return 0; }
     virtual double tailSeconds() const { return 0.0; }
+    // Project tempo (BPM) for tempo-synced processors. Message thread; stored atomically by implementations.
+    virtual void setHostTempo(double bpm) {}
 
     // ---- parameters -------------------------------------------------------
     int numParams() const { return static_cast<int>(info_.size()); }

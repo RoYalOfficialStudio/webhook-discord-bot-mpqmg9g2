@@ -99,6 +99,7 @@ std::shared_ptr<Processor> ProjectRuntime::ensureProcessor(const Project& projec
             e.sr = sr;
             e.block = maxBlock;
         }
+        e.proc->setHostTempo(project.tempo.tempoAt(0));
         return e.proc;
     }
     // New slot, changed type or changed opaque state: a fresh instance (the old
@@ -115,6 +116,7 @@ std::shared_ptr<Processor> ProjectRuntime::ensureProcessor(const Project& projec
         proc->setAsset(id, data);
     }
     proc->prepare(sr, maxBlock);
+    proc->setHostTempo(project.tempo.tempoAt(0));
     processors_[slot.id] = ProcEntry{slot.typeId, proc, sr, maxBlock, opaque};
     return proc;
 }
