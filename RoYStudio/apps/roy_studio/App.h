@@ -70,6 +70,8 @@ public:
 
     // ---- commands -----------------------------------------------------------------
     bool run(const std::string& id, const json& args = json::object());
+    // Several commands as ONE undo step (all-or-nothing).
+    bool runMacro(const std::string& name, const std::vector<std::pair<std::string, json>>& steps);
     bool undo();
     bool redo();
 

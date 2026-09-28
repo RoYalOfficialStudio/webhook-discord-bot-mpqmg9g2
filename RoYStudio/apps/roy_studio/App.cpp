@@ -66,6 +66,7 @@ bool App::init(const AppOptions& o) {
 
     audioCfg_.backend = o.audioBackend;
     engine_.prepare(audioCfg_.sampleRate, audioCfg_.bufferSize);
+    engine_.setWorkerThreads(AudioEngine::defaultWorkerThreads()); // multi-core mixing
     runtime_ = std::make_unique<ProjectRuntime>(engine_);
     if (!restartAudio(audioCfg_)) message(1, "audio device unavailable: " + audioStatus_ + " - running without audio output");
     engine_.setInputListener(&recorder_);
@@ -207,6 +208,15 @@ bool App::run(const std::string& id, const json& args) {
     lastResult_ = ctx_->result;
     lastError_ = ctx_->error;
     if (!ok) message(1, id + ": " + ctx_->error);
+    return ok;
+}
+
+bool App::runMacro(const std::string& name, const std::vector<std::pair<std::string, json>>& steps) {
+    if (!project_) return false;
+    const bool ok = registry_.executeMacro(*ctx_, name, steps);
+    lastResult_ = ctx_->result;
+    lastError_ = ctx_->error;
+    if (!ok) message(1, name + ": " + ctx_->error);
     return ok;
 }
 

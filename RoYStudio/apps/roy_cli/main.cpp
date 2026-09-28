@@ -70,6 +70,7 @@ struct Opened {
         if (!session.open(file, project, OpenMode::Normal, &err)) return false;
         setupProcessors();
         engine.prepare(project.sampleRate > 0 ? project.sampleRate : 48000.0, 512);
+        engine.setWorkerThreads(AudioEngine::defaultWorkerThreads());
         runtime = std::make_unique<ProjectRuntime>(engine);
         runtime->setProjectDirectory(session.folder());
         undo = std::make_unique<UndoManager>(project);

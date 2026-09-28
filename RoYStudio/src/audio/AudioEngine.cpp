@@ -7,6 +7,19 @@
 #include <cmath>
 #include <cstring>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <pthread.h>
+#include <sched.h>
+#endif
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
+#include <immintrin.h>
+#define ROY_CPU_RELAX() _mm_pause()
+#else
+#define ROY_CPU_RELAX() std::this_thread::yield()
+#endif
+
 namespace roy {
 
 float AutomationCurve::valueAt(int64_t t) const noexcept {
@@ -35,9 +48,131 @@ inline float fadeShape(int curve, float x) noexcept {
 }
 } // namespace
 
+void finalizeGraph(RenderGraph& g) {
+    const int n = static_cast<int>(g.channels.size());
+    for (auto& ch : g.channels) ch.incoming.clear();
+    bool ordered = true;
+    for (int i = 0; i < n; ++i)
+        for (int o = 0; o < static_cast<int>(g.channels[static_cast<size_t>(i)].outputs.size()); ++o) {
+            const int t = g.channels[static_cast<size_t>(i)].outputs[static_cast<size_t>(o)].target;
+            if (t < 0 || t >= n) continue;
+            if (t <= i) ordered = false;
+            g.channels[static_cast<size_t>(t)].incoming.push_back({i, o}); // i ascending: fixed summing order
+        }
+    std::vector<int> level(static_cast<size_t>(n), 0);
+    int maxLevel = 0;
+    for (int i = 0; i < n; ++i) {
+        const auto& ch = g.channels[static_cast<size_t>(i)];
+        int lv = 0;
+        for (auto& in : ch.incoming) lv = std::max(lv, level[static_cast<size_t>(in.source)] + 1);
+        for (auto& ins : ch.inserts)
+            if (ins.sidechainChannel >= 0) {
+                if (ins.sidechainChannel >= i) ordered = false;
+                else lv = std::max(lv, level[static_cast<size_t>(ins.sidechainChannel)] + 1);
+            }
+        level[static_cast<size_t>(i)] = lv;
+        maxLevel = std::max(maxLevel, lv);
+    }
+    if (!ordered) { // defensive: not topologically sorted -> fully sequential schedule
+        for (int i = 0; i < n; ++i) level[static_cast<size_t>(i)] = i;
+        maxLevel = n - 1;
+    }
+    g.levelOrder.clear();
+    g.levelStart.assign(1, 0);
+    for (int lv = 0; lv <= maxLevel; ++lv) {
+        for (int i = 0; i < n; ++i)
+            if (level[static_cast<size_t>(i)] == lv) g.levelOrder.push_back(i);
+        g.levelStart.push_back(static_cast<int>(g.levelOrder.size()));
+    }
+}
+
 AudioEngine::AudioEngine() { prepare(48000.0, 512); }
 
+int AudioEngine::defaultWorkerThreads() {
+    const unsigned hw = std::thread::hardware_concurrency();
+    return std::clamp(static_cast<int>(hw) - 1, 0, 7);
+}
+
+void AudioEngine::setWorkerThreads(int n) {
+    n = std::clamp(n, 0, 31);
+    if (n == static_cast<int>(workers_.size())) return;
+    // stop existing helpers
+    quitWorkers_.store(true, std::memory_order_release);
+    for (auto& w : workers_) {
+        w->go.fetch_add(1, std::memory_order_acq_rel);
+        w->go.notify_one();
+    }
+    for (auto& w : workers_)
+        if (w->thread.joinable()) w->thread.join();
+    workers_.clear();
+    quitWorkers_.store(false, std::memory_order_release);
+    for (int i = 0; i < n; ++i) {
+        workers_.push_back(std::make_unique<Worker>());
+        workers_.back()->go.store(ticket_, std::memory_order_relaxed);
+        workers_.back()->finished.store(ticket_, std::memory_order_relaxed);
+    }
+    for (int i = 0; i < n; ++i) workers_[static_cast<size_t>(i)]->thread = std::thread([this, i] { workerLoop(i); });
+}
+
+void AudioEngine::workerLoop(int index) noexcept {
+#ifdef _WIN32
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+#else
+    sched_param sp{};
+    sp.sched_priority = 70;
+    pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp); // needs rtprio rights; ignored otherwise
+#endif
+    Worker& w = *workers_[static_cast<size_t>(index)];
+    uint32_t last = w.go.load(std::memory_order_acquire);
+    for (;;) {
+        // Levels of one block follow each other within microseconds: spin briefly before
+        // sleeping so the next level does not pay the OS wake-up latency.
+        for (int spin = 0; spin < 4000 && w.go.load(std::memory_order_acquire) == last; ++spin) ROY_CPU_RELAX();
+        w.go.wait(last, std::memory_order_acquire);
+        const uint32_t t = w.go.load(std::memory_order_acquire);
+        if (quitWorkers_.load(std::memory_order_acquire)) return;
+        if (t == last) continue;
+        last = t;
+        {
+            ScopedNoDenormals nd;
+            // same partition as runLevel(): job k goes to participant k % (used + 1); 0 = audio thread
+            const int used = std::min(static_cast<int>(workers_.size()), levelCount_ - 1);
+            for (int k = index + 1; k < levelCount_; k += used + 1) runChannel(*levelGraph_, levelJobs_[k]);
+        }
+        w.finished.store(t, std::memory_order_release);
+    }
+}
+
+void AudioEngine::runLevel(RenderGraph& g, int level) noexcept {
+    const int* jobs = g.levelOrder.data() + g.levelStart[static_cast<size_t>(level)];
+    const int count = g.levelStart[static_cast<size_t>(level) + 1] - g.levelStart[static_cast<size_t>(level)];
+    const int nw = static_cast<int>(workers_.size());
+    if (nw == 0 || count < 2) {
+        for (int k = 0; k < count; ++k) runChannel(g, jobs[k]);
+        return;
+    }
+    const int used = std::min(nw, count - 1);
+    levelGraph_ = &g;
+    levelJobs_ = jobs;
+    levelCount_ = count;
+    ++ticket_;
+    for (int w = 0; w < used; ++w) {
+        workers_[static_cast<size_t>(w)]->go.store(ticket_, std::memory_order_release);
+        workers_[static_cast<size_t>(w)]->go.notify_one();
+    }
+    for (int k = 0; k < count; k += used + 1) runChannel(g, jobs[k]);
+    for (int w = 0; w < used; ++w) {
+        auto& f = workers_[static_cast<size_t>(w)]->finished;
+        int spins = 0;
+        while (f.load(std::memory_order_acquire) != ticket_) {
+            ROY_CPU_RELAX();
+            if (++spins > 20000) std::this_thread::yield();
+        }
+    }
+}
+
 AudioEngine::~AudioEngine() {
+    setWorkerThreads(0);
     delete current_.exchange(nullptr);
     std::lock_guard lock(garbageMutex_);
     for (auto& g : garbage_) delete g.graph;
@@ -52,6 +187,7 @@ void AudioEngine::prepare(double sampleRate, int maxBlockSize) {
 }
 
 void AudioEngine::setGraph(std::unique_ptr<RenderGraph> graph) {
+    if (graph) finalizeGraph(*graph);
     RenderGraph* old = current_.exchange(graph.release(), std::memory_order_acq_rel);
     if (old) {
         std::lock_guard lock(garbageMutex_);
@@ -145,33 +281,22 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
     float* mL = metronomeBuf_.channel(0);
     float* mR = metronomeBuf_.channel(1);
 
-    if (g) {
-        for (auto& ch : g->channels) {
-            std::memset(ch.in.channel(0), 0, sizeof(float) * static_cast<size_t>(frames));
-            std::memset(ch.in.channel(1), 0, sizeof(float) * static_cast<size_t>(frames));
-            ch.eventScratch.clear();
-        }
-    }
-
+    // Per-segment context for the channel jobs (sources are rendered inside each job).
     bool anyRolling = false;
     int64_t automationPos = 0;
+    jobNumSegs_ = numSegs;
+    jobFrames_ = frames;
+    jobNumIn_ = nIn;
+    for (int c = 0; c < nIn; ++c) jobIn_[c] = inPtrs[c];
     for (int s = 0; s < numSegs; ++s) {
         const auto& seg = segs[s];
         const bool stopping = wasRolling_ && !seg.rolling;
-        if (g && (seg.jumped || stopping)) {
-            for (auto& ch : g->channels)
-                if (ch.instrument && ch.eventScratch.size() < ch.eventScratch.capacity()) {
-                    NoteEvent off;
-                    off.type = NoteEvent::AllNotesOff;
-                    off.offset = seg.blockOffset;
-                    ch.eventScratch.push_back(off);
-                }
-        }
+        jobSegs_[s] = seg;
+        jobNotesOff_[s] = seg.jumped || stopping;
         if (seg.jumped) metronome_.reset();
-        if (seg.rolling && g) {
+        if (seg.rolling) {
             if (!anyRolling) automationPos = seg.timelineStart;
             anyRolling = true;
-            renderSources(*g, seg);
         }
         wasRolling_ = seg.rolling;
         if ((seg.rolling || seg.countIn) && g)
@@ -204,21 +329,12 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
         }
     }
 
-    // Input monitoring for armed/monitored channels.
-    for (auto& ch : g->channels) {
-        if (ch.inputLeft < 0 || !ch.monitorEnabled || !ch.monitorEnabled->load(std::memory_order_relaxed)) continue;
-        if (ch.inputLeft >= nIn) continue;
-        const float* l = inPtrs[ch.inputLeft];
-        const float* r = (ch.inputRight >= 0 && ch.inputRight < nIn) ? inPtrs[ch.inputRight] : l;
-        float* dl = ch.in.channel(0);
-        float* dr = ch.in.channel(1);
-        for (int i = 0; i < frames; ++i) {
-            dl[i] += l[i] * ch.inputGain;
-            dr[i] += r[i] * ch.inputGain;
-        }
+    // Channels level by level; channels inside a level run in parallel on the worker pool.
+    if (g->levelStart.size() >= 2) {
+        for (int lv = 0; lv + 1 < static_cast<int>(g->levelStart.size()); ++lv) runLevel(*g, lv);
+    } else {
+        for (int i = 0; i < static_cast<int>(g->channels.size()); ++i) runChannel(*g, i);
     }
-
-    for (auto& ch : g->channels) processChannel(*g, ch, frames);
 
     if (capture_ && capture_->writePos + frames <= capture_->capacity) {
         for (size_t k = 0; k < capture_->channelIds.size(); ++k)
@@ -259,44 +375,109 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
     }
 }
 
-void AudioEngine::renderSources(RenderGraph& g, const Transport::Segment& seg) noexcept {
+void AudioEngine::renderSources(GraphChannel& ch, const Transport::Segment& seg) noexcept {
     const int64_t segStart = seg.timelineStart;
     const int64_t segEnd = seg.timelineStart + seg.numFrames;
-    for (auto& ch : g.channels) {
-        float* L = ch.in.channel(0) + seg.blockOffset;
-        float* R = ch.in.channel(1) + seg.blockOffset;
-        for (const auto& clip : ch.clips) {
-            const int64_t s0 = std::max(segStart, clip.start);
-            const int64_t s1 = std::min(segEnd, clip.end);
-            if (s1 <= s0 || !clip.data) continue;
-            const AudioData& d = *clip.data;
-            const int64_t len = clip.end - clip.start;
-            const int rightCh = d.numChannels > 1 ? 1 : 0;
-            for (int64_t t = s0; t < s1; ++t) {
-                const int64_t rel = t - clip.start;
-                const int64_t src = clip.reversed ? clip.sourceStart + (len - 1 - rel) : clip.sourceStart + rel;
-                float gain = clip.gain;
-                if (clip.fadeIn > 0 && rel < clip.fadeIn)
-                    gain *= fadeShape(clip.fadeInCurve, static_cast<float>(rel) / static_cast<float>(clip.fadeIn));
-                const int64_t remaining = clip.end - t;
-                if (clip.fadeOut > 0 && remaining < clip.fadeOut)
-                    gain *= fadeShape(clip.fadeOutCurve, static_cast<float>(remaining) / static_cast<float>(clip.fadeOut));
-                const size_t i = static_cast<size_t>(t - segStart);
-                L[i] += d.sample(0, src) * gain;
-                R[i] += d.sample(rightCh, src) * gain;
-            }
+    float* L = ch.in.channel(0) + seg.blockOffset;
+    float* R = ch.in.channel(1) + seg.blockOffset;
+    for (const auto& clip : ch.clips) {
+        const int64_t s0 = std::max(segStart, clip.start);
+        const int64_t s1 = std::min(segEnd, clip.end);
+        if (s1 <= s0 || !clip.data) continue;
+        const AudioData& d = *clip.data;
+        const int64_t len = clip.end - clip.start;
+        const int rightCh = d.numChannels > 1 ? 1 : 0;
+        for (int64_t t = s0; t < s1; ++t) {
+            const int64_t rel = t - clip.start;
+            const int64_t src = clip.reversed ? clip.sourceStart + (len - 1 - rel) : clip.sourceStart + rel;
+            float gain = clip.gain;
+            if (clip.fadeIn > 0 && rel < clip.fadeIn)
+                gain *= fadeShape(clip.fadeInCurve, static_cast<float>(rel) / static_cast<float>(clip.fadeIn));
+            const int64_t remaining = clip.end - t;
+            if (clip.fadeOut > 0 && remaining < clip.fadeOut)
+                gain *= fadeShape(clip.fadeOutCurve, static_cast<float>(remaining) / static_cast<float>(clip.fadeOut));
+            const size_t i = static_cast<size_t>(t - segStart);
+            L[i] += d.sample(0, src) * gain;
+            R[i] += d.sample(rightCh, src) * gain;
         }
-        if (!ch.notes.empty() && ch.instrument) {
-            auto it = std::lower_bound(ch.notes.begin(), ch.notes.end(), segStart,
-                                       [](const ScheduledNote& n, int64_t v) { return n.time < v; });
-            for (; it != ch.notes.end() && it->time < segEnd; ++it) {
-                if (ch.eventScratch.size() >= ch.eventScratch.capacity()) break;
-                NoteEvent ev = it->ev;
-                ev.offset = seg.blockOffset + static_cast<int>(it->time - segStart);
-                ch.eventScratch.push_back(ev);
+    }
+    if (!ch.notes.empty() && ch.instrument) {
+        auto it = std::lower_bound(ch.notes.begin(), ch.notes.end(), segStart,
+                                   [](const ScheduledNote& n, int64_t v) { return n.time < v; });
+        for (; it != ch.notes.end() && it->time < segEnd; ++it) {
+            if (ch.eventScratch.size() >= ch.eventScratch.capacity()) break;
+            NoteEvent ev = it->ev;
+            ev.offset = seg.blockOffset + static_cast<int>(it->time - segStart);
+            ch.eventScratch.push_back(ev);
+        }
+    }
+}
+
+// One channel, complete: sources -> monitoring input -> pulled inputs -> instrument/inserts/fader.
+// Touches only this channel's buffers/processors and the outputs of channels from earlier levels.
+void AudioEngine::runChannel(RenderGraph& g, int index) noexcept {
+    GraphChannel& ch = g.channels[static_cast<size_t>(index)];
+    const int frames = jobFrames_;
+    std::memset(ch.in.channel(0), 0, sizeof(float) * static_cast<size_t>(frames));
+    std::memset(ch.in.channel(1), 0, sizeof(float) * static_cast<size_t>(frames));
+    ch.eventScratch.clear();
+    for (int s = 0; s < jobNumSegs_; ++s) {
+        const auto& seg = jobSegs_[s];
+        if (jobNotesOff_[s] && ch.instrument && ch.eventScratch.size() < ch.eventScratch.capacity()) {
+            NoteEvent off;
+            off.type = NoteEvent::AllNotesOff;
+            off.offset = seg.blockOffset;
+            ch.eventScratch.push_back(off);
+        }
+        if (seg.rolling) renderSources(ch, seg);
+    }
+    // input monitoring
+    if (ch.inputLeft >= 0 && ch.monitorEnabled && ch.monitorEnabled->load(std::memory_order_relaxed) && ch.inputLeft < jobNumIn_) {
+        const float* l = jobIn_[ch.inputLeft];
+        const float* r = (ch.inputRight >= 0 && ch.inputRight < jobNumIn_) ? jobIn_[ch.inputRight] : l;
+        float* dl = ch.in.channel(0);
+        float* dr = ch.in.channel(1);
+        for (int i = 0; i < frames; ++i) {
+            dl[i] += l[i] * ch.inputGain;
+            dr[i] += r[i] * ch.inputGain;
+        }
+    }
+    // pull inputs (busses, sends) in fixed source order -> bit-identical to sequential mixing
+    float* tL = ch.in.channel(0);
+    float* tR = ch.in.channel(1);
+    for (const auto& inc : ch.incoming) {
+        GraphChannel& src = g.channels[static_cast<size_t>(inc.source)];
+        Connection& c = src.outputs[static_cast<size_t>(inc.output)];
+        auto& P = *src.params;
+        float level = 1.0f;
+        if (c.sendIndex >= 0) {
+            const int si = c.sendIndex & (ChannelParams::kMaxSends - 1);
+            if (!P.sendEnabled[si].load(std::memory_order_relaxed)) continue;
+            level = dbToGain(P.sendLevelDb[si].load(std::memory_order_relaxed));
+        }
+        const float* sL = c.preFader ? src.pre.channel(0) : src.out.channel(0);
+        const float* sR = c.preFader ? src.pre.channel(1) : src.out.channel(1);
+        if (c.preFader && P.effectiveMute.load(std::memory_order_relaxed)) level = 0.0f;
+        if (c.compensation && c.compensation->delay() > 0) {
+            float* xL = c.scratch.channel(0);
+            float* xR = c.scratch.channel(1);
+            for (int i = 0; i < frames; ++i) {
+                xL[i] = sL[i] * level;
+                xR[i] = sR[i] * level;
+            }
+            c.compensation->process(xL, xR, frames);
+            for (int i = 0; i < frames; ++i) {
+                tL[i] += xL[i];
+                tR[i] += xR[i];
+            }
+        } else {
+            for (int i = 0; i < frames; ++i) {
+                tL[i] += sL[i] * level;
+                tR[i] += sR[i] * level;
             }
         }
     }
+    processChannel(g, ch, frames);
 }
 
 void AudioEngine::processChannel(RenderGraph& g, GraphChannel& ch, int frames) noexcept {
@@ -374,41 +555,6 @@ void AudioEngine::processChannel(RenderGraph& g, GraphChannel& ch, int frames) n
     P.rmsL.store(static_cast<float>(std::sqrt(sumL / frames)), std::memory_order_relaxed);
     P.rmsR.store(static_cast<float>(std::sqrt(sumR / frames)), std::memory_order_relaxed);
     if (peakL > 1.0f || peakR > 1.0f) P.clipCount.fetch_add(1, std::memory_order_relaxed);
-
-    // ---- outputs (sends + main out) ----
-    for (auto& c : ch.outputs) {
-        if (c.target < 0) continue;
-        float level = 1.0f;
-        if (c.sendIndex >= 0) {
-            const int si = c.sendIndex & (ChannelParams::kMaxSends - 1);
-            if (!P.sendEnabled[si].load(std::memory_order_relaxed)) continue;
-            level = dbToGain(P.sendLevelDb[si].load(std::memory_order_relaxed));
-        }
-        const float* sL = c.preFader ? ch.pre.channel(0) : oL;
-        const float* sR = c.preFader ? ch.pre.channel(1) : oR;
-        if (c.preFader && mute) level = 0.0f;
-        auto& target = g.channels[static_cast<size_t>(c.target)];
-        float* tL = target.in.channel(0);
-        float* tR = target.in.channel(1);
-        if (c.compensation && c.compensation->delay() > 0) {
-            float* xL = c.scratch.channel(0);
-            float* xR = c.scratch.channel(1);
-            for (int i = 0; i < frames; ++i) {
-                xL[i] = sL[i] * level;
-                xR[i] = sR[i] * level;
-            }
-            c.compensation->process(xL, xR, frames);
-            for (int i = 0; i < frames; ++i) {
-                tL[i] += xL[i];
-                tR[i] += xR[i];
-            }
-        } else {
-            for (int i = 0; i < frames; ++i) {
-                tL[i] += sL[i] * level;
-                tR[i] += sR[i] * level;
-            }
-        }
-    }
 }
 
 } // namespace roy

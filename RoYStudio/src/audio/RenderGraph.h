@@ -109,6 +109,12 @@ struct InsertRef {
     int bypassIndex = 0;
 };
 
+// A connection arriving at a channel: outputs[output] of channel `source`.
+struct IncomingRef {
+    int source = -1;
+    int output = -1;
+};
+
 struct GraphChannel {
     std::string id;
     int kind = 0; // ChannelKind
@@ -122,6 +128,7 @@ struct GraphChannel {
     std::shared_ptr<std::atomic<bool>> monitorEnabled;
     float inputGain = 1.0f;
     std::vector<Connection> outputs; // sends + main out
+    std::vector<IncomingRef> incoming; // filled by finalizeGraph(): pulled in source order
     AudioBuffer in;   // summed input (sources + busses)
     AudioBuffer out;  // post-fader output (kept for sidechains)
     AudioBuffer pre;  // pre-fader copy for pre-fader sends
@@ -154,6 +161,13 @@ struct RenderGraph {
     std::vector<AutomationCurve> automation;
     int totalLatency = 0;
     uint64_t version = 0;
+    // Parallel schedule (finalizeGraph): channel indices grouped into dependency levels.
+    // Channels of one level never depend on each other and can be processed concurrently.
+    std::vector<int> levelOrder;
+    std::vector<int> levelStart; // levelStart[k]..levelStart[k+1] indexes levelOrder
 };
+
+// Builds `incoming` lists and dependency levels. Message thread (allocates).
+void finalizeGraph(RenderGraph& g);
 
 } // namespace roy

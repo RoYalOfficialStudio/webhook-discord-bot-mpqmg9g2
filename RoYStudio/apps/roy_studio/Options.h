@@ -12,6 +12,8 @@ struct LaunchOptions {
     std::string screenshotDir; // --screenshots <dir>: render every area once, save PNGs, exit
     std::string openFile;      // project file to open
     std::string selfTestDir;   // --selftest <dir>: run App::selfTest and exit
+    int benchUiTracks = 0;     // --benchui <tracks>: measure frame times per area with a large project
+    std::string benchUiOut;    // --benchui-out <file.md>
     int width = 1600, height = 900;
 };
 
@@ -24,6 +26,8 @@ inline LaunchOptions parseLaunch(int argc, char** argv) {
         else if (a == "--audio" && i + 1 < argc) o.app.audioBackend = argv[++i];
         else if (a == "--screenshots" && i + 1 < argc) o.screenshotDir = argv[++i];
         else if (a == "--selftest" && i + 1 < argc) o.selfTestDir = argv[++i];
+        else if (a == "--benchui" && i + 1 < argc) o.benchUiTracks = std::atoi(argv[++i]);
+        else if (a == "--benchui-out" && i + 1 < argc) o.benchUiOut = argv[++i];
         else if (a == "--size" && i + 2 < argc) {
             o.width = std::atoi(argv[++i]);
             o.height = std::atoi(argv[++i]);

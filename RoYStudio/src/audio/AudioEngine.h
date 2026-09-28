@@ -9,7 +9,9 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <memory>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 namespace roy {
@@ -82,13 +84,42 @@ public:
 
     EngineStats stats() const;
     void resetStats();
+
+    // Multi-core mixing: number of helper threads besides the audio thread (0 = single-threaded).
+    // Message thread, not while a device callback is running. Output is bit-identical for any count.
+    void setWorkerThreads(int n);
+    int workerThreads() const { return static_cast<int>(workers_.size()); }
+    static int defaultWorkerThreads();
     uint64_t processedBlocks() const { return blocksProcessed_.load(std::memory_order_acquire); }
 
 private:
     void processChunk(RenderGraph* g, const float* const* inputs, int numInputs, float* const* outputs,
                       int numOutputs, int outOffset, int frames) noexcept;
-    void renderSources(RenderGraph& g, const Transport::Segment& seg) noexcept;
+    void renderSources(GraphChannel& ch, const Transport::Segment& seg) noexcept;
+    void runChannel(RenderGraph& g, int index) noexcept;
     void processChannel(RenderGraph& g, GraphChannel& ch, int frames) noexcept;
+    void runLevel(RenderGraph& g, int level) noexcept;
+
+    // per-chunk job context (written by the audio thread before a level starts)
+    Transport::Segment jobSegs_[8];
+    bool jobNotesOff_[8] = {};
+    int jobNumSegs_ = 0;
+    const float* jobIn_[64] = {};
+    int jobNumIn_ = 0;
+    int jobFrames_ = 0;
+
+    struct Worker {
+        std::thread thread;
+        std::atomic<uint32_t> go{0};
+        std::atomic<uint32_t> finished{0};
+    };
+    std::vector<std::unique_ptr<Worker>> workers_;
+    std::atomic<bool> quitWorkers_{false};
+    uint32_t ticket_ = 0;
+    RenderGraph* levelGraph_ = nullptr;
+    const int* levelJobs_ = nullptr;
+    int levelCount_ = 0;
+    void workerLoop(int index) noexcept;
 
     double sampleRate_ = 48000.0;
     int maxBlock_ = 512;

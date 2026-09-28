@@ -60,6 +60,12 @@ endif()
 add_executable(roy_cli apps/roy_cli/main.cpp)
 target_link_libraries(roy_cli PRIVATE roy_core)
 
+add_executable(roy_bench apps/roy_bench/main.cpp)
+target_link_libraries(roy_bench PRIVATE roy_core)
+if(WIN32)
+  target_link_libraries(roy_bench PRIVATE psapi)
+endif()
+
 add_executable(roy_plugin_host apps/roy_plugin_host/main.cpp)
 target_link_libraries(roy_plugin_host PRIVATE roy_core)
 

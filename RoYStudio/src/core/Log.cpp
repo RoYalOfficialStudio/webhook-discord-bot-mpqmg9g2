@@ -114,8 +114,14 @@ void write(Level l, std::string_view category, std::string_view msg) {
 
 void audioEvent(Level l, const char* staticMessage, double value) {
     auto& s = state();
-    if (!s.audioQueue.push(AudioEvent{l, staticMessage, value, nowUs()}))
-        s.audioDropped.fetch_add(1, std::memory_order_relaxed);
+    // Several realtime threads (audio thread + mixing workers) may report: a tiny spin
+    // lock around the single-producer ring keeps it correct without blocking syscalls.
+    static std::atomic_flag producer = ATOMIC_FLAG_INIT;
+    while (producer.test_and_set(std::memory_order_acquire)) {
+    }
+    const bool ok = s.audioQueue.push(AudioEvent{l, staticMessage, value, nowUs()});
+    producer.clear(std::memory_order_release);
+    if (!ok) s.audioDropped.fetch_add(1, std::memory_order_relaxed);
 }
 
 int flushAudioEvents() {
