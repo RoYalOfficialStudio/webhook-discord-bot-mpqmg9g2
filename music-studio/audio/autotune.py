@@ -81,6 +81,44 @@ def _correct_formants(shifted_chunk: np.ndarray, original_chunk: np.ndarray, n_f
     return np.fft.irfft(corrected_spec, n=n_fft)[: len(shifted_chunk)]
 
 
+def resynthesize_with_pitch_curve(
+    y: np.ndarray,
+    sr: int,
+    n_steps: np.ndarray,
+    hop_length: int,
+    formant_preserve: bool = False,
+) -> np.ndarray:
+    """Pitch-shift `y` frame-by-frame according to a per-frame semitone curve
+    (one value of `n_steps` per hop_length-spaced analysis frame) and
+    reassemble with a Hann-windowed overlap-add. Shared by autotune() and the
+    harmony generator, which both need "shift this frame by X semitones".
+    """
+    frame_length = hop_length * 2
+    window = np.hanning(frame_length).astype(np.float32)
+    padded = np.pad(y, (frame_length // 2, frame_length))
+    out = np.zeros(len(padded), dtype=np.float64)
+    norm = np.zeros(len(padded), dtype=np.float64)
+
+    for i in range(len(n_steps)):
+        start = i * hop_length
+        end = start + frame_length
+        if end > len(padded):
+            break
+        chunk = padded[start:end]
+        if abs(n_steps[i]) > 1e-3:
+            shifted = librosa.effects.pitch_shift(chunk, sr=sr, n_steps=n_steps[i])
+            if formant_preserve:
+                shifted = _correct_formants(shifted, chunk, n_fft=frame_length)
+            chunk = shifted
+        windowed = chunk * window
+        out[start:end] += windowed
+        norm[start:end] += window
+
+    norm[norm < 1e-8] = 1.0
+    out = out / norm
+    return out[frame_length // 2: frame_length // 2 + len(y)].astype(np.float32)
+
+
 def autotune(
     y: np.ndarray,
     sr: int,
@@ -186,28 +224,4 @@ def autotune(
         target_freq = librosa.midi_to_hz(corrected_midi) / ref_ratio
         n_steps[i] = 12 * np.log2(target_freq / f0[i])
 
-    frame_length = hop_length * 2
-    window = np.hanning(frame_length).astype(np.float32)
-    padded = np.pad(y, (frame_length // 2, frame_length))
-    out = np.zeros(len(padded), dtype=np.float64)
-    norm = np.zeros(len(padded), dtype=np.float64)
-
-    for i in range(n_frames):
-        start = i * hop_length
-        end = start + frame_length
-        if end > len(padded):
-            break
-        chunk = padded[start:end]
-        if abs(n_steps[i]) > 1e-3:
-            shifted = librosa.effects.pitch_shift(chunk, sr=sr, n_steps=n_steps[i])
-            if formant_preserve:
-                shifted = _correct_formants(shifted, chunk, n_fft=frame_length)
-            chunk = shifted
-        windowed = chunk * window
-        out[start:end] += windowed
-        norm[start:end] += window
-
-    norm[norm < 1e-8] = 1.0
-    out = out / norm
-    out = out[frame_length // 2: frame_length // 2 + len(y)]
-    return out.astype(np.float32)
+    return resynthesize_with_pitch_curve(y, sr, n_steps, hop_length, formant_preserve=formant_preserve)

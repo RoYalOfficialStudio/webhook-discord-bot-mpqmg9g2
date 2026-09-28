@@ -10,7 +10,9 @@ erweiterbare Basis dafür.
 ## Features
 
 - **Offline-Aufnahme**: Mikrofon direkt in einen Track aufnehmen, keine
-  Internetverbindung nötig.
+  Internetverbindung nötig — mit **Pegelanzeige**, **Aufnahme-Timer** und
+  **Wellenform-Vorschau**, damit immer sichtbar ist, wie viel und wie laut
+  gerade aufgenommen wurde.
 - **Autotune / Pitch-Correction** – mit allen gängigen Reglern:
   - Tonart + 12 Skalen (Dur, natürlich/harmonisch/melodisch Moll, Dorisch,
     Phrygisch, Lydisch, Mixolydisch, Lokrisch, Pentatonik, Blues, Chromatisch)
@@ -26,11 +28,22 @@ erweiterbare Basis dafür.
     draufsetzen
   - **Presets**: eigene Einstellungen benennen und speichern, jederzeit wieder
     laden oder löschen; ein paar Werks-Presets sind vorinstalliert
+  - **Schnellregler direkt am Track**: Autotune an/aus, Strength und Speed,
+    ohne den Effekt-Dialog öffnen zu müssen (voller Regelsatz bleibt im
+    Effects-Dialog verfügbar)
 - **Studio-Effekte** pro Track:
   - Parametrischer 3-Band-EQ (Low-Shelf, Peak, High-Shelf)
   - Delay/Echo mit Feedback und Mix
   - Reverb (Schroeder-Algorithmus: Kammfilter + Allpassfilter)
   - Kompressor (Attack/Release/Ratio/Threshold/Makeup-Gain)
+- **Voice FX — Effekte, die es in klassischem Autotune nicht gibt**:
+  - **De-Esser**: zähmt harte "S"/"Sch"-Laute, ohne die Stimme dumpf zu machen
+  - **Doubler**: legt leicht verstimmte/verzögerte Kopien der Stimme übereinander
+    für einen dickeren, breiteren "doppelt eingesungenen" Sound
+  - **Harmonie-Generator** ("🎤 Add Harmony..."): erzeugt aus einer Lead-Stimme
+    automatisch zusätzliche Backing-Vocal-Spuren (Terz/Quinte/Sexte/Oktave
+    über oder unter der Lead), die sich an Tonart/Skala halten — komplett neue
+    Spuren, kein reiner Effekt
 - **Mehrspur-Mixer**: beliebig viele Tracks, je mit Lautstärke, Panorama,
   Mute/Solo, eigener Effektkette.
 - **Alle gängigen Audioformate** zum Laden und Exportieren: WAV, MP3, FLAC,
@@ -91,37 +104,48 @@ python main.py
    Standard-Eingabegerät).
 3. **Load File** – vorhandene Audiodatei in den Track laden (WAV, MP3, FLAC,
    OGG, AIFF, M4A/AAC, WMA).
-4. **Effects / Autotune...** – EQ, Delay, Reverb, Compressor und Autotune für
-   diesen Track einstellen. Im Autotune-Tab oben das Preset-Dropdown nutzen,
-   um eigene oder mitgelieferte Einstellungen zu laden/speichern/löschen.
-5. **Vol/Pan-Regler** und **Mute/Solo** wie in jedem DAW-Mixer.
-6. **Play Mix** – aktuellen Mixdown anhören, **Stop** zum Abbrechen.
-7. **Export Mixdown...** – fertigen Track als WAV/MP3/FLAC/OGG/AIFF/M4A/WMA
+4. **Effects / Autotune...** – EQ, Delay, Reverb, Compressor, Autotune und
+   Voice FX (De-Esser, Doubler) für diesen Track einstellen. Im Autotune-Tab
+   oben das Preset-Dropdown nutzen, um eigene oder mitgelieferte Einstellungen
+   zu laden/speichern/löschen.
+5. **Autotune-Zeile** direkt am Track – schneller Ein/Aus-Schalter plus
+   Strength/Speed, für schnelle Anpassungen ohne Dialog.
+6. **Vol/Pan-Regler** und **Mute/Solo** wie in jedem DAW-Mixer. Darüber zeigen
+   Pegelanzeige, Timer und Wellenform, was gerade aufgenommen wurde.
+7. **Play Mix** – aktuellen Mixdown anhören, **Stop** zum Abbrechen.
+8. **🎤 Add Harmony...** – aus einer Lead-Stimme automatisch neue
+   Harmonie-Spuren erzeugen (Terz/Quinte/... über oder unter der Lead).
+9. **Export Mixdown...** – fertigen Track als WAV/MP3/FLAC/OGG/AIFF/M4A/WMA
    exportieren.
-8. **Save/Open Project...** – Session in einen Ordner speichern bzw. laden.
+10. **Save/Open Project...** – Session in einen Ordner speichern bzw. laden.
 
 ## Architektur
 
 ```
 music-studio/
   audio/
-    recorder.py    Mikrofonaufnahme (sounddevice)
-    effects.py     EQ, Delay, Reverb, Compressor, Limiter (numpy/scipy)
+    recorder.py    Mikrofonaufnahme + Pegel/Timer (sounddevice)
+    effects.py     EQ, Delay, Reverb, Compressor, Limiter, Doubler, De-Esser
     autotune.py    Pitch-Detection (librosa pYIN) + Pitch-Correction
+    harmony.py     Harmonie-Generator (diatonische Transposition der Lead-Stimme)
     presets.py     Autotune-Presets speichern/laden/löschen (~/.music_studio/presets)
     io_formats.py  Laden/Exportieren aller Audioformate (WAV/MP3/FLAC/OGG/...)
     mixer.py       Track/Mixer-Klassen, Rendering, Export
     project.py     Speichern/Laden von Projekten
   gui/
     theme.py           Dark-Theme (Farben, Stylesheet)
-    main_window.py     Hauptfenster, Transport, Track-Liste
-    track_widget.py    Eine Track-Zeile (Record/Load/Vol/Pan/Mute/Solo)
-    effects_dialog.py  Effekt-Editor + Autotune-Presets pro Track
+    main_window.py     Hauptfenster, Transport, Track-Liste, Harmonie-Aktion
+    track_widget.py    Eine Track-Zeile (Record/Load/Vol/Pan/Mute/Solo, Meter,
+                       Wellenform, Autotune-Schnellregler)
+    waveform_widget.py Wellenform-Vorschau-Widget
+    effects_dialog.py  Effekt-Editor (EQ/Delay/Reverb/Compressor/Autotune/Voice FX)
+    harmony_dialog.py  Auswahl-Dialog für den Harmonie-Generator
   tests/
     test_effects.py    DSP-Effekte-Tests
     test_autotune.py   Pitch-Correction-Tests (Skalen, Humanize, Formant, Referenz)
     test_presets.py    Preset-Speichern/Laden-Tests
     test_io_formats.py Format-Roundtrip-Tests (WAV/FLAC immer, MP3 falls ffmpeg da ist)
+    test_voice_fx.py   Doubler/De-Esser/Harmonie-Tests
   main.py          Einstiegspunkt
 ```
 

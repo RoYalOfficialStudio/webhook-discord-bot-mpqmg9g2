@@ -4,7 +4,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+import librosa
 from scipy import signal
+
+
+def _to_stereo_f64(y: np.ndarray) -> np.ndarray:
+    y2, _ = _ensure_2d(y)
+    if y2.shape[1] == 1:
+        y2 = np.repeat(y2, 2, axis=1)
+    return y2.astype(np.float64)
 
 
 def _ensure_2d(y: np.ndarray) -> tuple[np.ndarray, bool]:
@@ -212,3 +220,68 @@ def apply_limiter(y: np.ndarray, ceiling_db: float = -0.3) -> np.ndarray:
     if peak > ceiling:
         y = y * (ceiling / peak)
     return np.clip(y, -1.0, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Voice Doubler ("ADT" — artificial double tracking): layers slightly
+# detuned/delayed copies of a vocal, panned wide, to fake the thickness of
+# singing the same line multiple times. Plain autotune never had this.
+# ---------------------------------------------------------------------------
+
+def apply_doubler(y: np.ndarray, sr: int, voices: int = 2, detune_cents: float = 15.0,
+                   delay_ms: float = 18.0, mix: float = 0.5, seed: int = 0) -> np.ndarray:
+    if y.ndim > 1:
+        mono = np.mean(y, axis=1).astype(np.float32)
+    else:
+        mono = y.astype(np.float32)
+    if len(mono) == 0:
+        return _to_stereo_f64(y).astype(np.float32)
+
+    rng = np.random.default_rng(seed)
+    wet = np.zeros((len(mono), 2), dtype=np.float64)
+    voices = max(1, voices)
+    for v in range(voices):
+        sign = 1 if v % 2 == 0 else -1
+        cents = detune_cents * sign * (0.85 + 0.3 * rng.random())
+        shifted = librosa.effects.pitch_shift(mono, sr=sr, n_steps=cents / 100.0)
+        delay_samples = max(1, int(sr * delay_ms / 1000 * (0.7 + 0.6 * rng.random())))
+        delayed = np.zeros_like(shifted)
+        if delay_samples < len(shifted):
+            delayed[delay_samples:] = shifted[: len(shifted) - delay_samples]
+        pan = sign * 0.6
+        wet[:, 0] += delayed * (1 - max(0.0, pan))
+        wet[:, 1] += delayed * (1 + min(0.0, pan))
+    wet /= voices
+
+    dry = _to_stereo_f64(y)
+    out = (1 - mix) * dry + mix * wet
+    return out.astype(np.float32)
+
+
+# ---------------------------------------------------------------------------
+# De-esser: dynamic split-band compression that only ducks harsh sibilance
+# ("s", "sh", "t" sounds), instead of dulling the whole vocal like a plain EQ cut.
+# ---------------------------------------------------------------------------
+
+def apply_deesser(y: np.ndarray, sr: int, freq: float = 6500.0, bandwidth: float = 3000.0,
+                   threshold_db: float = -26.0, ratio: float = 4.0) -> np.ndarray:
+    y2, was_1d = _ensure_2d(y)
+    low = max(200.0, freq - bandwidth / 2)
+    high = min(sr / 2 - 100, freq + bandwidth / 2)
+    sos = signal.butter(2, [low, high], btype="band", fs=sr, output="sos")
+
+    out = y2.astype(np.float64).copy()
+    for ch in range(out.shape[1]):
+        x = out[:, ch]
+        sibilant_band = signal.sosfilt(sos, x)
+        envelope = np.abs(sibilant_band)
+        smoothing = max(1, int(sr * 0.001))
+        smooth = np.convolve(envelope, np.ones(smoothing) / smoothing, mode="same")
+        env_db = 20 * np.log10(np.maximum(smooth, 1e-9))
+        over_db = env_db - threshold_db
+        reduction_db = np.where(over_db > 0, over_db * (1 / ratio - 1), 0.0)
+        gain = 10 ** (reduction_db / 20)
+        out[:, ch] = x - sibilant_band + sibilant_band * gain
+
+    result = out.astype(np.float32)
+    return result[:, 0] if was_1d else result

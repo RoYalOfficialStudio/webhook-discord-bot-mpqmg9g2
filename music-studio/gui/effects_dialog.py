@@ -40,6 +40,7 @@ class EffectsDialog(QDialog):
         tabs.addTab(self._build_reverb_tab(), "Reverb")
         tabs.addTab(self._build_compressor_tab(), "Compressor")
         tabs.addTab(self._build_autotune_tab(), "Autotune")
+        tabs.addTab(self._build_voice_fx_tab(), "Voice FX")
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -108,6 +109,46 @@ class EffectsDialog(QDialog):
         form.addRow("Attack (ms)", self.comp_attack)
         form.addRow("Release (ms)", self.comp_release)
         form.addRow("Makeup gain (dB)", self.comp_makeup)
+        return w
+
+    def _build_voice_fx_tab(self) -> QWidget:
+        w = QWidget()
+        outer = QVBoxLayout(w)
+
+        outer.addWidget(QLabel("De-Esser — tames harsh \"s\"/\"sh\" sibilance without dulling the voice"))
+        deesser_form = QFormLayout()
+        outer.addLayout(deesser_form)
+
+        self.deesser_enabled = QCheckBox("Enable De-Esser")
+        self.deesser_enabled.setChecked(self.effects.deesser_enabled)
+        deesser_form.addRow(self.deesser_enabled)
+
+        self.deesser_freq = _spin(2000.0, 12000.0, self.effects.deesser_freq, step=100, decimals=0)
+        self.deesser_bandwidth = _spin(500.0, 8000.0, self.effects.deesser_bandwidth, step=100, decimals=0)
+        self.deesser_threshold = _spin(-60.0, 0.0, self.effects.deesser_threshold_db, step=1)
+        self.deesser_ratio = _spin(1.0, 20.0, self.effects.deesser_ratio, step=0.5)
+        deesser_form.addRow("Center frequency (Hz)", self.deesser_freq)
+        deesser_form.addRow("Bandwidth (Hz)", self.deesser_bandwidth)
+        deesser_form.addRow("Threshold (dB)", self.deesser_threshold)
+        deesser_form.addRow("Ratio", self.deesser_ratio)
+
+        outer.addWidget(QLabel("Doubler — layers detuned/delayed copies for a thicker, wider \"double-tracked\" voice"))
+        doubler_form = QFormLayout()
+        outer.addLayout(doubler_form)
+
+        self.doubler_enabled = QCheckBox("Enable Doubler")
+        self.doubler_enabled.setChecked(self.effects.doubler_enabled)
+        doubler_form.addRow(self.doubler_enabled)
+
+        self.doubler_voices = _spin(1, 4, self.effects.doubler_voices, step=1, decimals=0)
+        self.doubler_detune = _spin(1.0, 50.0, self.effects.doubler_detune_cents, step=1)
+        self.doubler_delay = _spin(1.0, 60.0, self.effects.doubler_delay_ms, step=1)
+        self.doubler_mix = _spin(0.0, 1.0, self.effects.doubler_mix, step=0.05)
+        doubler_form.addRow("Voices", self.doubler_voices)
+        doubler_form.addRow("Detune (cents)", self.doubler_detune)
+        doubler_form.addRow("Delay (ms)", self.doubler_delay)
+        doubler_form.addRow("Mix (wet)", self.doubler_mix)
+
         return w
 
     def _build_autotune_tab(self) -> QWidget:
@@ -283,3 +324,15 @@ class EffectsDialog(QDialog):
         effects.autotune_vibrato_depth = self.autotune_vibrato_depth.value()
         effects.autotune_vibrato_rate = self.autotune_vibrato_rate.value()
         effects.autotune_preset_name = self._last_preset_name
+
+        effects.deesser_enabled = self.deesser_enabled.isChecked()
+        effects.deesser_freq = self.deesser_freq.value()
+        effects.deesser_bandwidth = self.deesser_bandwidth.value()
+        effects.deesser_threshold_db = self.deesser_threshold.value()
+        effects.deesser_ratio = self.deesser_ratio.value()
+
+        effects.doubler_enabled = self.doubler_enabled.isChecked()
+        effects.doubler_voices = int(self.doubler_voices.value())
+        effects.doubler_detune_cents = self.doubler_detune.value()
+        effects.doubler_delay_ms = self.doubler_delay.value()
+        effects.doubler_mix = self.doubler_mix.value()

@@ -6,7 +6,10 @@ from typing import Callable
 
 import numpy as np
 
-from .effects import ParametricEQ, apply_delay, apply_reverb, apply_compressor, apply_limiter
+from .effects import (
+    ParametricEQ, apply_delay, apply_reverb, apply_compressor, apply_limiter,
+    apply_doubler, apply_deesser,
+)
 from .autotune import autotune
 from .io_formats import export_audio
 
@@ -54,6 +57,18 @@ class EffectSettings:
     autotune_vibrato_rate: float = 5.0
     autotune_preset_name: str = ""
 
+    deesser_enabled: bool = False
+    deesser_freq: float = 6500.0
+    deesser_bandwidth: float = 3000.0
+    deesser_threshold_db: float = -26.0
+    deesser_ratio: float = 4.0
+
+    doubler_enabled: bool = False
+    doubler_voices: int = 2
+    doubler_detune_cents: float = 15.0
+    doubler_delay_ms: float = 18.0
+    doubler_mix: float = 0.5
+
 
 @dataclass
 class Track:
@@ -87,6 +102,14 @@ class Track:
             )
         if fx.eq_enabled and fx.eq is not None:
             y = fx.eq.process(y, self.sr)
+        if fx.deesser_enabled:
+            y = apply_deesser(
+                y, self.sr,
+                freq=fx.deesser_freq,
+                bandwidth=fx.deesser_bandwidth,
+                threshold_db=fx.deesser_threshold_db,
+                ratio=fx.deesser_ratio,
+            )
         if fx.compressor_enabled:
             y = apply_compressor(
                 y, self.sr,
@@ -109,6 +132,14 @@ class Track:
                 room_size=fx.reverb_room_size,
                 damping=fx.reverb_damping,
                 wet=fx.reverb_wet,
+            )
+        if fx.doubler_enabled:
+            y = apply_doubler(
+                y, self.sr,
+                voices=fx.doubler_voices,
+                detune_cents=fx.doubler_detune_cents,
+                delay_ms=fx.doubler_delay_ms,
+                mix=fx.doubler_mix,
             )
 
         stereo = _to_stereo(y).astype(np.float64)

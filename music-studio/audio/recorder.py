@@ -29,19 +29,41 @@ class Recorder:
     _chunks: list[np.ndarray] = field(default_factory=list, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _recording: bool = field(default=False, init=False, repr=False)
+    _start_time: float = field(default=0.0, init=False, repr=False)
+    _level: float = field(default=0.0, init=False, repr=False)
+    _frames_recorded: int = field(default=0, init=False, repr=False)
 
     @property
     def is_recording(self) -> bool:
         return self._recording
 
+    @property
+    def level(self) -> float:
+        """Current input peak level in [0, 1], updated live while recording."""
+        return self._level
+
+    @property
+    def level_db(self) -> float:
+        return 20 * np.log10(max(self._level, 1e-6))
+
+    @property
+    def elapsed_seconds(self) -> float:
+        if not self._recording:
+            return self._frames_recorded / self.samplerate if self.samplerate else 0.0
+        return time.monotonic() - self._start_time
+
     def _callback(self, indata, frames, time_info, status):
         with self._lock:
             self._chunks.append(indata.copy())
+            self._frames_recorded += frames
+        self._level = float(np.max(np.abs(indata))) if frames else 0.0
 
     def start(self) -> None:
         if self._recording:
             return
         self._chunks = []
+        self._level = 0.0
+        self._frames_recorded = 0
         self._stream = sd.InputStream(
             samplerate=self.samplerate,
             channels=self.channels,
@@ -49,6 +71,7 @@ class Recorder:
             callback=self._callback,
         )
         self._stream.start()
+        self._start_time = time.monotonic()
         self._recording = True
 
     def stop(self) -> np.ndarray:
@@ -58,6 +81,7 @@ class Recorder:
         self._stream.close()
         self._stream = None
         self._recording = False
+        self._level = 0.0
         with self._lock:
             if self._chunks:
                 audio = np.concatenate(self._chunks, axis=0).astype(np.float32)

@@ -13,7 +13,9 @@ from PySide6.QtCore import Qt
 from audio.mixer import Mixer, Track, EffectSettings
 from audio.project import save_project, load_project
 from audio.io_formats import EXPORT_FILTER
+from audio.harmony import generate_harmony_voice
 from .track_widget import TrackWidget
+from .harmony_dialog import HarmonyDialog
 
 DEFAULT_SR = 44100
 
@@ -70,6 +72,12 @@ class MainWindow(QMainWindow):
         open_btn.clicked.connect(self.open_project)
         transport.addWidget(open_btn)
 
+        transport.addSpacing(16)
+
+        harmony_btn = QPushButton("🎤 Add Harmony...")
+        harmony_btn.clicked.connect(self.generate_harmony)
+        transport.addWidget(harmony_btn)
+
         transport.addStretch()
 
         self.scroll = QScrollArea()
@@ -88,11 +96,7 @@ class MainWindow(QMainWindow):
         index = len(self.mixer.tracks) + 1
         track = Track(name=f"Track {index}", audio=np.zeros(0, dtype=np.float32), sr=DEFAULT_SR)
         self.mixer.add_track(track)
-
-        widget = TrackWidget(track, color_index=len(self.track_widgets))
-        widget.removed.connect(self._remove_track)
-        self.track_widgets.append(widget)
-        self.track_layout.insertWidget(self.track_layout.count() - 1, widget)
+        self._add_track_widget(track)
 
     def _remove_track(self, widget: TrackWidget) -> None:
         self.mixer.remove_track(widget.track)
@@ -153,7 +157,35 @@ class MainWindow(QMainWindow):
         self.track_widgets = []
 
         for track in self.mixer.tracks:
-            widget = TrackWidget(track, color_index=len(self.track_widgets))
-            widget.removed.connect(self._remove_track)
-            self.track_widgets.append(widget)
-            self.track_layout.insertWidget(self.track_layout.count() - 1, widget)
+            self._add_track_widget(track)
+
+    def _add_track_widget(self, track: Track) -> None:
+        widget = TrackWidget(track, color_index=len(self.track_widgets))
+        widget.removed.connect(self._remove_track)
+        self.track_widgets.append(widget)
+        self.track_layout.insertWidget(self.track_layout.count() - 1, widget)
+
+    def generate_harmony(self) -> None:
+        dialog = HarmonyDialog(self.mixer.tracks, self)
+        if not dialog.exec() or not dialog.tracks:
+            return
+
+        source = dialog.selected_track()
+        key, scale = dialog.selected_key_scale()
+        steps = dialog.selected_steps()
+        if not steps:
+            return
+
+        progress = QProgressDialog("Generating harmony voices...", None, 0, len(steps), self)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+
+        for i, (name, step_count) in enumerate(steps):
+            audio = generate_harmony_voice(source.audio, source.sr, key=key, scale=scale, steps=step_count)
+            pan = 0.35 if step_count > 0 else -0.35
+            track = Track(name=f"{source.name} ({name})", audio=audio, sr=source.sr, pan=pan, volume=0.85)
+            self.mixer.add_track(track)
+            self._add_track_widget(track)
+            progress.setValue(i + 1)
+
+        progress.setValue(len(steps))

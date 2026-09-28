@@ -4,15 +4,22 @@ import numpy as np
 import sounddevice as sd
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QSlider,
-    QLineEdit, QFileDialog, QFrame, QMessageBox,
+    QLineEdit, QFileDialog, QFrame, QMessageBox, QProgressBar, QCheckBox,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 
 from audio.recorder import Recorder
 from audio.mixer import Track
 from audio.io_formats import load_audio, LOAD_FILTER
 from .effects_dialog import EffectsDialog
+from .waveform_widget import WaveformWidget
 from .theme import TRACK_COLORS
+
+
+def _format_time(seconds: float) -> str:
+    minutes = int(seconds // 60)
+    secs = seconds - minutes * 60
+    return f"{minutes:02d}:{secs:04.1f}"
 
 
 class TrackWidget(QFrame):
@@ -24,8 +31,12 @@ class TrackWidget(QFrame):
         self.track = track
         self.recorder = Recorder(samplerate=track.sr, channels=1)
         self.setObjectName("trackCard")
-        accent = TRACK_COLORS[color_index % len(TRACK_COLORS)]
-        self.setStyleSheet(f"QFrame#trackCard {{ border-left: 4px solid {accent}; }}")
+        self._accent = TRACK_COLORS[color_index % len(TRACK_COLORS)]
+        self.setStyleSheet(f"QFrame#trackCard {{ border-left: 4px solid {self._accent}; }}")
+
+        self._meter_timer = QTimer(self)
+        self._meter_timer.setInterval(80)
+        self._meter_timer.timeout.connect(self._update_meter)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 8, 10, 8)
@@ -80,6 +91,27 @@ class TrackWidget(QFrame):
         self.remove_btn.clicked.connect(lambda: self.removed.emit(self))
         top.addWidget(self.remove_btn)
 
+        # --- Level meter + elapsed/duration time -----------------------------
+        meter_row = QHBoxLayout()
+        root.addLayout(meter_row)
+
+        self.level_meter = QProgressBar()
+        self.level_meter.setRange(0, 100)
+        self.level_meter.setValue(0)
+        self.level_meter.setTextVisible(False)
+        self.level_meter.setFixedHeight(10)
+        meter_row.addWidget(self.level_meter, 1)
+
+        self.time_label = QLabel(self._duration_text())
+        self.time_label.setObjectName("dim")
+        self.time_label.setFixedWidth(70)
+        meter_row.addWidget(self.time_label)
+
+        # --- Waveform preview --------------------------------------------------
+        self.waveform = WaveformWidget()
+        root.addWidget(self.waveform)
+        self.waveform.set_audio(track.audio, color=self._accent)
+
         bottom = QHBoxLayout()
         root.addLayout(bottom)
 
@@ -105,18 +137,53 @@ class TrackWidget(QFrame):
         self.pan_label.setFixedWidth(36)
         bottom.addWidget(self.pan_label)
 
+        # --- Quick Autotune controls (full set lives in Effects dialog) --------
+        autotune_row = QHBoxLayout()
+        root.addLayout(autotune_row)
+
+        self.autotune_quick_enabled = QCheckBox("Autotune")
+        self.autotune_quick_enabled.setChecked(track.effects.autotune_enabled)
+        self.autotune_quick_enabled.toggled.connect(self._on_quick_autotune_toggle)
+        autotune_row.addWidget(self.autotune_quick_enabled)
+
+        autotune_row.addWidget(QLabel("Strength"))
+        self.autotune_quick_strength = QSlider(Qt.Horizontal)
+        self.autotune_quick_strength.setRange(0, 100)
+        self.autotune_quick_strength.setValue(int(track.effects.autotune_strength * 100))
+        self.autotune_quick_strength.valueChanged.connect(self._on_quick_strength)
+        autotune_row.addWidget(self.autotune_quick_strength)
+        self.autotune_strength_label = QLabel(f"{track.effects.autotune_strength:.2f}")
+        self.autotune_strength_label.setObjectName("dim")
+        self.autotune_strength_label.setFixedWidth(32)
+        autotune_row.addWidget(self.autotune_strength_label)
+
+        autotune_row.addWidget(QLabel("Speed"))
+        self.autotune_quick_speed = QSlider(Qt.Horizontal)
+        self.autotune_quick_speed.setRange(1, 100)
+        self.autotune_quick_speed.setValue(int(track.effects.autotune_speed * 100))
+        self.autotune_quick_speed.valueChanged.connect(self._on_quick_speed)
+        autotune_row.addWidget(self.autotune_quick_speed)
+        self.autotune_speed_label = QLabel(f"{track.effects.autotune_speed:.2f}")
+        self.autotune_speed_label.setObjectName("dim")
+        self.autotune_speed_label.setFixedWidth(32)
+        autotune_row.addWidget(self.autotune_speed_label)
+
         self.status_label = QLabel(self._status_text())
         self.status_label.setObjectName("dim")
         root.addWidget(self.status_label)
 
     def _status_text(self) -> str:
         n = len(self.track.audio)
-        secs = n / self.track.sr if self.track.sr else 0
-        base = f"{secs:.1f}s recorded" if n else "empty — record or load audio"
+        base = "empty — record or load audio" if not n else "recorded"
         if self.track.effects.autotune_enabled:
             preset = self.track.effects.autotune_preset_name
             base += f"  ·  Autotune: {preset or self.track.effects.autotune_key + ' ' + self.track.effects.autotune_scale}"
         return base
+
+    def _duration_text(self) -> str:
+        n = len(self.track.audio)
+        secs = n / self.track.sr if (self.track.sr and n) else 0.0
+        return _format_time(secs)
 
     @staticmethod
     def _pan_text(pan: float) -> str:
@@ -141,15 +208,56 @@ class TrackWidget(QFrame):
     def _on_solo(self, checked: bool) -> None:
         self.track.solo = checked
 
+    def _on_quick_autotune_toggle(self, checked: bool) -> None:
+        self.track.effects.autotune_enabled = checked
+        self.status_label.setText(self._status_text())
+        self.changed.emit()
+
+    def _on_quick_strength(self, value: int) -> None:
+        self.track.effects.autotune_strength = value / 100.0
+        self.autotune_strength_label.setText(f"{self.track.effects.autotune_strength:.2f}")
+
+    def _on_quick_speed(self, value: int) -> None:
+        self.track.effects.autotune_speed = value / 100.0
+        self.autotune_speed_label.setText(f"{self.track.effects.autotune_speed:.2f}")
+
+    def _refresh_quick_autotune_controls(self) -> None:
+        fx = self.track.effects
+        self.autotune_quick_enabled.blockSignals(True)
+        self.autotune_quick_enabled.setChecked(fx.autotune_enabled)
+        self.autotune_quick_enabled.blockSignals(False)
+        self.autotune_quick_strength.blockSignals(True)
+        self.autotune_quick_strength.setValue(int(fx.autotune_strength * 100))
+        self.autotune_quick_strength.blockSignals(False)
+        self.autotune_quick_speed.blockSignals(True)
+        self.autotune_quick_speed.setValue(int(fx.autotune_speed * 100))
+        self.autotune_quick_speed.blockSignals(False)
+        self.autotune_strength_label.setText(f"{fx.autotune_strength:.2f}")
+        self.autotune_speed_label.setText(f"{fx.autotune_speed:.2f}")
+
+    def _update_meter(self) -> None:
+        if not self.recorder.is_recording:
+            self._meter_timer.stop()
+            self.level_meter.setValue(0)
+            return
+        self.level_meter.setValue(int(min(1.0, self.recorder.level) * 100))
+        self.time_label.setText(_format_time(self.recorder.elapsed_seconds))
+
     def _toggle_record(self) -> None:
         if not self.recorder.is_recording:
             self.recorder.start()
             self.record_btn.setText("⏹ Stop")
+            self.waveform.set_audio(None)
+            self._meter_timer.start()
         else:
             audio = self.recorder.stop()
+            self._meter_timer.stop()
+            self.level_meter.setValue(0)
             self.track.audio = audio.flatten() if audio.ndim > 1 and audio.shape[1] == 1 else audio
             self.record_btn.setText("⏺ Rec")
             self.record_btn.setChecked(False)
+            self.time_label.setText(self._duration_text())
+            self.waveform.set_audio(self.track.audio, color=self._accent)
             self.status_label.setText(self._status_text())
             self.changed.emit()
 
@@ -165,6 +273,8 @@ class TrackWidget(QFrame):
         self.track.audio = audio
         self.track.sr = sr
         self.recorder.samplerate = sr
+        self.time_label.setText(self._duration_text())
+        self.waveform.set_audio(audio, color=self._accent)
         self.status_label.setText(self._status_text())
         self.changed.emit()
 
@@ -177,5 +287,6 @@ class TrackWidget(QFrame):
         dialog = EffectsDialog(self.track.effects, self)
         if dialog.exec():
             dialog.apply_to(self.track.effects)
+            self._refresh_quick_autotune_controls()
             self.status_label.setText(self._status_text())
             self.changed.emit()
