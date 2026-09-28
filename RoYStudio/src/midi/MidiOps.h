@@ -38,6 +38,18 @@ std::vector<bool> outOfKey(const MidiClip& clip, const Key& key); // for HIGHLIG
 void setVelocity(MidiClip& clip, const Selection& sel, int velocity);
 void scaleVelocity(MidiClip& clip, const Selection& sel, double factor);
 void setLength(MidiClip& clip, const Selection& sel, double lengthBeats);
+
+// LIVE RECORDING -> clip. One raw event: timeline sample + status/data bytes.
+struct TimedMidi {
+    int64_t timeline = 0;
+    uint8_t status = 0, data1 = 0, data2 = 0;
+};
+// Pairs note on/off per (channel, note); the sustain pedal (CC64) extends notes to the pedal
+// release; notes still held at `endTimeline` end there. The clip starts on the bar of the first
+// note and ends on the bar after the last one. quantizeBeats > 0 quantizes starts (and nothing else).
+// Returns a clip without id; nullopt if no note was played.
+std::optional<MidiClip> clipFromLiveRecording(const std::vector<TimedMidi>& events, const TempoMap& tempo, double sampleRate,
+                                              int64_t endTimeline, double quantizeBeats = 0.0);
 void removeNotes(MidiClip& clip, const Selection& sel);
 void sortNotes(MidiClip& clip);
 

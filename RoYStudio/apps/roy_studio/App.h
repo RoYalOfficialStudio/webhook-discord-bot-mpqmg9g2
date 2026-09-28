@@ -1,4 +1,5 @@
 #pragma once
+#include "midi/MidiInput.h"
 // RoY Studio GUI application state. Everything that changes the project goes
 // through run(<command>) - the same command system the CLI and tests use - so
 // every UI action is undoable, validated and logged.
@@ -81,7 +82,11 @@ public:
     void togglePlay();
     void stop();
     void toggleRecord();
-    bool recording() const { return recorder_.isRecording(); }
+    bool recording() const { return recorder_.isRecording() || midiRecording_; }
+    // Live MIDI input (keyboard). Plays the selected track's instrument (or the armed MIDI track).
+    midi::MidiInputManager* midiInput() { return midiIn_.get(); }
+    void midiPanic();
+    std::string liveMidiTrackName() const;
     void seekBeat(double beat);
     double positionBeats() const;
     std::string positionText() const;
@@ -142,6 +147,12 @@ private:
     CommandRegistry registry_;
     ProjectSession session_;
     Recorder recorder_;
+    std::unique_ptr<midi::MidiInputManager> midiIn_;
+    bool midiRecording_ = false;
+    std::string midiRecordTrack_;
+    std::vector<RecordedMidi> midiTake_;
+    void updateLiveMidiTarget();
+    void finishMidiRecording();
     uint32_t diskErrorsSeen_ = 0;
     void pollAudioDevice();
     WaveformStore waveforms_;

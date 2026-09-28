@@ -761,6 +761,26 @@ void registerCoreCommands(CommandRegistry& r) {
                ctx.result["id"] = c.id;
                return true;
            }});
+    // A live MIDI take -> one new clip (one undo step). events: [[timelineSample, status, data1, data2], ...]
+    r.add({"AddMidiRecording", "Record MIDI", "MIDI", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t || t->type != TrackType::Midi) return fail(ctx, "MIDI track not found");
+               std::vector<midi::TimedMidi> ev;
+               for (auto& e : a.value("events", json::array()))
+                   if (e.is_array() && e.size() == 4 && e[0].is_number_integer())
+                       ev.push_back({e[0].get<int64_t>(), static_cast<uint8_t>(e[1].get<int>()), static_cast<uint8_t>(e[2].get<int>()),
+                                     static_cast<uint8_t>(e[3].get<int>())});
+               const double sr = argNum(a, "sampleRate", 48000.0);
+               auto clip = midi::clipFromLiveRecording(ev, ctx.project.tempo, sr, static_cast<int64_t>(argNum(a, "endTimeline", 0.0)),
+                                                       argNum(a, "quantizeBeats", 0.0));
+               if (!clip) return fail(ctx, "no notes were played");
+               clip->id = files::newId();
+               t->midiClips.push_back(*clip);
+               ctx.result["id"] = clip->id;
+               ctx.result["notes"] = clip->notes.size();
+               ctx.result["startBeat"] = clip->startBeat;
+               return true;
+           }});
     r.add({"AddNote", "Add Note", "MIDI", "", true, true, [midiClip](CommandContext& ctx, const json& a) {
                MidiClip* c = midiClip(ctx, a);
                if (!c) return false;

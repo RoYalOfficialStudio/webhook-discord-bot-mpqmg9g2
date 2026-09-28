@@ -72,6 +72,12 @@ bool App::init(const AppOptions& o) {
     if (!restartAudio(audioCfg_)) message(1, "audio device unavailable: " + audioStatus_ + " - running without audio output");
     engine_.setInputListener(&recorder_);
     recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
+    // live MIDI: open every connected input (keyboards just work)
+    midiIn_ = std::make_unique<midi::MidiInputManager>(engine_);
+    for (auto& d : midiIn_->devices()) {
+        std::string err;
+        if (!midiIn_->open(d.id, &err)) message(1, "MIDI input " + d.name + ": " + err);
+    }
     if (o.demo) return buildDemo(o.demoFolder.empty() ? fs::temp_directory_path() / "RoYStudioDemo" : o.demoFolder);
     return true;
 }
@@ -122,6 +128,7 @@ void App::pollAudioDevice() {
 
 void App::shutdown() {
     if (scanFuture_.valid()) scanFuture_.wait();
+    if (midiIn_) midiIn_->closeAll();
     if (recorder_.isRecording()) recorder_.stopRecording();
     engine_.setInputListener(nullptr);
     device_.stop();
@@ -275,27 +282,83 @@ void App::togglePlay() {
 
 void App::stop() {
     if (recorder_.isRecording()) recorder_.stopRecording();
+    if (midiRecording_) finishMidiRecording();
     engine_.transport().stop();
+}
+
+void App::finishMidiRecording() {
+    const int64_t end = engine_.transport().position();
+    engine_.setLiveMidiRecording(false);
+    midiRecording_ = false;
+    engine_.drainRecordedMidi(midiTake_);
+    json ev = json::array();
+    for (auto& r : midiTake_) ev.push_back({r.timeline, r.msg.status, r.msg.data1, r.msg.data2});
+    midiTake_.clear();
+    if (ev.empty()) {
+        message(1, "MIDI recording: nothing was played");
+        return;
+    }
+    if (run("AddMidiRecording", {{"trackId", midiRecordTrack_}, {"events", ev}, {"sampleRate", engine_.sampleRate()}, {"endTimeline", end}}))
+        message(0, std::format("MIDI take recorded: {} notes", lastResult_.value("notes", 0)));
+}
+
+void App::updateLiveMidiTarget() {
+    if (!project_ || !runtime_) return;
+    std::string target;
+    if (midiRecording_) target = midiRecordTrack_;
+    else if (const Track* t = project_->findTrack(selTrack); t && t->instrument) target = t->id;
+    else
+        for (auto& t : project_->tracks)
+            if (t.armed && t.instrument && target.empty()) target = t.id;
+    if (target != runtime_->liveMidiTrack()) runtime_->setLiveMidiTrack(*project_, target);
+}
+
+std::string App::liveMidiTrackName() const {
+    if (!project_ || !runtime_) return {};
+    const Track* t = project_->findTrack(runtime_->liveMidiTrack());
+    return t ? t->name : std::string();
+}
+
+void App::midiPanic() {
+    if (!midiIn_) return;
+    for (uint8_t ch = 0; ch < 16; ++ch) {
+        const uint8_t msg[6] = {static_cast<uint8_t>(0xB0 | ch), 64, 0, static_cast<uint8_t>(0xB0 | ch), 123, 0}; // pedal up + all notes off
+        midiIn_->inject(msg, sizeof(msg));
+    }
+    message(0, "MIDI panic: all notes off");
 }
 
 void App::toggleRecord() {
     if (!project_) return;
-    if (recorder_.isRecording()) {
+    if (recorder_.isRecording() || midiRecording_) {
         stop();
         return;
     }
-    bool armed = false;
-    for (auto& t : project_->tracks) armed |= t.armed;
-    if (!armed) {
+    bool audioArmed = false;
+    std::string midiArmed;
+    for (auto& t : project_->tracks) {
+        audioArmed |= t.armed && t.type == TrackType::Audio;
+        if (t.armed && t.type == TrackType::Midi && midiArmed.empty()) midiArmed = t.id;
+    }
+    if (!audioArmed && midiArmed.empty()) {
         message(1, "arm a track first (R button in the playlist)");
         return;
     }
-    recorder_.setTracks(takes::recordConfig(*project_));
-    recorder_.setOutputFolder(session_.folder() / "Audio");
-    std::string err;
-    if (!recorder_.startRecording(&err)) {
-        message(2, "cannot record: " + err);
-        return;
+    if (audioArmed) {
+        recorder_.setTracks(takes::recordConfig(*project_));
+        recorder_.setOutputFolder(session_.folder() / "Audio");
+        std::string err;
+        if (!recorder_.startRecording(&err)) {
+            message(2, "cannot record: " + err);
+            return;
+        }
+    }
+    if (!midiArmed.empty()) { // live MIDI goes to the armed MIDI track and is captured
+        midiRecordTrack_ = midiArmed;
+        midiTake_.clear();
+        midiRecording_ = true;
+        updateLiveMidiTarget();
+        engine_.setLiveMidiRecording(true);
     }
     engine_.transport().play();
     message(0, "recording...");
@@ -326,6 +389,8 @@ void App::tick() {
     if (previewer_) previewer_->collect();
     pollAudioDevice();
     if (!project_) return;
+    updateLiveMidiTarget();
+    if (midiRecording_) engine_.drainRecordedMidi(midiTake_); // keep the engine queue short
     if (recorder_.diskErrors() != diskErrorsSeen_) {
         diskErrorsSeen_ = recorder_.diskErrors();
         message(2, "DISK WRITE FAILED: " + recorder_.lastDiskError());

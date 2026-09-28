@@ -6,6 +6,7 @@
 #include "audio/PreviewPlayer.h"
 #include "audio/RenderGraph.h"
 #include "audio/Transport.h"
+#include "core/SpscQueue.h"
 
 #include <atomic>
 #include <cstdint>
@@ -46,6 +47,17 @@ struct EngineStats {
     uint64_t callbacks = 0;
     uint64_t overloads = 0;    // callbacks that took longer than the buffer duration (likely xruns)
     uint64_t nonFiniteFixes = 0; // NaN/Inf samples removed at the output
+};
+
+// One raw MIDI channel message from a live input (MIDI keyboard / pad controller).
+struct LiveMidiMessage {
+    uint8_t status = 0, data1 = 0, data2 = 0;
+    uint8_t port = 0; // input device index
+};
+// A live message received while recording, stamped with the timeline sample of its block.
+struct RecordedMidi {
+    int64_t timeline = 0;
+    LiveMidiMessage msg;
 };
 
 class AudioEngine {
@@ -97,6 +109,23 @@ public:
     static int defaultWorkerThreads();
     uint64_t processedBlocks() const { return blocksProcessed_.load(std::memory_order_acquire); }
 
+    // ---- live MIDI (MIDI keyboard) ---------------------------------------------
+    // Any ONE producer thread (the MIDI input thread). Delivered to the instrument of the
+    // live target channel at the next block - also while the transport is stopped (MIDI thru).
+    // Sustain pedal (CC64) holds note-offs. Never allocates or locks.
+    bool pushLiveMidi(const LiveMidiMessage& m) noexcept;
+    // Message thread: channel index in the CURRENT graph that plays live MIDI (-1 = none).
+    // Switching the target releases every note on the previous one.
+    void setLiveMidiTarget(int channelIndex) { liveTarget_.store(channelIndex, std::memory_order_release); }
+    int liveMidiTarget() const { return liveTarget_.load(std::memory_order_acquire); }
+    // While on and the transport rolls, live messages are also queued with their timeline sample.
+    void setLiveMidiRecording(bool on) { liveRecording_.store(on, std::memory_order_release); }
+    bool liveMidiRecording() const { return liveRecording_.load(std::memory_order_acquire); }
+    // Message thread: takes the recorded messages collected so far.
+    size_t drainRecordedMidi(std::vector<RecordedMidi>& out);
+    uint64_t liveMidiReceived() const { return liveReceived_.load(std::memory_order_relaxed); }
+    uint64_t liveMidiDropped() const { return liveDropped_.load(std::memory_order_relaxed); }
+
 private:
     void processChunk(RenderGraph* g, const float* const* inputs, int numInputs, float* const* outputs,
                       int numOutputs, int outOffset, int frames) noexcept;
@@ -137,6 +166,21 @@ private:
     std::atomic<bool> deviceRunning_{false};
     std::atomic<uint64_t> blocksProcessed_{0};
     std::atomic<bool> inProcess_{false};
+    // live MIDI
+    void collectLiveMidi(bool rolling, int64_t timeline) noexcept;
+    std::unique_ptr<SpscQueue<LiveMidiMessage>> liveIn_;
+    std::unique_ptr<SpscQueue<RecordedMidi>> liveRec_;
+    std::atomic<int> liveTarget_{-1};
+    std::atomic<bool> liveRecording_{false};
+    std::atomic<uint64_t> liveReceived_{0}, liveDropped_{0};
+    static constexpr int kMaxLiveEvents = 256;
+    NoteEvent liveEvents_[kMaxLiveEvents];
+    int liveCount_ = 0;
+    int liveBlockTarget_ = -1;  // target for this block
+    int liveOffTarget_ = -1;    // previous target: gets AllNotesOff this block
+    int lastLiveTarget_ = -1;
+    bool sustain_ = false;
+    bool sustained_[128] = {};  // note-offs held by the sustain pedal
 
     struct Garbage { RenderGraph* graph; uint64_t retireAfter; };
     std::mutex garbageMutex_;

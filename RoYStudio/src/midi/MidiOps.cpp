@@ -312,4 +312,71 @@ std::vector<ChordAt> detectChords(const MidiClip& clip, double res) {
     return out;
 }
 
+std::optional<MidiClip> clipFromLiveRecording(const std::vector<TimedMidi>& evIn, const TempoMap& tempo, double sr, int64_t endTimeline,
+                                              double quantizeBeats) {
+    auto ev = evIn;
+    std::stable_sort(ev.begin(), ev.end(), [](auto& a, auto& b) { return a.timeline < b.timeline; });
+    auto beatOf = [&](int64_t t) { return tempo.sampleToBeat(static_cast<double>(t), sr); };
+    struct Open {
+        double start = -1;
+        int velocity = 0;
+        bool pedalHeld = false; // key released while the pedal was down
+    };
+    Open open[16][128];
+    bool pedal[16] = {};
+    std::vector<MidiNote> notes; // absolute beats for now
+    auto finish = [&](int ch, int n, double end) {
+        Open& o = open[ch][n];
+        if (o.start < 0) return;
+        MidiNote m;
+        m.pitch = n;
+        m.channel = ch;
+        m.velocity = std::clamp(o.velocity, 1, 127);
+        m.startBeat = o.start;
+        m.lengthBeats = std::max(1.0 / 64.0, end - o.start);
+        notes.push_back(m);
+        o = Open{};
+    };
+    for (auto& e : ev) {
+        const int ch = e.status & 0x0F, type = e.status & 0xF0, n = e.data1 & 0x7F;
+        const double b = beatOf(e.timeline);
+        if (type == 0x90 && e.data2 > 0) {
+            finish(ch, n, b); // re-strike ends the previous one
+            open[ch][n] = Open{b, e.data2, false};
+        } else if (type == 0x80 || type == 0x90) {
+            if (pedal[ch] && open[ch][n].start >= 0) open[ch][n].pedalHeld = true;
+            else finish(ch, n, b);
+        } else if (type == 0xB0 && e.data1 == 64) {
+            const bool down = e.data2 >= 64;
+            if (pedal[ch] && !down)
+                for (int k = 0; k < 128; ++k)
+                    if (open[ch][k].pedalHeld) finish(ch, k, b);
+            pedal[ch] = down;
+        }
+    }
+    const double endBeat = beatOf(endTimeline);
+    for (int ch = 0; ch < 16; ++ch)
+        for (int n = 0; n < 128; ++n) finish(ch, n, std::max(endBeat, open[ch][n].start + 1.0 / 64.0));
+    if (notes.empty()) return std::nullopt;
+    std::sort(notes.begin(), notes.end(), [](auto& a, auto& b) { return a.startBeat < b.startBeat || (a.startBeat == b.startBeat && a.pitch < b.pitch); });
+    if (quantizeBeats > 0)
+        for (auto& m : notes) m.startBeat = std::max(0.0, std::round(m.startBeat / quantizeBeats) * quantizeBeats);
+    double first = notes.front().startBeat, last = 0;
+    for (auto& m : notes) last = std::max(last, m.endBeat());
+    // clip on bar boundaries (4/4 fallback if the signature is odd)
+    const auto bb = tempo.beatToBarBeat(first);
+    const double barStart = tempo.barToBeat(bb.bar);
+    const auto sig = tempo.signatureAtBar(bb.bar);
+    const double barLen = TempoMap::barLengthBeats(sig.numerator, sig.denominator);
+    MidiClip c;
+    c.name = "Recorded MIDI";
+    c.startBeat = std::max(0.0, barStart);
+    c.lengthBeats = std::max(barLen, std::ceil((last - c.startBeat) / barLen - 1e-9) * barLen);
+    for (auto& m : notes) {
+        m.startBeat -= c.startBeat;
+        c.notes.push_back(m);
+    }
+    return c;
+}
+
 } // namespace roy::midi

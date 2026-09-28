@@ -86,7 +86,11 @@ void finalizeGraph(RenderGraph& g) {
     }
 }
 
-AudioEngine::AudioEngine() { prepare(48000.0, 512); }
+AudioEngine::AudioEngine() {
+    liveIn_ = std::make_unique<SpscQueue<LiveMidiMessage>>(1024);
+    liveRec_ = std::make_unique<SpscQueue<RecordedMidi>>(8192);
+    prepare(48000.0, 512);
+}
 
 int AudioEngine::defaultWorkerThreads() {
     const unsigned hw = std::thread::hardware_concurrency();
@@ -307,6 +311,9 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
                               seg.countIn);
     }
 
+    if (!offlineRendering_) collectLiveMidi(anyRolling, automationPos);
+    else liveCount_ = 0, liveBlockTarget_ = -1, liveOffTarget_ = -1;
+
     if (auto* l = listener_.load(std::memory_order_acquire)) l->onAudioInput(inPtrs, nIn, frames, segs, numSegs);
 
     if (!g) {
@@ -385,6 +392,86 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
     }
 }
 
+bool AudioEngine::pushLiveMidi(const LiveMidiMessage& m) noexcept {
+    liveReceived_.fetch_add(1, std::memory_order_relaxed);
+    if (liveIn_->push(m)) return true;
+    liveDropped_.fetch_add(1, std::memory_order_relaxed);
+    return false;
+}
+
+size_t AudioEngine::drainRecordedMidi(std::vector<RecordedMidi>& out) {
+    size_t n = 0;
+    RecordedMidi r;
+    while (liveRec_->pop(r)) {
+        out.push_back(r);
+        ++n;
+    }
+    return n;
+}
+
+// Audio thread, once per chunk before the channels run: live messages -> NoteEvents for the target.
+void AudioEngine::collectLiveMidi(bool rolling, int64_t timeline) noexcept {
+    liveCount_ = 0;
+    const int target = liveTarget_.load(std::memory_order_acquire);
+    liveOffTarget_ = target != lastLiveTarget_ ? lastLiveTarget_ : -1;
+    if (target != lastLiveTarget_) {
+        sustain_ = false;
+        std::fill(std::begin(sustained_), std::end(sustained_), false);
+    }
+    lastLiveTarget_ = target;
+    liveBlockTarget_ = target;
+    const bool record = rolling && liveRecording_.load(std::memory_order_acquire);
+    LiveMidiMessage m;
+    while (liveCount_ < kMaxLiveEvents && liveIn_->pop(m)) {
+        if (record) liveRec_->push(RecordedMidi{timeline, m});
+        const int type = m.status & 0xF0;
+        NoteEvent e;
+        e.channel = static_cast<uint8_t>(m.status & 0x0F);
+        e.note = static_cast<int16_t>(m.data1 & 0x7F);
+        if (type == 0x90 && m.data2 > 0) {
+            e.type = NoteEvent::NoteOn;
+            e.velocity = static_cast<float>(m.data2) / 127.0f;
+            sustained_[e.note] = false;
+        } else if (type == 0x80 || type == 0x90) {
+            if (sustain_) { // pedal down: release later
+                sustained_[e.note] = true;
+                continue;
+            }
+            e.type = NoteEvent::NoteOff;
+            e.velocity = 0.0f;
+        } else if (type == 0xB0) {
+            if (m.data1 == 64) { // sustain pedal
+                const bool down = m.data2 >= 64;
+                if (sustain_ && !down)
+                    for (int n = 0; n < 128 && liveCount_ < kMaxLiveEvents; ++n)
+                        if (sustained_[n]) {
+                            sustained_[n] = false;
+                            NoteEvent off;
+                            off.type = NoteEvent::NoteOff;
+                            off.note = static_cast<int16_t>(n);
+                            off.channel = e.channel;
+                            liveEvents_[liveCount_++] = off;
+                        }
+                sustain_ = down;
+                continue;
+            }
+            if (m.data1 == 120 || m.data1 == 123) {
+                e.type = NoteEvent::AllNotesOff;
+            } else {
+                e.type = NoteEvent::Controller;
+                e.controller = static_cast<int16_t>(m.data1);
+                e.value = static_cast<float>(m.data2) / 127.0f;
+            }
+        } else if (type == 0xE0) {
+            e.type = NoteEvent::PitchBend;
+            e.value = static_cast<float>(((m.data2 & 0x7F) << 7 | (m.data1 & 0x7F)) - 8192) / 8192.0f;
+        } else {
+            continue; // aftertouch / program change: not used by RoY instruments yet
+        }
+        if (liveCount_ < kMaxLiveEvents) liveEvents_[liveCount_++] = e;
+    }
+}
+
 void AudioEngine::renderSources(GraphChannel& ch, const Transport::Segment& seg) noexcept {
     const int64_t segStart = seg.timelineStart;
     const int64_t segEnd = seg.timelineStart + seg.numFrames;
@@ -441,6 +528,14 @@ void AudioEngine::runChannel(RenderGraph& g, int index) noexcept {
         }
         if (seg.rolling) renderSources(ch, seg);
     }
+    // live MIDI (read-only here: collected once per chunk on the audio thread)
+    if (ch.instrument && index == liveOffTarget_ && ch.eventScratch.size() < ch.eventScratch.capacity()) {
+        NoteEvent off;
+        off.type = NoteEvent::AllNotesOff;
+        ch.eventScratch.push_back(off);
+    }
+    if (ch.instrument && index == liveBlockTarget_)
+        for (int i = 0; i < liveCount_ && ch.eventScratch.size() < ch.eventScratch.capacity(); ++i) ch.eventScratch.push_back(liveEvents_[i]);
     // input monitoring
     if (ch.inputLeft >= 0 && ch.monitorEnabled && ch.monitorEnabled->load(std::memory_order_relaxed) && ch.inputLeft < jobNumIn_) {
         const float* l = jobIn_[ch.inputLeft];

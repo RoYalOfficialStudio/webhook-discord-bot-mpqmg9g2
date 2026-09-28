@@ -488,7 +488,22 @@ bool ProjectRuntime::rebuild(const Project& project) {
     for (auto& w : warnings_) log::warn("runtime", "{}", w);
     syncParams(project);
     engine_.setGraph(std::move(graph));
+    resolveLiveTarget(project);
     return true;
+}
+
+void ProjectRuntime::setLiveMidiTrack(const Project& project, const std::string& trackId) {
+    liveTrack_ = trackId;
+    resolveLiveTarget(project);
+}
+
+void ProjectRuntime::resolveLiveTarget(const Project& project) {
+    int index = -1;
+    const Track* t = liveTrack_.empty() ? nullptr : project.findTrack(liveTrack_);
+    if (const RenderGraph* g = engine_.currentGraphForMessageThread(); g && t && t->instrument)
+        for (size_t i = 0; i < g->channels.size(); ++i)
+            if (g->channels[i].id == t->channelId && g->channels[i].instrument) index = static_cast<int>(i);
+    engine_.setLiveMidiTarget(index);
 }
 
 void ProjectRuntime::syncParams(const Project& project) {

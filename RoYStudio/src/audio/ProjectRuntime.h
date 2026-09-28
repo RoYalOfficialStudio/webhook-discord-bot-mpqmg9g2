@@ -65,7 +65,14 @@ public:
     }
     AudioEngine& engine() { return engine_; }
 
+    // Live MIDI (keyboard) plays the instrument of this track; re-resolved after every rebuild.
+    // Empty / a track without instrument = no live target.
+    void setLiveMidiTrack(const Project& project, const std::string& trackId);
+    const std::string& liveMidiTrack() const { return liveTrack_; }
+
 private:
+    void resolveLiveTarget(const Project& project);
+    std::string liveTrack_;
     std::shared_ptr<Processor> ensureProcessor(const Project& project, const PluginSlot& slot, double sr, int maxBlock);
     std::shared_ptr<const AudioData> derived(const Project& p, const AudioClip& c);
 

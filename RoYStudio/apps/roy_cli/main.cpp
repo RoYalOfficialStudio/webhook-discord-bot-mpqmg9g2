@@ -3,6 +3,7 @@
 // so scripted work is undoable-by-design, validated and logged the same way.
 #include "audio/AudioEngine.h"
 #include "audio/DeviceManager.h"
+#include "midi/MidiInput.h"
 #include "audio/Processor.h"
 #include "audio/ProjectRuntime.h"
 #include "commands/Commands.h"
@@ -16,6 +17,8 @@
 #include "midi/Scale.h"
 
 #include <cstdio>
+#include <chrono>
+#include <thread>
 #include <cstdlib>
 #include <filesystem>
 #include <string>
@@ -32,6 +35,7 @@ int usage(int code) {
         "usage:\n"
         "  roy_cli version\n"
         "  roy_cli devices [backend]\n"
+        "  roy_cli midi-devices [--monitor <seconds>]         list MIDI inputs; --monitor prints what they send\n"
         "  roy_cli new <parentFolder> <name> [bpm] [key]     create a project (folder + .roy file)\n"
         "  roy_cli info <project.roy>                         summary as JSON\n"
         "  roy_cli commands [search]                          list commands\n"
@@ -128,6 +132,29 @@ int main(int argc, char** argv) {
         std::printf("backend: %s\n", dm.backendName().c_str());
         for (auto& d : dm.outputDevices()) std::printf("  out %s%s\n", d.name.c_str(), d.isDefault ? " (default)" : "");
         for (auto& d : dm.inputDevices()) std::printf("  in  %s%s\n", d.name.c_str(), d.isDefault ? " (default)" : "");
+        return 0;
+    }
+
+    if (cmd == "midi-devices") {
+        AudioEngine engine;
+        midi::MidiInputManager mi(engine);
+        const auto devs = mi.devices();
+        if (devs.empty()) std::printf("no MIDI inputs found\n");
+        for (auto& d : devs) std::printf("  %-28s %s\n", d.id.c_str(), d.name.c_str());
+        if (a.size() > 2 && a[1] == "--monitor") {
+            for (auto& d : devs)
+                if (!mi.open(d.id, &err)) std::fprintf(stderr, "%s\n", err.c_str());
+            const auto until = std::chrono::steady_clock::now() + std::chrono::duration<double>(std::atof(a[2].c_str()));
+            uint64_t seen = 0;
+            while (std::chrono::steady_clock::now() < until) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                if (mi.messageCount() != seen) {
+                    seen = mi.messageCount();
+                    std::printf("  %s\n", mi.lastMessageText().c_str());
+                }
+            }
+            std::printf("%llu messages\n", static_cast<unsigned long long>(mi.messageCount()));
+        }
         return 0;
     }
 

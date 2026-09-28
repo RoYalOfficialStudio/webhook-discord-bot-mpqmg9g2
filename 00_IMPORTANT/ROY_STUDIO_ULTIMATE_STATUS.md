@@ -15,8 +15,8 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 ## Verification run of this report
 | Check | Result |
 |---|---|
-| Linux full suite | PASS – 190 tests, 0 failed, 101 221 checks |
-| Windows full suite under Wine 9.0 | PASS – 189 tests, 0 failed, 101 241 checks (the SIGSTOP test is POSIX-only) |
+| Linux full suite | PASS – 196 tests, 0 failed, 101 291 checks (after the live-MIDI block) |
+| Windows full suite under Wine 9.0 | PASS – 194 tests, 0 failed, 101 298 checks (SIGSTOP + FIFO tests are POSIX-only) |
 | Windows GUI self-test (roy_studio.exe --selftest, Wine, null audio) | PASS – 17/17 steps |
 | Windows + Linux CLI self-test (roy_cli selftest) | PASS |
 | ASan/UBSan full suite | PASS – 190 tests; only findings are the deliberate crash test plugins. One test expectation failed first (scanner error text when ASan turns the crash into exit code 1) → message fixed, plugin suite re-run under ASan: 8/8 PASS |
@@ -60,7 +60,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | AUDIO DEVICES | PARTIAL | device-loss detection (stop notification + stall watchdog) and auto-reconnect with default-device fallback PASS on the null backend; real WASAPI/ALSA devices UNTESTED |
 | PLAYLIST | PASS | clips, waveforms, drag, split, sections, markers, Ctrl+click multi-select → MoveClips (one undo) |
 | RECORDING | PARTIAL | takes, loop, punch, comp, never-lose, disk-full handling PASS headless; real inputs UNTESTED |
-| MIDI | PARTIAL | editing, SMF import/export PASS; live MIDI device input NOT IMPLEMENTED |
+| MIDI | PARTIAL | editing, SMF import/export PASS; LIVE INPUT PASS (parser, MIDI thru with stopped transport, sustain pedal, target follows the selected track, recording → clip in one undo, panic, overflow-safe) – WinMM / ALSA raw-MIDI backends verified only without real devices (Linux via FIFO, Wine enumeration) → real keyboards UNTESTED; recorded timing resolution = one audio block (5.3 ms at 256) |
 | PIANO ROLL | PASS | |
 | AUTOMATION | PASS | volume, pan, width, sends, plugin + effect params, tempo; curves Linear / Hold / Smooth / Bezier(tension) |
 | VOCALS | PASS | pitch editor: waveform, pitch curve, detected/target notes, cents, confidence, IN SCALE / OFF KEY / UNCERTAIN / CORRECTED; Strength, Speed, Humanize, Formant, Vibrato + Slide preserve; A/B ORIGINAL/CORRECTED; original never modified; real recordings UNTESTED |
@@ -99,7 +99,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 
 ## Next blocks (BETA HARDENING → RELEASE CANDIDATE)
 1. Windows-native validation package (installer/zip, first-run checks, crash-report collection).
-2. Live MIDI input (device list, recording, MIDI learn) – currently NOT IMPLEMENTED.
+2. Live MIDI: sub-block timestamps (driver time stamps), MIDI learn for plugin/mixer parameters, hot-plug rescan.
 3. Real-recording vocal material in the regression suite (needs user-provided takes).
 4. Third-party plugin compatibility pass (free CLAP/VST3 plugins from official sources).
 5. Long-session soak test (multi-hour playback/record cycles), memory growth check.

@@ -52,7 +52,11 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 |---|---|---|
 | 5.1 | Demo project: play, loop, seek, metronome | correct timing, no clicks |
 | 5.2 | Build a beat in CHANNELS, 808 in PIANO ROLL | audible immediately while playing |
-| 5.3 | MIDI keyboard input (if supported yet) | currently NOT IMPLEMENTED for live input – mark BLOCKED/UNTESTED |
+| 5.3 | Connect a MIDI keyboard, start RoY; `roy_cli.exe midi-devices --monitor 10` first | device listed; monitor prints Note On/Off, CC, pitch bend |
+| 5.3b | Select a MIDI track (RoY Synth / 808 / a VST3 instrument), play keys with the transport STOPPED | sound immediately, velocity works, sustain pedal holds notes, status bar shows "MIDI ... -> track" |
+| 5.3c | Arm the MIDI track, press REC, play 4 bars, stop | one new clip on bar boundaries with the played notes; Ctrl+Z removes it in one step |
+| 5.3d | Audio menu → MIDI panic while notes hang | all notes stop |
+| 5.3e | Unplug the keyboard while playing | no crash; notes can be stopped with MIDI panic; replug + re-enable in Audio menu |
 | 5.4 | VOCALS: Pitch analysis + Pitch Guardian on a real sung take | corrections audible and natural; original file unchanged |
 | 5.5 | VOCALS: Preview → pitch editor shows waveform, pitch curve, notes with IN SCALE / OFF KEY / UNCERTAIN / CORRECTED | statuses plausible for your take |
 | 5.6 | Apply, then A ORIGINAL / B CORRECTED while playing | instant switch, both play in sync; Apply again with other settings starts from the original |

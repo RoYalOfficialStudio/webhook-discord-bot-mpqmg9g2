@@ -80,6 +80,24 @@ void menuBar(App& app) {
                 cfg.sampleRate = sr;
                 app.restartAudio(cfg);
             }
+        ImGui::Separator();
+        ImGui::TextDisabled("MIDI INPUTS");
+        if (auto* mi = app.midiInput()) {
+            const auto devs = mi->devices();
+            if (devs.empty()) ImGui::TextDisabled("no MIDI input found - connect a keyboard");
+            for (auto& d : devs) {
+                const bool open = mi->isOpen(d.id);
+                if (ImGui::MenuItem(d.name.c_str(), nullptr, open)) {
+                    std::string err;
+                    if (open) mi->close(d.id);
+                    else if (!mi->open(d.id, &err)) app.message(2, err);
+                }
+            }
+            ImGui::TextDisabled("last: %s", mi->lastMessageText().c_str());
+            const std::string target = app.liveMidiTrackName();
+            ImGui::TextDisabled("plays: %s", target.empty() ? "(select a track with an instrument)" : target.c_str());
+            if (ImGui::MenuItem("MIDI panic (all notes off)")) app.midiPanic();
+        }
         ImGui::EndMenu();
     }
     ImGui::EndMenuBar();
@@ -148,6 +166,10 @@ void statusBar(App& app) {
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(cpuC), "CPU %3.0f%%", st.cpuLoad * 100.0);
     ImGui::SameLine();
     ImGui::TextDisabled("| xruns %llu | %s", static_cast<unsigned long long>(st.overloads), app.audioStatus().c_str());
+    if (auto* mi = app.midiInput(); mi && mi->messageCount() > 0) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("| MIDI %s -> %s", mi->lastMessageText().c_str(), app.liveMidiTrackName().c_str());
+    }
     if (app.hasProject()) {
         ImGui::SameLine();
         ImGui::TextDisabled("| %s%s", app.session().file().filename().string().c_str(), app.dirty() ? " *" : "");
