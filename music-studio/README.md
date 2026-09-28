@@ -40,6 +40,22 @@ erweiterbare Basis dafür.
 
 ## Installation
 
+### Windows-Installer (empfohlen, kein Terminal nötig)
+
+Ein fertiges `OfflineMusicStudioSetup.exe` wird automatisch von GitHub Actions
+gebaut (`.github/workflows/build-windows-installer.yml`, PyInstaller + Inno
+Setup) — kein Python, kein PowerShell auf deinem Rechner nötig:
+
+1. Im GitHub-Repo auf **Actions → Build Windows Installer → Run workflow**
+   klicken (oder es läuft automatisch bei Änderungen an `music-studio/`).
+2. Nach ein paar Minuten ist der Lauf grün → im Abschnitt **Artifacts** die
+   Datei `OfflineMusicStudioSetup` herunterladen und entpacken.
+3. `OfflineMusicStudioSetup.exe` doppelklicken → normaler Windows-Installer
+   (Weiter/Weiter/Fertig), erstellt Startmenü- und optional Desktop-Icon.
+4. Danach einfach "Offline Music Studio" im Startmenü öffnen.
+
+### Manuell mit Python (Entwickler / Mac / Linux)
+
 ```bash
 cd music-studio
 python -m venv .venv
