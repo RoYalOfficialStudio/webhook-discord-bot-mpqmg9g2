@@ -123,7 +123,9 @@ CompatResult checkPlugin(const PluginRecord& rec, const CompatOptions& o) {
             if (!open) r.notes.push_back("editor reported not open");
         } else {
             r.editorOk = false;
-            if (err.find("no editor") != std::string::npos || err.find("not support") != std::string::npos) r.hasEditor = false;
+            if (err.find("no editor") != std::string::npos || err.find("not support") != std::string::npos ||
+                err.find("no embeddable editor") != std::string::npos)
+                r.hasEditor = false;
             r.notes.push_back("editor: " + err + (p->alive() ? "" : " [" + p->problem() + "]"));
         }
     }
