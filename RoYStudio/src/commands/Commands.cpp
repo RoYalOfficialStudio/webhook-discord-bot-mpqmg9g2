@@ -1,5 +1,7 @@
 #include "commands/Commands.h"
 #include "arrange/ClipOps.h"
+#include "midi/MidiFile.h"
+#include "midi/MidiOps.h"
 #include "audio/ProjectRuntime.h"
 #include "core/Files.h"
 #include "core/Log.h"
@@ -568,6 +570,138 @@ void registerCoreCommands(CommandRegistry& r) {
            }});
     r.add({"RenameProject", "Rename Project", "Project", "", true, false, [](CommandContext& ctx, const json& a) {
                ctx.project.name = argStr(a, "name", ctx.project.name);
+               return true;
+           }});
+    // ---- MIDI / piano roll ------------------------------------------------------
+    auto noteSel = [](const json& a) {
+        midi::Selection s;
+        for (auto& x : a.value("notes", json::array()))
+            if (x.is_number_integer() && x.get<long long>() >= 0) s.push_back(static_cast<size_t>(x.get<long long>()));
+        return s;
+    };
+    auto midiClip = [](CommandContext& ctx, const json& a) -> MidiClip* {
+        MidiClip* c = ctx.project.findMidiClip(argStr(a, "clipId"));
+        if (!c) ctx.error = "MIDI clip not found";
+        else if (c->locked) {
+            ctx.error = "clip is locked";
+            return nullptr;
+        }
+        return c;
+    };
+    r.add({"AddMidiClip", "Add MIDI Clip", "MIDI", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t || t->type != TrackType::Midi) return fail(ctx, "MIDI track not found");
+               MidiClip c;
+               c.id = files::newId();
+               c.name = argStr(a, "name", "Pattern");
+               c.startBeat = std::max(0.0, argNum(a, "startBeat", 0.0));
+               c.lengthBeats = std::max(0.25, argNum(a, "lengthBeats", 4.0));
+               c.loopLengthBeats = std::max(0.0, argNum(a, "loopLengthBeats", 0.0));
+               t->midiClips.push_back(c);
+               ctx.result["id"] = c.id;
+               return true;
+           }});
+    r.add({"AddNote", "Add Note", "MIDI", "", true, true, [midiClip](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               MidiNote n;
+               n.pitch = static_cast<int>(argNum(a, "pitch", 60));
+               n.velocity = static_cast<int>(argNum(a, "velocity", 100));
+               n.startBeat = argNum(a, "startBeat", 0.0);
+               n.lengthBeats = argNum(a, "lengthBeats", 1.0);
+               n.slide = argBool(a, "slide", false);
+               const auto mode = a.contains("wrongNoteMode") ? wrongNoteModeFromId(argStr(a, "wrongNoteMode")).value_or(WrongNoteMode::Off)
+                                                             : ctx.project.settings.wrongNoteMode;
+               auto idx = midi::addNote(*c, n, ctx.project.key, mode);
+               if (!idx) return fail(ctx, "note blocked: " + noteName(n.pitch) + " is not in " + ctx.project.key.name());
+               ctx.result["index"] = *idx;
+               ctx.result["pitch"] = c->notes[*idx].pitch;
+               ctx.result["outOfKey"] = !ctx.project.key.contains(c->notes[*idx].pitch);
+               return true;
+           }});
+    r.add({"DeleteNotes", "Delete Notes", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               midi::removeNotes(*c, noteSel(a));
+               return true;
+           }});
+    r.add({"QuantizeNotes", "Quantize", "MIDI", "Q", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               midi::quantize(*c, noteSel(a), argNum(a, "grid", 0.25), argNum(a, "strength", 1.0), argBool(a, "ends", false), argNum(a, "swing", 0.0));
+               return true;
+           }});
+    r.add({"HumanizeNotes", "Humanize", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               midi::humanize(*c, noteSel(a), argNum(a, "timing", 0.02), static_cast<int>(argNum(a, "velocity", 8)), static_cast<uint64_t>(argNum(a, "seed", 1)));
+               return true;
+           }});
+    r.add({"TransposeNotes", "Transpose", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               const bool diatonic = argBool(a, "diatonic", false);
+               midi::transpose(*c, noteSel(a), static_cast<int>(argNum(a, "amount", 0)), diatonic ? &ctx.project.key : nullptr);
+               return true;
+           }});
+    r.add({"DuplicateNotes", "Duplicate Notes", "MIDI", "Ctrl+B", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               auto created = midi::duplicate(*c, noteSel(a), static_cast<int>(argNum(a, "times", 1)));
+               ctx.result["created"] = created;
+               return true;
+           }});
+    r.add({"LegatoNotes", "Legato", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               midi::legato(*c, noteSel(a));
+               return true;
+           }});
+    r.add({"StrumNotes", "Strum", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               midi::strum(*c, noteSel(a), argNum(a, "step", 0.03), argBool(a, "up", true));
+               return true;
+           }});
+    r.add({"ArpeggiateNotes", "Arpeggiate", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               const std::string m = argStr(a, "mode", "up");
+               const midi::ArpMode mode = m == "down" ? midi::ArpMode::Down : m == "updown" ? midi::ArpMode::UpDown
+                                        : m == "random" ? midi::ArpMode::Random : m == "played" ? midi::ArpMode::AsPlayed : midi::ArpMode::Up;
+               midi::arpeggiate(*c, noteSel(a), argNum(a, "rate", 0.25), mode, argNum(a, "gate", 0.9), static_cast<uint64_t>(argNum(a, "seed", 1)));
+               return true;
+           }});
+    r.add({"SnapNotesToKey", "Snap Notes To Key", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               ctx.result["changed"] = midi::snapToKey(*c, noteSel(a), ctx.project.key);
+               return true;
+           }});
+    r.add({"SetNoteVelocity", "Set Velocity", "MIDI", "", true, true, [midiClip, noteSel](CommandContext& ctx, const json& a) {
+               MidiClip* c = midiClip(ctx, a);
+               if (!c) return false;
+               midi::setVelocity(*c, noteSel(a), static_cast<int>(argNum(a, "velocity", 100)));
+               return true;
+           }});
+    r.add({"ImportMidi", "Import MIDI File", "MIDI", "", true, true, [](CommandContext& ctx, const json& a) {
+               midi::SmfData d;
+               std::string err;
+               if (!midi::readMidiFile(argStr(a, "path"), d, &err)) return fail(ctx, err);
+               ctx.result["tracks"] = midi::importSmfIntoProject(ctx.project, d, argNum(a, "atBeat", 0.0), argBool(a, "applyTempo", false));
+               return true;
+           }});
+    r.add({"ExportMidi", "Export MIDI File", "MIDI", "", false, false, [](CommandContext& ctx, const json& a) {
+               std::string err;
+               midi::SmfData d;
+               if (a.contains("clipId")) {
+                   const MidiClip* c = ctx.project.findMidiClip(argStr(a, "clipId"));
+                   if (!c) return fail(ctx, "MIDI clip not found");
+                   d = midi::clipToSmf(ctx.project, *c, c->name);
+               } else {
+                   d = midi::projectToSmf(ctx.project);
+               }
+               if (!midi::writeMidiFile(argStr(a, "path"), d, false, &err)) return fail(ctx, err);
                return true;
            }});
 }

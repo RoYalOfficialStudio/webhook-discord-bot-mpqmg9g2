@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="56" failures="0">
+  <testcase classname="gmb01" name="tempo map conversions" time="3.6993e-05"></testcase>
+  <testcase classname="gmb01" name="transport play pause stop seek" time="8.943e-06"></testcase>
+  <testcase classname="gmb01" name="transport loop splits blocks" time="1.464e-06"></testcase>
+  <testcase classname="gmb01" name="count-in and pre-roll" time="8.331e-06"></testcase>
+  <testcase classname="gmb01" name="metronome clicks on every beat" time="0.00104626"></testcase>
+  <testcase classname="gmb01" name="engine plays a clip bit-exact at unity" time="0.00268763"></testcase>
+  <testcase classname="gmb01" name="sample rates and buffer sizes give identical output" time="0.0333055"></testcase>
+  <testcase classname="gmb01" name="routing busses sends mute solo" time="0.00418902"></testcase>
+  <testcase classname="gmb01" name="pre-fader send ignores fader" time="0.00161599"></testcase>
+  <testcase classname="gmb01" name="plugin delay compensation aligns paths" time="0.000534981"></testcase>
+  <testcase classname="gmb01" name="automation drives channel gain" time="0.00436685"></testcase>
+  <testcase classname="gmb01" name="audio callback does not allocate" time="0.00794565"></testcase>
+  <testcase classname="gmb01" name="non-finite samples never reach the output" time="0.0003638"></testcase>
+  <testcase classname="gmb01" name="graph hot swap while playing" time="0.00205517"></testcase>
+  <testcase classname="gmb01" name="null audio device runs the engine" time="0.0418142"></testcase>
+  <testcase classname="gmb02" name="save close load verify roundtrip" time="0.0193481"></testcase>
+  <testcase classname="gmb02" name="unknown keys from newer versions are preserved" time="0.00444158"></testcase>
+  <testcase classname="gmb02" name="migration from v0 keeps a backup" time="0.000286263"></testcase>
+  <testcase classname="gmb02" name="numbered backups and retention" time="0.00660201"></testcase>
+  <testcase classname="gmb02" name="autosave never touches the project file" time="0.00211356"></testcase>
+  <testcase classname="gmb02" name="crash recovery: recover, last stable, discard" time="0.00653091"></testcase>
+  <testcase classname="gmb02" name="second instance cannot open a live project" time="0.00175107"></testcase>
+  <testcase classname="gmb02" name="commands with undo redo and macros" time="0.00161618"></testcase>
+  <testcase classname="gmb02" name="command palette search and shortcuts" time="5.14e-05"></testcase>
+  <testcase classname="gmb02" name="routing command rejects feedback loops" time="0.000233604"></testcase>
+  <testcase classname="gmb03" name="split clip renders sample-identical" time="0.0154681"></testcase>
+  <testcase classname="gmb03" name="move, trim, slip and duplicate" time="0.0289864"></testcase>
+  <testcase classname="gmb03" name="locked clips and groups" time="0.0041724"></testcase>
+  <testcase classname="gmb03" name="fades and crossfade are smooth" time="0.010645"></testcase>
+  <testcase classname="gmb03" name="clip gain, mute, reverse" time="0.00871235"></testcase>
+  <testcase classname="gmb03" name="time stretch keeps pitch, changes length" time="0.0405846"></testcase>
+  <testcase classname="gmb03" name="stretched clip plays through the engine" time="0.0265415"></testcase>
+  <testcase classname="gmb03" name="waveform cache levels, persistence, speed" time="0.717887"></testcase>
+  <testcase classname="gmb03" name="snap, time formats, markers, sections, loop" time="7.0079e-05"></testcase>
+  <testcase classname="gmb04" name="record a take into its own file" time="0.362592"></testcase>
+  <testcase classname="gmb04" name="recorded take plays back at the right position" time="0.359649"></testcase>
+  <testcase classname="gmb04" name="loop recording creates one take per pass" time="0.366068"></testcase>
+  <testcase classname="gmb04" name="punch in and out" time="0.360284"></testcase>
+  <testcase classname="gmb04" name="existing files are never overwritten" time="0.690178"></testcase>
+  <testcase classname="gmb04" name="comping selects ranges across takes" time="1.1207e-05"></testcase>
+  <testcase classname="gmb04" name="flatten comp keeps audio identical" time="0.370618"></testcase>
+  <testcase classname="gmb04" name="input clipping warning and meter" time="0.0300803"></testcase>
+  <testcase classname="gmb04" name="never-lose: recover a performance without pressing record" time="0.0468563"></testcase>
+  <testcase classname="gmb04" name="never-lose memory is bounded" time="0.391409"></testcase>
+  <testcase classname="gmb04" name="recording path does not allocate on the audio thread" time="0.357548"></testcase>
+  <testcase classname="gmb05" name="keys and scales" time="2.268e-05"></testcase>
+  <testcase classname="gmb05" name="wrong note blocker modes" time="1.297e-06"></testcase>
+  <testcase classname="gmb05" name="AddNote command obeys the blocker and can be disabled" time="0.00151088"></testcase>
+  <testcase classname="gmb05" name="quantize humanize transpose" time="1.0388e-05"></testcase>
+  <testcase classname="gmb05" name="duplicate legato strum arpeggiate" time="1.3298e-05"></testcase>
+  <testcase classname="gmb05" name="chord detection" time="0.000531739"></testcase>
+  <testcase classname="gmb05" name="standard MIDI file roundtrip" time="0.0011458"></testcase>
+  <testcase classname="gmb05" name="ghost notes from other clips" time="1.2771e-05"></testcase>
+  <testcase classname="gmb05" name="synth renders MIDI with correct pitch" time="0.00466719"></testcase>
+  <testcase classname="gmb05" name="synth polyphony, voice stealing, no allocation" time="0.0095914"></testcase>
+  <testcase classname="gmb05" name="MIDI track plays through the engine" time="0.0205315"></testcase>
+</testsuites>
