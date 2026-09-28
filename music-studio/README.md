@@ -190,6 +190,13 @@ oder Cloud-Dienste nötig, alles läuft lokal und offline.
 - Eine Spur mit laufender Aufnahme/Monitoring entfernen ließ das
   Mikrofon-Stream im Hintergrund weiterlaufen — wird jetzt beim Entfernen
   sauber gestoppt.
+- **🎧 Monitor schlug oft mit "Illegal combination of I/O devices" fehl**:
+  Ein einzelner Stream, der Mikrofon und Kopfhörer gleichzeitig öffnet,
+  wird von PortAudio/Windows oft abgelehnt, sobald beide Geräte nicht exakt
+  zusammenpassen (unterschiedliche Treiber/Host-APIs). Aufnahme und
+  Live-Monitoring laufen jetzt über zwei komplett getrennte Streams
+  (Mikrofon-Eingang + Kopfhörer-Ausgang, verbunden über einen kleinen
+  Zwischenpuffer) — das unterstützt PortAudio immer.
 
 ## Grenzen (bewusst nicht enthalten)
 
