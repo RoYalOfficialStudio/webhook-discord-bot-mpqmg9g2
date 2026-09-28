@@ -66,5 +66,7 @@ void registerCoreCommands(CommandRegistry& r);
 void registerVocalCommands(CommandRegistry& r);
 // Import, sampler slicing, sample analysis, stem separation. Called by registerCoreCommands.
 void registerProductionCommands(CommandRegistry& r);
+// Master chain presets and export. Called by registerCoreCommands.
+void registerMasterCommands(CommandRegistry& r);
 
 } // namespace roy

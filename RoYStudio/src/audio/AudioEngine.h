@@ -22,6 +22,21 @@ public:
                               const Transport::Segment* segments, int numSegments) noexcept = 0;
 };
 
+// Offline capture of every channel's post-fader output (analysis, stem export).
+// Buffers are preallocated by the caller; the engine only copies into them.
+struct ChannelCapture {
+    std::vector<std::string> channelIds;             // channels to capture
+    std::vector<std::vector<std::vector<float>>> data; // [channel][L/R][frame]
+    int64_t writePos = 0;                             // frames written
+    int64_t capacity = 0;
+    void allocate(const std::vector<std::string>& ids, int64_t frames) {
+        channelIds = ids;
+        capacity = frames;
+        writePos = 0;
+        data.assign(ids.size(), std::vector<std::vector<float>>(2, std::vector<float>(static_cast<size_t>(frames), 0.0f)));
+    }
+};
+
 struct EngineStats {
     double cpuLoad = 0.0;      // last callback time / buffer duration
     double peakCpuLoad = 0.0;
@@ -53,6 +68,8 @@ public:
     bool isDeviceRunning() const { return deviceRunning_.load(); }
 
     void setInputListener(InputListener* l) { listener_.store(l, std::memory_order_release); }
+    // Offline only (device stopped): capture channel outputs while rendering.
+    void setCapture(ChannelCapture* c) { capture_ = c; }
 
     // ---- audio thread -------------------------------------------------------
     // Renders `numFrames` frames. `inputs`/`outputs` are non-interleaved.
@@ -83,6 +100,7 @@ private:
     std::vector<Garbage> garbage_;
 
     AudioBuffer metronomeBuf_;
+    ChannelCapture* capture_ = nullptr;
     bool wasRolling_ = false;
 
     std::atomic<double> cpuLoad_{0.0}, peakCpuLoad_{0.0};

@@ -419,6 +419,8 @@ bool ProjectRuntime::rebuild(const Project& project) {
             }
         }
     }
+    arrival_.clear();
+    for (auto& gc : graph->channels) arrival_[gc.id] = gc.inputLatency + gc.chainLatency;
     auto& mg = graph->channels[static_cast<size_t>(graph->master)];
     graph->totalLatency = mg.inputLatency + mg.chainLatency;
     lastLatency_ = graph->totalLatency;

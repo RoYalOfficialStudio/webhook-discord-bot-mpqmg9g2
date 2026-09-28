@@ -27,6 +27,10 @@ std::vector<std::vector<float>> renderOffline(AudioEngine& engine, const Offline
     engine.metronome().setEnabled(opt.includeMetronome);
     t.seek(opt.startSample);
     t.play();
+    if (opt.capture) {
+        opt.capture->writePos = 0;
+        engine.setCapture(opt.capture);
+    }
 
     const int block = std::clamp(opt.blockSize, 16, engine.maxBlockSize());
     const int nOut = std::max(1, opt.numOutputs);
@@ -42,6 +46,7 @@ std::vector<std::vector<float>> renderOffline(AudioEngine& engine, const Offline
             break;
         }
     }
+    engine.setCapture(nullptr);
     t.stop();
     t.setCountInSamples(savedCountIn);
     t.setPreRollSamples(savedPreRoll);

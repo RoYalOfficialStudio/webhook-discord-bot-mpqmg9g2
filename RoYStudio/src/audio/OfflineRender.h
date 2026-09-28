@@ -16,6 +16,8 @@ struct OfflineRenderOptions {
     int blockSize = 512;
     bool includeMetronome = false;
     int numOutputs = 2;
+    // Optional: capture these channels' outputs (filled in by renderOffline).
+    ChannelCapture* capture = nullptr;
     // Called every block with progress 0..1; return false to cancel.
     std::function<bool(double)> progress;
 };

@@ -152,6 +152,7 @@ bool fromEdit(CommandContext& ctx, const arrange::EditResult& r) {
 }
 
 MixerChannel* channelArg(CommandContext& ctx, const json& a) {
+    if (argBool(a, "master", false)) return ctx.project.master();
     std::string id = argStr(a, "channelId");
     if (id.empty()) {
         if (auto* t = ctx.project.findTrack(argStr(a, "trackId"))) id = t->channelId;
@@ -225,7 +226,9 @@ void registerCoreCommands(CommandRegistry& r) {
     r.add({"SetChannelGain", "Set Volume", "Mixer", "", true, false, [](CommandContext& ctx, const json& a) {
                auto* ch = channelArg(ctx, a);
                if (!ch) return fail(ctx, "channel not found");
-               ch->gainDb = static_cast<float>(std::clamp(argNum(a, "gainDb", ch->gainDb), -120.0, 12.0));
+               const double v = argNum(a, "gainDb", 0.0);
+               const double target = argBool(a, "relative", false) ? ch->gainDb + v : argNum(a, "gainDb", ch->gainDb);
+               ch->gainDb = static_cast<float>(std::clamp(target, -120.0, 12.0));
                return true;
            }});
     r.add({"SetChannelPan", "Set Pan", "Mixer", "", true, false, [](CommandContext& ctx, const json& a) {
@@ -706,6 +709,7 @@ void registerCoreCommands(CommandRegistry& r) {
            }});
     registerVocalCommands(r);
     registerProductionCommands(r);
+    registerMasterCommands(r);
 }
 
 } // namespace roy

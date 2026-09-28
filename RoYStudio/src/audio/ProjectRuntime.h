@@ -49,6 +49,12 @@ public:
     void captureProcessorStates(Project& project) const;
 
     int graphLatencySamples() const { return lastLatency_; }
+    // Latency with which a channel's output reaches the master mix without compensation.
+    int channelArrivalLatency(const std::string& channelId) const {
+        auto it = arrival_.find(channelId);
+        return it == arrival_.end() ? 0 : it->second;
+    }
+    AudioEngine& engine() { return engine_; }
 
 private:
     std::shared_ptr<Processor> ensureProcessor(const Project& project, const PluginSlot& slot, double sr, int maxBlock);
@@ -66,6 +72,7 @@ private:
     DeriveFn derive_;
     uint64_t graphVersion_ = 0;
     int lastLatency_ = 0;
+    std::map<std::string, int> arrival_;
 };
 
 // Expands a Beat Lab pattern clip into scheduled note events (implemented in beat/).

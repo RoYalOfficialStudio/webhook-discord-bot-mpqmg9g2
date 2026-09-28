@@ -205,6 +205,18 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
 
     for (auto& ch : g->channels) processChannel(*g, ch, frames);
 
+    if (capture_ && capture_->writePos + frames <= capture_->capacity) {
+        for (size_t k = 0; k < capture_->channelIds.size(); ++k)
+            for (auto& ch : g->channels)
+                if (ch.id == capture_->channelIds[k]) {
+                    for (int c = 0; c < 2; ++c)
+                        std::memcpy(capture_->data[k][static_cast<size_t>(c)].data() + capture_->writePos, ch.out.channel(c),
+                                    sizeof(float) * static_cast<size_t>(frames));
+                    break;
+                }
+        capture_->writePos += frames;
+    }
+
     const GraphChannel& master = g->channels[static_cast<size_t>(g->master)];
     const float* outL = master.out.channel(0);
     const float* outR = master.out.channel(1);
