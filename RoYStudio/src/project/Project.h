@@ -92,7 +92,8 @@ struct Step {
     float probability = 1.0f;  // 0..1
     float microTiming = 0.0f;  // fraction of a step, -0.5..0.5
     bool flam = false;
-    int roll = 0;              // 0 = none, n = number of repeats inside the step
+    int roll = 0;              // 0 = none, n = hits (ratchet / note repeat)
+    int rollLength = 1;        // steps the roll is spread over (2 + roll 3 = 1/16 triplets)
 };
 
 struct PatternRow {
@@ -115,6 +116,8 @@ struct Pattern {
     int numSteps = 16;             // 16 / 32 / 64
     double stepLengthBeats = 0.25; // sixteenth notes
     float swing = 0.0f;            // 0..1 (0.5 = strong)
+    std::string groove = "Straight"; // groove template (beat::grooveTemplates), applied on playback
+    float grooveAmount = 1.0f;       // 0..1
     std::vector<PatternRow> rows;
     double lengthBeats() const { return numSteps * stepLengthBeats; }
 };

@@ -463,6 +463,32 @@ void registerCoreCommands(CommandRegistry& r) {
                return fromEdit(ctx, arrange::moveClip(ctx.project, argStr(a, "clipId"), argNum(a, "startBeat", 0.0),
                                                       argStr(a, "trackId"), argBool(a, "moveGroup", true)));
            }});
+    // Moves several clips by the same offset as ONE undo step (all or nothing).
+    r.add({"MoveClips", "Move Clips", "Clip", "", true, true, [](CommandContext& ctx, const json& a) {
+               const auto ids = a.value("clipIds", json::array());
+               if (!ids.is_array() || ids.empty()) return fail(ctx, "clipIds required");
+               const double delta = argNum(a, "deltaBeats", 0.0);
+               std::vector<std::pair<std::string, double>> moves;
+               for (auto& id : ids) {
+                   if (!id.is_string()) return fail(ctx, "clip ids must be strings");
+                   const std::string cid = id.get<std::string>();
+                   std::optional<double> start;
+                   for (auto& t : ctx.project.tracks) {
+                       for (auto& c : t.audioClips)
+                           if (c.id == cid) start = c.startBeat;
+                       for (auto& c : t.midiClips)
+                           if (c.id == cid) start = c.startBeat;
+                       for (auto& c : t.patternClips)
+                           if (c.id == cid) start = c.startBeat;
+                   }
+                   if (!start) return fail(ctx, "clip not found: " + cid);
+                   if (*start + delta < 0) return fail(ctx, "clips cannot move before the song start");
+                   moves.emplace_back(cid, *start + delta);
+               }
+               for (auto& [cid, to] : moves)
+                   if (!fromEdit(ctx, arrange::moveClip(ctx.project, cid, to, {}, false))) return false;
+               return true;
+           }});
     r.add({"DuplicateClip", "Duplicate Clip", "Clip", "Ctrl+D", true, true, [](CommandContext& ctx, const json& a) {
                std::optional<double> at;
                if (a.contains("startBeat")) at = argNum(a, "startBeat", 0.0);

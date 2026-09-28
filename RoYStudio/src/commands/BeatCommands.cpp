@@ -1,5 +1,6 @@
 // Beat Lab commands: patterns, steps, swing, pattern clips (drum programming).
 #include "commands/Commands.h"
+#include "beat/StepSequencer.h"
 #include "core/Files.h"
 
 #include <algorithm>
@@ -70,6 +71,7 @@ void registerBeatCommands(CommandRegistry& r) {
                s.microTiming = static_cast<float>(std::clamp(num(a, "microTiming", s.microTiming), -0.5, 0.5));
                s.flam = a.value("flam", s.flam);
                s.roll = std::clamp(static_cast<int>(num(a, "roll", s.roll)), 0, 8);
+               s.rollLength = std::clamp(static_cast<int>(num(a, "rollLength", s.rollLength)), 1, 16);
                return true;
            }});
     // Fills a row from a pattern string like "x...x...x...x..." (x = on, o = soft, . = off).
@@ -80,10 +82,13 @@ void registerBeatCommands(CommandRegistry& r) {
                if (!row) return false;
                const std::string t = str(a, "text");
                if (t.empty()) return fail(ctx, "text required");
+               // The text defines the whole row: plain hits (no leftover ratchets, flams, odds).
                for (size_t i = 0; i < row->steps.size(); ++i) {
                    const char c = t[i % t.size()];
-                   row->steps[i].on = c == 'x' || c == 'X' || c == 'o';
-                   row->steps[i].velocity = c == 'o' ? 0.45f : (c == 'X' ? 1.0f : 0.8f);
+                   Step s;
+                   s.on = c == 'x' || c == 'X' || c == 'o';
+                   s.velocity = c == 'o' ? 0.45f : (c == 'X' ? 1.0f : 0.8f);
+                   row->steps[i] = s;
                }
                return true;
            }});
@@ -135,6 +140,86 @@ void registerBeatCommands(CommandRegistry& r) {
                                              {"tune", 0.0}, {"pan", 0.0}, {"choke", 0}});
                t->instrument = slot;
                ctx.result["id"] = slot.id;
+               return true;
+           }});
+    r.add({"SetPatternGroove", "Set Groove", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Pattern* p = patternArg(ctx, a);
+               if (!p) return false;
+               const std::string g = str(a, "groove", p->groove);
+               if (!beat::findGroove(g)) return fail(ctx, "unknown groove template " + g);
+               p->groove = g;
+               p->grooveAmount = static_cast<float>(std::clamp(num(a, "amount", p->grooveAmount), 0.0, 1.0));
+               return true;
+           }});
+    r.add({"SetVelocityCurve", "Velocity Curve", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Pattern* p = patternArg(ctx, a);
+               if (!p) return false;
+               PatternRow* row = rowArg(ctx, *p, a);
+               if (!row) return false;
+               if (!beat::applyVelocityCurve(*row, str(a, "curve", "Flat"), static_cast<float>(num(a, "lo", 0.4)),
+                                             static_cast<float>(num(a, "hi", 1.0)), static_cast<int>(num(a, "from", 0)),
+                                             static_cast<int>(num(a, "to", -1)), static_cast<uint64_t>(num(a, "seed", 1))))
+                   return fail(ctx, "unknown velocity curve " + str(a, "curve"));
+               return true;
+           }});
+    r.add({"NoteRepeat", "Note Repeat", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Pattern* p = patternArg(ctx, a);
+               if (!p) return false;
+               PatternRow* row = rowArg(ctx, *p, a);
+               if (!row) return false;
+               std::string err;
+               if (!beat::noteRepeat(*p, *row, static_cast<int>(num(a, "from", 0)), static_cast<int>(num(a, "to", -1)),
+                                     str(a, "rate", "1/16"), static_cast<float>(num(a, "velocity", 0.8)), &err))
+                   return fail(ctx, err);
+               return true;
+           }});
+    // One command = one undo step, however many steps it writes.
+    r.add({"GeneratePattern", "Generate Pattern", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               const int steps = static_cast<int>(num(a, "steps", 16));
+               if (steps != 16 && steps != 32 && steps != 64) return fail(ctx, "steps must be 16, 32 or 64");
+               const std::string style = str(a, "style", "Trap");
+               Pattern p = makeDefaultPattern(str(a, "name", style + " " + std::to_string(ctx.project.patterns.size() + 1)), steps);
+               std::string err;
+               if (!beat::generatePattern(p, style, static_cast<uint64_t>(num(a, "seed", 1)), &err)) return fail(ctx, err);
+               ctx.project.patterns.push_back(p);
+               ctx.result["id"] = p.id;
+               return true;
+           }});
+    r.add({"MakeVariation", "Make Variation", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Pattern* p = patternArg(ctx, a);
+               if (!p) return false;
+               Pattern v = beat::makeVariation(*p, static_cast<uint64_t>(num(a, "seed", 1)), static_cast<float>(num(a, "amount", 0.3)));
+               if (a.contains("name")) v.name = str(a, "name", v.name);
+               ctx.project.patterns.push_back(v);
+               ctx.result["id"] = v.id;
+               return true;
+           }});
+    // Pattern chaining: A B A C ... placed back to back on a beat track (one undo step).
+    r.add({"PlacePatternChain", "Place Pattern Chain", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(str(a, "trackId"));
+               if (!t || t->type != TrackType::Beat) return fail(ctx, "beat track not found");
+               const auto ids = a.value("patternIds", json::array());
+               if (!ids.is_array() || ids.empty()) return fail(ctx, "patternIds required");
+               const int repeats = std::clamp(static_cast<int>(num(a, "repeats", 1)), 1, 256);
+               double at = std::max(0.0, num(a, "startBeat", 0.0));
+               json placed = json::array();
+               for (int rep = 0; rep < repeats; ++rep)
+                   for (auto& id : ids) {
+                       const Pattern* pat = nullptr;
+                       for (auto& p : ctx.project.patterns)
+                           if (id.is_string() && p.id == id.get<std::string>()) pat = &p;
+                       if (!pat) return fail(ctx, "pattern in chain not found");
+                       PatternClip c;
+                       c.id = files::newId();
+                       c.patternId = pat->id;
+                       c.startBeat = at;
+                       c.lengthBeats = pat->lengthBeats();
+                       at += c.lengthBeats;
+                       t->patternClips.push_back(c);
+                       placed.push_back(c.id);
+                   }
+               ctx.result["ids"] = placed;
+               ctx.result["endBeat"] = at;
                return true;
            }});
     r.add({"AddPatternClip", "Place Pattern", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {

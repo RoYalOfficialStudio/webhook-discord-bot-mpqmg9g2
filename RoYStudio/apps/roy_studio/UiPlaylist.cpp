@@ -1,6 +1,7 @@
 #include "Ui.h"
 
 #include <algorithm>
+#include <set>
 #include <cmath>
 #include <format>
 
@@ -15,6 +16,7 @@ struct Drag {
     bool active = false;
 };
 Drag g_drag;
+std::set<std::string> g_multi; // Ctrl+click multi-selection; dragging one moves all (one undo step)
 
 const char* typeTag(TrackType t) { return t == TrackType::Audio ? "AUDIO" : t == TrackType::Midi ? "MIDI" : "BEAT"; }
 
@@ -164,10 +166,13 @@ void drawPlaylist(App& app) {
         const float y0 = gridTop + rowH * static_cast<float>(i) + 2, y1 = y0 + rowH - 4;
         auto clipRect = [&](const std::string& id, double start, double len, uint32_t color, bool muted, const std::string& name, auto&& body) {
             double s = start;
-            if (g_drag.active && g_drag.clipId == id) s = snap(xToBeat(mouse.x) - g_drag.grabOffsetBeats, app.snapBeats);
+            if (g_drag.active && (g_drag.clipId == id || (g_multi.count(g_drag.clipId) && g_multi.count(id)))) {
+                const double delta = snap(xToBeat(mouse.x) - g_drag.grabOffsetBeats, app.snapBeats) - g_drag.originalStart;
+                s = std::max(0.0, start + delta);
+            }
             const ImVec2 a(beatToX(s), y0), b(beatToX(s + len), y1);
             if (b.x < win0.x || a.x > win0.x + winSize.x + scrollX + 200) return;
-            const bool sel = id == app.selClip || id == app.selMidiClip;
+            const bool sel = id == app.selClip || id == app.selMidiClip || g_multi.count(id);
             dl->AddRectFilled(a, b, clipColor(color, muted ? 70 : 215), 4);
             dl->AddRectFilled(a, ImVec2(b.x, a.y + 14), clipColor(color, 255), 4, ImDrawFlags_RoundCornersTop);
             body(a, b);
@@ -202,6 +207,11 @@ void drawPlaylist(App& app) {
     const int laneIndex = static_cast<int>((mouse.y - gridTop) / rowH);
     const Track* laneTrack = laneIndex >= 0 && laneIndex < static_cast<int>(p.tracks.size()) ? &p.tracks[static_cast<size_t>(laneIndex)] : nullptr;
     if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        if (ImGui::GetIO().KeyCtrl && !hoverClip.empty()) {
+            if (!g_multi.erase(hoverClip)) g_multi.insert(hoverClip);
+        } else if (!g_multi.count(hoverClip)) {
+            g_multi.clear(); // plain click outside the selection starts a new one
+        }
         if (!hoverClip.empty()) {
             Track* owner = nullptr;
             double start = 0;
@@ -229,8 +239,12 @@ void drawPlaylist(App& app) {
     if (g_drag.active && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
         const double ns = snap(xToBeat(mouse.x) - g_drag.grabOffsetBeats, app.snapBeats);
         const std::string target = laneTrack ? laneTrack->id : "";
-        if (std::fabs(ns - g_drag.originalStart) > 1e-9 || (!target.empty() && target != g_drag.trackId))
+        if (g_multi.size() > 1 && g_multi.count(g_drag.clipId)) {
+            if (std::fabs(ns - g_drag.originalStart) > 1e-9)
+                app.run("MoveClips", {{"clipIds", std::vector<std::string>(g_multi.begin(), g_multi.end())}, {"deltaBeats", ns - g_drag.originalStart}});
+        } else if (std::fabs(ns - g_drag.originalStart) > 1e-9 || (!target.empty() && target != g_drag.trackId)) {
             app.run("MoveClip", {{"clipId", g_drag.clipId}, {"startBeat", ns}, {"trackId", target == g_drag.trackId ? "" : target}});
+        }
         g_drag.active = false;
     }
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {

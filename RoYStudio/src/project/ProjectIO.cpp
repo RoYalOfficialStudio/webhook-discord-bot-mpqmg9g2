@@ -143,8 +143,10 @@ MidiClip midiClipFrom(const json& j) {
 }
 
 json toJ(const Step& s) {
-    return {{"on", s.on}, {"vel", s.velocity}, {"pan", s.pan}, {"pitch", s.pitch}, {"prob", s.probability},
-            {"micro", s.microTiming}, {"flam", s.flam}, {"roll", s.roll}};
+    json j = {{"on", s.on}, {"vel", s.velocity}, {"pan", s.pan}, {"pitch", s.pitch}, {"prob", s.probability},
+              {"micro", s.microTiming}, {"flam", s.flam}, {"roll", s.roll}};
+    if (s.rollLength != 1) j["rollLen"] = s.rollLength;
+    return j;
 }
 Step stepFrom(const json& j) {
     Step s;
@@ -155,7 +157,8 @@ Step stepFrom(const json& j) {
     s.probability = get<float>(j, "prob", 1.0f);
     s.microTiming = get<float>(j, "micro", 0.0f);
     s.flam = get<bool>(j, "flam", false);
-    s.roll = get<int>(j, "roll", 0);
+    s.roll = std::clamp(get<int>(j, "roll", 0), 0, 16);
+    s.rollLength = std::clamp(get<int>(j, "rollLen", 1), 1, 16);
     return s;
 }
 
@@ -168,8 +171,11 @@ json toJ(const Pattern& p) {
                         {"note", r.note}, {"muted", r.muted}, {"solo", r.solo}, {"volume", r.volume}, {"pan", r.pan},
                         {"pitch", r.pitch}, {"steps", steps}});
     }
-    return {{"id", p.id}, {"name", p.name}, {"numSteps", p.numSteps}, {"stepLengthBeats", p.stepLengthBeats},
-            {"swing", p.swing}, {"rows", rows}};
+    json j = {{"id", p.id}, {"name", p.name}, {"numSteps", p.numSteps}, {"stepLengthBeats", p.stepLengthBeats},
+              {"swing", p.swing}, {"rows", rows}};
+    if (p.groove != "Straight") j["groove"] = p.groove;
+    if (p.grooveAmount != 1.0f) j["grooveAmount"] = p.grooveAmount;
+    return j;
 }
 Pattern patternFrom(const json& j) {
     Pattern p;
@@ -178,6 +184,8 @@ Pattern patternFrom(const json& j) {
     p.numSteps = std::clamp(get<int>(j, "numSteps", 16), 1, 256);
     p.stepLengthBeats = get<double>(j, "stepLengthBeats", 0.25);
     p.swing = get<float>(j, "swing", 0.0f);
+    p.groove = get<std::string>(j, "groove", "Straight");
+    p.grooveAmount = std::clamp(get<float>(j, "grooveAmount", 1.0f), 0.0f, 1.0f);
     if (auto it = j.find("rows"); it != j.end() && it->is_array())
         for (auto& rj : *it) {
             PatternRow r;

@@ -1,5 +1,6 @@
 // PIANO ROLL, CHANNELS (step sequencer), BEATS (patterns, 808).
 #include "Ui.h"
+#include "beat/StepSequencer.h"
 
 #include "midi/Scale.h"
 
@@ -204,6 +205,20 @@ void drawChannels(App& app) {
     ImGui::SliderFloat("Swing", &swing, 0, 1, "%.2f");
     if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetPatternSwing", {{"patternId", pat->id}, {"swing", swing}});
     ImGui::SameLine();
+    ImGui::SetNextItemWidth(150 * dpi);
+    if (ImGui::BeginCombo("Groove", pat->groove.c_str())) {
+        for (auto& g : beat::grooveTemplates()) {
+            if (ImGui::Selectable(g.name.c_str(), g.name == pat->groove)) app.run("SetPatternGroove", {{"patternId", pat->id}, {"groove", g.name}});
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", g.description.c_str());
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    float gAmt = pat->grooveAmount;
+    ImGui::SetNextItemWidth(90 * dpi);
+    ImGui::SliderFloat("##gamt", &gAmt, 0, 1, "groove %.2f");
+    if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetPatternGroove", {{"patternId", pat->id}, {"amount", gAmt}});
+    ImGui::SameLine();
     std::string beatTrack;
     for (auto& t : p.tracks)
         if (t.type == TrackType::Beat && (beatTrack.empty() || t.id == app.selTrack)) beatTrack = t.id;
@@ -236,8 +251,21 @@ void drawChannels(App& app) {
             }
             ImGui::EndDragDropTarget();
         }
-        if (!row.sampleAssetId.empty() && ImGui::IsItemClicked(ImGuiMouseButton_Right))
-            app.run("SetRowSample", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"assetId", ""}});
+        if (ImGui::BeginPopupContextItem("rowctx")) {
+            if (ImGui::BeginMenu("Velocity curve")) {
+                for (auto& c : beat::velocityCurves())
+                    if (ImGui::MenuItem(c.c_str())) app.run("SetVelocityCurve", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"curve", c}, {"lo", 0.4}, {"hi", 1.0}});
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Note repeat (whole row)")) {
+                for (auto& rate : beat::noteRepeatRates())
+                    if (ImGui::MenuItem(rate.c_str())) app.run("NoteRepeat", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"rate", rate}, {"velocity", 0.75}});
+                ImGui::EndMenu();
+            }
+            if (!row.sampleAssetId.empty() && ImGui::MenuItem("Back to built-in drum voice"))
+                app.run("SetRowSample", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"assetId", ""}});
+            ImGui::EndPopup();
+        }
         ImGui::SameLine();
         float vol = row.volume;
         ImGui::SetNextItemWidth(60 * dpi);
@@ -253,15 +281,35 @@ void drawChannels(App& app) {
             const bool clicked = toggleButton("##s", st.on, on, ImVec2(stepW, stepH));
             if (!st.on) ImGui::PopStyleColor();
             if (clicked) app.run("SetStep", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"step", static_cast<int>(s)}, {"on", !st.on}});
-            if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && st.on)
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && st.on && !ImGui::GetIO().KeyShift)
                 app.run("SetStep", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"step", static_cast<int>(s)}, {"velocity", st.velocity < 0.6f ? 1.0 : 0.45}});
+            if (st.on && ImGui::GetIO().KeyShift && ImGui::BeginPopupContextItem("stepctx")) { // Shift+right-click: step details
+                const json key = {{"patternId", pid}, {"row", static_cast<int>(r)}, {"step", static_cast<int>(s)}, {"on", true}};
+                auto set = [&](const char* k, const json& v) { json a = key; a[k] = v; app.run("SetStep", a); };
+                float prob = st.probability;
+                if (ImGui::SliderFloat("probability", &prob, 0, 1, "%.2f")) {}
+                if (ImGui::IsItemDeactivatedAfterEdit()) set("probability", prob);
+                int ratchet = st.roll;
+                if (ImGui::SliderInt("ratchet", &ratchet, 0, 8)) {}
+                if (ImGui::IsItemDeactivatedAfterEdit()) set("roll", ratchet);
+                if (ImGui::MenuItem("flam", nullptr, st.flam)) set("flam", !st.flam);
+                float micro = st.microTiming;
+                if (ImGui::SliderFloat("micro timing", &micro, -0.5f, 0.5f, "%.2f step")) {}
+                if (ImGui::IsItemDeactivatedAfterEdit()) set("microTiming", micro);
+                ImGui::EndPopup();
+            }
+            if (st.on && (st.roll > 1 || st.flam || st.probability < 1.0f)) {
+                const ImVec2 mn = ImGui::GetItemRectMin();
+                ImGui::GetWindowDrawList()->AddText(ImVec2(mn.x + 2, mn.y), col::rgb(0x101014),
+                                                    st.roll > 1 ? std::format("{}", st.roll).c_str() : st.flam ? "f" : "?");
+            }
             ImGui::PopID();
             if (static_cast<int>(r) < 0) break;
         }
         ImGui::PopID();
         if (app.project().findPattern(pid) != pat) break; // pattern vector changed (undo etc.)
     }
-    ImGui::TextDisabled("Left-click: step on/off  |  right-click: accent/ghost  |  steps honour swing, probability, rolls (BEATS)");
+    ImGui::TextDisabled("Left-click: step on/off  |  right-click: accent/ghost  |  Shift+right-click: probability / ratchet / flam  |  right-click row name: velocity curve, note repeat");
     ImGui::EndChild();
 }
 
@@ -292,14 +340,52 @@ void drawBeats(App& app) {
                                      {"Four on the floor", "X...X...X...X...", "....X.......X...", "..x...x...x...x."}};
     Pattern* sel = p.findPattern(app.selPattern);
     for (auto& g : grooves) {
-        if (ImGui::Button(g.name) && sel) {
-            app.run("SetRowPattern", {{"patternId", sel->id}, {"voice", "kick"}, {"text", g.kick}});
-            app.run("SetRowPattern", {{"patternId", sel->id}, {"voice", "snare"}, {"text", g.snare}});
-            app.run("SetRowPattern", {{"patternId", sel->id}, {"voice", "closed_hat"}, {"text", g.hat}});
-        }
+        if (ImGui::Button(g.name) && sel) // one button = one undo step
+            app.runMacro(std::string("Quick Groove: ") + g.name,
+                         {{"SetRowPattern", {{"patternId", sel->id}, {"voice", "kick"}, {"text", g.kick}}},
+                          {"SetRowPattern", {{"patternId", sel->id}, {"voice", "snare"}, {"text", g.snare}}},
+                          {"SetRowPattern", {{"patternId", sel->id}, {"voice", "closed_hat"}, {"text", g.hat}}}});
         ImGui::SameLine();
     }
     ImGui::NewLine();
+    ImGui::Spacing();
+    sectionTitle("GENERATE");
+    static int seed = 1;
+    ImGui::SetNextItemWidth(90 * dpi);
+    ImGui::InputInt("seed", &seed);
+    for (auto& style : beat::generatorStyles()) {
+        if (ImGui::Button(style.c_str()) && app.run("GeneratePattern", {{"style", style}, {"seed", seed}}))
+            app.selPattern = app.lastResult().value("id", app.selPattern);
+        ImGui::SameLine();
+    }
+    ImGui::NewLine();
+    if (sel && ImGui::Button("Make Variation") && app.run("MakeVariation", {{"patternId", sel->id}, {"seed", seed++}, {"amount", 0.35}}))
+        app.selPattern = app.lastResult().value("id", app.selPattern);
+    ImGui::Spacing();
+    sectionTitle("PATTERN CHAIN");
+    static std::vector<std::string> chain;
+    std::erase_if(chain, [&](const std::string& id) { return !p.findPattern(id); });
+    std::string chainText;
+    for (auto& id : chain) chainText += (chainText.empty() ? "" : " > ") + p.findPattern(id)->name;
+    ImGui::TextWrapped("%s", chain.empty() ? "(empty - add patterns in playing order)" : chainText.c_str());
+    if (sel && ImGui::SmallButton("+ selected")) chain.push_back(sel->id);
+    ImGui::SameLine();
+    if (ImGui::SmallButton("clear")) chain.clear();
+    static int repeats = 1;
+    ImGui::SetNextItemWidth(90 * dpi);
+    ImGui::InputInt("repeats", &repeats);
+    repeats = std::clamp(repeats, 1, 64);
+    if (!chain.empty() && goldButton("Place chain")) {
+        std::string beatTrack;
+        for (auto& t : p.tracks)
+            if (t.type == TrackType::Beat && (beatTrack.empty() || t.id == app.selTrack)) beatTrack = t.id;
+        if (beatTrack.empty() && app.run("AddTrack", {{"type", "beat"}, {"name", "Drums"}, {"role", "drums"}}))
+            beatTrack = app.lastResult().value("id", "");
+        double end = 0;
+        if (const Track* t = p.findTrack(beatTrack))
+            for (auto& c : t->patternClips) end = std::max(end, c.endBeat());
+        if (!beatTrack.empty()) app.run("PlacePatternChain", {{"trackId", beatTrack}, {"patternIds", chain}, {"startBeat", end}, {"repeats", repeats}});
+    }
     ImGui::EndChild();
     ImGui::SameLine();
     ImGui::BeginChild("808lab", ImVec2(0, 0), ImGuiChildFlags_Borders);
