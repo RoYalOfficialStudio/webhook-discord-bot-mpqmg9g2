@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <regex>
 
 namespace roy::beatimport {
@@ -70,6 +71,10 @@ BeatFileInfo analyzeBeatFile(const fs::path& file) {
     info.sampleRate = d.sampleRate;
     info.channels = d.numChannels;
     info.seconds = static_cast<double>(d.numFrames) / d.sampleRate;
+    float pk = 0;
+    for (auto& c : d.channels)
+        for (float v : c) pk = std::max(pk, std::fabs(v));
+    info.peakDb = pk > 0 ? 20.0 * std::log10(pk) : -120.0;
     // analyse at most 60 s from the middle (intro tags / fades are not typical of the song)
     sampler::Channels part;
     const int64_t maxFrames = static_cast<int64_t>(60 * d.sampleRate);

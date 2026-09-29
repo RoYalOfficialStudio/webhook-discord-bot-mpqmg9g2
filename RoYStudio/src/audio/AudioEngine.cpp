@@ -238,6 +238,7 @@ EngineStats AudioEngine::stats() const {
     s.callbacks = blocksProcessed_.load();
     s.overloads = overloads_.load();
     s.nonFiniteFixes = nonFinite_.load();
+    s.outputOvers = outputOvers_.load();
     return s;
 }
 
@@ -245,6 +246,7 @@ void AudioEngine::resetStats() {
     peakCpuLoad_.store(0.0);
     overloads_.store(0);
     nonFinite_.store(0);
+    outputOvers_.store(0);
 }
 
 bool AudioEngine::startInputCapture(double seconds) {
@@ -429,6 +431,21 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
             }
     }
     if (previewOn) preview_.render(outputs, numOutputs, outOffset, frames);
+    if (!offlineRendering_ && outputProtection_.load(std::memory_order_relaxed)) {
+        // soft knee from -1 dBFS: transparent below, never above 0 dBFS (no hard clipping at the device)
+        constexpr float knee = 0.891f, room = 1.0f - knee;
+        uint64_t overs = 0;
+        for (int c = 0; c < numOutputs; ++c) {
+            float* dst = outputs[c] + outOffset;
+            for (int i = 0; i < frames; ++i) {
+                const float a = std::fabs(dst[i]);
+                if (a <= knee) continue;
+                overs += a > 1.0f;
+                dst[i] = std::copysign(knee + room * std::tanh((a - knee) / room), dst[i]);
+            }
+        }
+        if (overs) outputOvers_.fetch_add(overs, std::memory_order_relaxed);
+    }
     if (fixes) {
         nonFinite_.fetch_add(fixes, std::memory_order_relaxed);
         log::audioEvent(log::Level::Error, "non-finite samples removed at output", static_cast<double>(fixes));

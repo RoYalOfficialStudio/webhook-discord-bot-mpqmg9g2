@@ -247,6 +247,37 @@ void statusBar(App& app) {
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(cpuC), "CPU %3.0f%%", st.cpuLoad * 100.0);
     ImGui::SameLine();
     ImGui::TextDisabled("| xruns %llu | %s", static_cast<unsigned long long>(st.overloads), app.audioStatus().c_str());
+    // CRACKLE HELP: the two usual causes, each with a one-click answer
+    {
+        static uint64_t lastOvers = 0, lastXruns = 0;
+        static double oversUntil = 0, xrunsUntil = 0;
+        const double now = ImGui::GetTime();
+        if (st.outputOvers > lastOvers) oversUntil = now + 4.0;
+        if (st.overloads > lastXruns && app.engine().transport().isPlaying()) xrunsUntil = now + 6.0;
+        lastOvers = st.outputOvers;
+        lastXruns = st.overloads;
+        if (now < oversUntil) {
+            ImGui::SameLine();
+            if (toggleButton("TOO LOUD - lower the BEAT fader", true, col::Red)) app.area = Area::Mixer;
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("The master goes over 0 dB (red CLIP in the MIXER). RoY softens it so it does not crack,\n"
+                                  "but it sounds best with headroom: MIXER > beat track fader to about -6 dB. Click = open MIXER.");
+        }
+        const int buf = app.audioConfig().bufferSize;
+        if (now < xrunsUntil && buf < 1024) {
+            ImGui::SameLine();
+            const int next = buf < 512 ? 512 : 1024;
+            if (toggleButton(std::format("DROPOUTS (crackles) - click: buffer {}", next).c_str(), true, col::Orange)) {
+                AudioDeviceConfig cfg = app.audioConfig();
+                cfg.bufferSize = next;
+                app.changeAudio(cfg);
+                xrunsUntil = 0;
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("The computer did not finish the audio in time (xruns). A bigger buffer fixes it\n"
+                                  "(a little more delay when you hear yourself live). Audio > Buffer to change it back.");
+        }
+    }
     if (app.midiLearning()) {
         ImGui::SameLine();
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "| MIDI LEARN: move a controller for %s (Esc cancels)", app.midiLearnLabel().c_str());

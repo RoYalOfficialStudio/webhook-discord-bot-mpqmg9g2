@@ -24,6 +24,7 @@ struct BeatFileInfo {
     std::string error;
     double seconds = 0, sampleRate = 0;
     int channels = 0;
+    double peakDb = -120; // loudest sample; > 0 dBFS is common for loud MP3 masters (inter-sample overs)
     std::optional<double> bpmFromName;
     std::optional<Key> keyFromName;
     double bpmDetected = 0, bpmConfidence = 0; // 60..180 (a 140 BPM trap beat may show as 70)

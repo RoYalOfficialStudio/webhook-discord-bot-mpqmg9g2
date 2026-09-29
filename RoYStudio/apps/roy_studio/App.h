@@ -148,7 +148,8 @@ public:
     // ---- IMPORT BEAT (bought / downloaded MP3, WAV, FLAC ...) ----
     void pickAndImportBeat();                                     // native file dialog -> IMPORT BEAT window
     void beginImportBeat(const std::vector<fs::path>& files);      // first file in the window, the rest queued
-    bool importBeat(const fs::path& file, double bpm, const std::string& key); // bpm 0 / key "" keep the song's
+    // bpm 0 / key "" keep the song's; beatGainDb = fader of the new beat track (headroom for vocals)
+    bool importBeat(const fs::path& file, double bpm, const std::string& key, double beatGainDb = -6.0);
     void cancelImportBeat();
     bool showImportBeat = false;
     fs::path importBeatFile;

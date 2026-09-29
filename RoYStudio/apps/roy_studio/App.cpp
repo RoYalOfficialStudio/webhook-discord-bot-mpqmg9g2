@@ -407,8 +407,8 @@ const beatimport::BeatFileInfo* App::importBeatInfo() {
     return importInfo_ ? &*importInfo_ : nullptr;
 }
 
-bool App::importBeat(const fs::path& file, double bpm, const std::string& key) {
-    json a = {{"path", file.string()}, {"startBeat", 0.0}};
+bool App::importBeat(const fs::path& file, double bpm, const std::string& key, double beatGainDb) {
+    json a = {{"path", file.string()}, {"startBeat", 0.0}, {"gainDb", beatGainDb}};
     if (bpm > 0) a["bpm"] = bpm;
     if (!key.empty()) a["key"] = key;
     if (!run("ImportBeat", a)) {
@@ -418,9 +418,9 @@ bool App::importBeat(const fs::path& file, double bpm, const std::string& key) {
     selTrack = lastResult_.value("trackId", selTrack);
     if (const Track* t = project_->findTrack(selTrack)) selChannel = t->channelId;
     area = Area::Playlist;
-    message(0, std::format("beat '{}' imported on its own track from bar 1 ({:.0f} BPM, {}) - a copy is in the project's Audio folder. "
+    message(0, std::format("beat '{}' imported on its own track from bar 1 ({:.0f} BPM, {}, fader {:+.0f} dB) - a copy is in the project's Audio folder. "
                            "Ctrl+Z undoes. Next: add a vocal track and press LIVE",
-                           file.stem().string(), project_->tempo.tempoAt(0), project_->key.name()));
+                           file.stem().string(), project_->tempo.tempoAt(0), project_->key.name(), beatGainDb));
     return true;
 }
 

@@ -225,3 +225,49 @@ TEST_CASE("livevocal", "shipped vocal chains (UserData presets of the portable b
     }
 #endif
 }
+
+TEST_CASE("livevocal", "output protection: a too-loud mix never hard-clips at the sound card, renders stay untouched") {
+    auto run = [](float amp, bool protect, bool offline) {
+        AudioEngine engine;
+        engine.prepare(SR, 256);
+        ProjectRuntime rt{engine};
+        Project p = makeNewProject("loud", SR, 120.0);
+        Track& t = addTrack(p, TrackType::Audio, "Beat");
+        const std::string a = addMemoryAsset(p, rt, makeSine(SR, 220, 2.0, amp), "beat");
+        addClip(t, a, 0.0, 4.0);
+        REQUIRE(rt.rebuild(p));
+        engine.setOutputProtection(protect);
+        engine.transport().seek(0);
+        engine.transport().play();
+        std::vector<float> out;
+        if (offline) {
+            out = render(engine, 48000)[0];
+        } else {
+            std::vector<float> l(256), r(256);
+            for (int b = 0; b < 48000 / 256; ++b) {
+                float* o[2] = {l.data(), r.data()};
+                engine.process(nullptr, 0, o, 2, 256);
+                out.insert(out.end(), l.begin(), l.end());
+            }
+        }
+        return std::pair{out, engine.stats().outputOvers};
+    };
+    // +6 dBFS mix, live: soft-limited below 0 dBFS, counted for the "TOO LOUD" hint
+    auto [live, overs] = run(2.0f, true, false);
+    CHECK(peak(live) <= 1.0f);
+    CHECK(peak(live) > 0.95f);
+    CHECK(overs > 0);
+    CHECK(allFinite(live));
+    // the same mix rendered/exported: untouched (export has its own mastering / limiter)
+    auto [rendered, overs2] = run(2.0f, true, true);
+    CHECK(peak(rendered) > 1.9f);
+    CHECK(overs2 == 0);
+    // protection off: raw
+    auto [raw, overs3] = run(2.0f, false, false);
+    CHECK(peak(raw) > 1.9f);
+    // a normal mix (-6 dBFS) is bit-identical with and without protection
+    auto [a1, o1] = run(0.5f, true, false);
+    auto [a2, o2] = run(0.5f, false, false);
+    CHECK(a1 == a2);
+    CHECK(o1 == 0);
+}

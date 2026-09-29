@@ -47,6 +47,7 @@ struct EngineStats {
     uint64_t callbacks = 0;
     uint64_t overloads = 0;    // callbacks that took longer than the buffer duration (likely xruns)
     uint64_t nonFiniteFixes = 0; // NaN/Inf samples removed at the output
+    uint64_t outputOvers = 0;    // live output samples above 0 dBFS caught by the output protection
 };
 
 // One raw MIDI channel message from a live input (MIDI keyboard / pad controller).
@@ -110,6 +111,10 @@ public:
     void cancelInputCapture() { capturing_.store(false, std::memory_order_release); }
     EngineStats stats() const;
     void resetStats();
+    // OUTPUT PROTECTION (live playback only, never in renders/exports): samples above -1 dBFS are
+    // soft-limited so a too-loud mix never hard-clips at the sound card (audible crackles).
+    void setOutputProtection(bool on) { outputProtection_.store(on, std::memory_order_relaxed); }
+    bool outputProtection() const { return outputProtection_.load(std::memory_order_relaxed); }
 
     // Multi-core mixing: number of helper threads besides the audio thread (0 = single-threaded).
     // Message thread, not while a device callback is running. Output is bit-identical for any count.
@@ -217,7 +222,8 @@ private:
     bool wasRolling_ = false;
 
     std::atomic<double> cpuLoad_{0.0}, peakCpuLoad_{0.0};
-    std::atomic<uint64_t> overloads_{0}, nonFinite_{0};
+    std::atomic<uint64_t> overloads_{0}, nonFinite_{0}, outputOvers_{0};
+    std::atomic<bool> outputProtection_{true};
 };
 
 } // namespace roy

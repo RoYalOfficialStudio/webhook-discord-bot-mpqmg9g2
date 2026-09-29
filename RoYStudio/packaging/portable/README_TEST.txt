@@ -176,6 +176,17 @@ Abgemischte Vocal für     MIXER > PRESETS (am Vocal-Kanal) > Namen eingeben > "
                           bleibt in Presets\Channel\Backups\ erhalten.
 
 
+KNACKEN / KNISTERN?        Unten in der Statusleiste zeigt RoY die Ursache:
+                          rot  "TOO LOUD - lower the BEAT fader": der Mix ist über 0 dB
+                               (roter CLIP im MIXER). Beat-Fader auf ca. -6 dB ziehen.
+                               RoY entschärft Übersteuerung beim Abhören automatisch.
+                               Neue Beats bekommen beim IMPORT BEAT automatisch -6 dB.
+                          orange "DROPOUTS - click: buffer 512": der PC schafft das Audio
+                               nicht rechtzeitig -> anklicken (Buffer 512).
+MIXER: viele Effekte      Die Effektliste scrollt (Mausrad). Die goldene Leiste darunter
+                          nach unten ziehen = mehr Platz für Effekte.
+
+
 10. CRASH RECOVERY TESTEN
 ------------------------
 Projekt ändern, mindestens 60 Sekunden warten (Autosave), RoYStudio.exe im Task-Manager

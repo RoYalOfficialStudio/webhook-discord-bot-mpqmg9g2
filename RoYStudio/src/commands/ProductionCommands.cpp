@@ -119,6 +119,9 @@ void registerProductionCommands(CommandRegistry& r) {
                    Track& t = addTrack(ctx.project, TrackType::Audio, str(a, "name", src.stem().string()));
                    t.role = "beat";
                    trackId = t.id;
+                   // headroom: a loud mastered beat plus vocals would overload the master (crackles)
+                   if (a.contains("gainDb"))
+                       if (auto* ch = ctx.project.findChannel(t.channelId)) ch->gainDb = static_cast<float>(std::clamp(num(a, "gainDb", 0.0), -60.0, 12.0));
                }
                json b = a;
                b["trackId"] = trackId;

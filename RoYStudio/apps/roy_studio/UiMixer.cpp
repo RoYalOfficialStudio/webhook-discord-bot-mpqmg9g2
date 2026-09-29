@@ -36,7 +36,8 @@ void channelPresetMenu(App& app, const std::string& channelId, const std::string
     const float dpi = ImGui::GetFontSize() / 15.0f;
     ImGui::TextDisabled("VOCAL CHAIN / CHANNEL PRESET");
     if (ImGui::BeginMenu("Load preset")) {
-        ImGui::TextDisabled("replaces this channel's effects (Ctrl+Z undoes); VocalTune follows THIS song's key");
+        ImGui::TextDisabled("replaces this channel's effects");
+        ImGui::TextDisabled("(Ctrl+Z undoes, tune follows the song key)");
         ImGui::Separator();
         ImGui::TextDisabled("RoY starting points");
         for (auto& f : presets::factoryChannelPresets())
@@ -287,8 +288,13 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
         if (ImGui::Button("PRESETS", ImVec2(-1, 0))) ImGui::OpenPopup("chPresetMenu");
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("save this channel's effects + settings as a preset, or load one (e.g. your vocal chain)");
     }
-    // inserts
-    ImGui::TextDisabled("INSERTS");
+    // inserts + sends live in a scrollable rack; the bar below it drags the rack taller / shorter
+    static float rackFrac = 0.45f; // share of the strip height above the pan/fader section (all strips)
+    const float bottomH = height * (1.0f - rackFrac);
+    const float splitH = 8 * dpi;
+    const float rackH = std::max(40 * dpi, height - bottomH - ImGui::GetCursorPosY() - splitH - 4 * dpi);
+    ImGui::BeginChild("rack", ImVec2(-1, rackH), ImGuiChildFlags_None);
+    ImGui::TextDisabled("INSERTS (%zu)", ch.inserts.size());
     for (auto& s : ch.inserts) {
         ImGui::PushID(s.id.c_str());
         bool alive = true;
@@ -299,7 +305,7 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
         ImGui::SameLine();
         std::string label = s.name;
         if (!alive) label = "CRASHED " + label;
-        if (ImGui::Selectable(label.c_str(), app.selSlot == s.id, 0, ImVec2(width - 40 * dpi, 0))) {
+        if (ImGui::Selectable(label.c_str(), app.selSlot == s.id, 0, ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
             app.selSlot = s.id;
             app.selChannel = ch.id;
         }
@@ -359,8 +365,27 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
         }
         ImGui::EndPopup();
     }
+    const bool overflow = ImGui::GetScrollMaxY() > 0.0f;
+    const bool atEnd = ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f;
+    ImGui::EndChild();
+    // splitter: drag up/down to show more effects or a longer fader (shared by all strips)
+    {
+        const ImVec2 a = ImGui::GetCursorScreenPos();
+        const float w = ImGui::GetContentRegionAvail().x;
+        ImGui::InvisibleButton("rackSplit", ImVec2(w, splitH));
+        const bool hot = ImGui::IsItemHovered() || ImGui::IsItemActive();
+        if (ImGui::IsItemActive()) rackFrac = std::clamp(rackFrac + ImGui::GetIO().MouseDelta.y / height, 0.2f, 0.72f);
+        if (hot) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+        if (ImGui::IsItemHovered() && !ImGui::IsItemActive())
+            ImGui::SetTooltip("drag up / down: more room for effects or for the fader.  Mouse wheel over the effects scrolls them.");
+        ImDrawList* sdl = ImGui::GetWindowDrawList();
+        const float cy = a.y + splitH * 0.5f;
+        sdl->AddRectFilled(ImVec2(a.x, cy - 1.5f * dpi), ImVec2(a.x + w, cy + 1.5f * dpi), hot ? col::Gold : col::GoldDim, 2.0f);
+        if (overflow && !atEnd) // more effects below: small arrow hint
+            sdl->AddTriangleFilled(ImVec2(a.x + w * 0.5f - 5 * dpi, cy - 4 * dpi), ImVec2(a.x + w * 0.5f + 5 * dpi, cy - 4 * dpi),
+                                   ImVec2(a.x + w * 0.5f, cy + 3 * dpi), col::Orange);
+    }
     // pan
-    const float bottomH = height * 0.55f;
     ImGui::SetCursorPosY(height - bottomH);
     float pan = ch.pan;
     ImGui::SetNextItemWidth(-1);

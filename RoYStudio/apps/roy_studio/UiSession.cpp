@@ -485,13 +485,19 @@ void drawImportBeat(App& app) {
         else if (info->keyRoot >= 0)
             ImGui::TextDisabled("   detected: %s %s (%s)", roots[info->keyRoot], info->keyMinor ? "Minor" : "Major",
                                 info->keyConfidence >= 0.6 ? "fairly sure" : "unsure - the seller's key info is better");
+        // headroom: bought beats are mastered loud; with vocals on top the master would clip (crackles)
+        static bool headroom = true;
+        ImGui::Checkbox("Beat fader -6 dB (room for your vocals - prevents clipping / crackles)", &headroom);
+        if (info->peakDb > -0.5)
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(info->peakDb > 0.0 ? col::Red : col::Orange), "   the file peaks at %+.1f dBFS%s",
+                               info->peakDb, info->peakDb > 0.0 ? " - over 0 dB, it clips without headroom!" : " - very loud master");
         ImGui::Separator();
         ImGui::TextWrapped("The beat goes on its OWN new track, starting at bar 1. RoY copies the file into the project "
                            "(your download stays where it is). One Ctrl+Z undoes everything.");
         if (goldButton("IMPORT BEAT", ImVec2(160 * dpi, 0))) {
             const std::string key = std::string(roots[keyRoot]) + (keyMinor ? " Minor" : " Major");
             if (app.previewer().playing()) app.previewer().stop();
-            if (app.importBeat(app.importBeatFile, useTempo ? bpm : 0.0, useKey ? key : std::string())) {
+            if (app.importBeat(app.importBeatFile, useTempo ? bpm : 0.0, useKey ? key : std::string(), headroom ? -6.0 : 0.0)) {
                 app.showImportBeat = false;
                 app.importNextQueued(); // several files picked / dropped: the next one
             }
