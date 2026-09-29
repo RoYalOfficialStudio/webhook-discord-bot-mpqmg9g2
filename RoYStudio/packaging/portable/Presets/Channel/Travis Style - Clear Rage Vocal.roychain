@@ -1,0 +1,146 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "Travis Style - Clear Rage Vocal",
+  "created": "2026-09-29T00:00:00Z",
+  "app": "0.2.0",
+  "description": "Travis-style hard tune and space, but clear: fast autotune (5 ms, 90 %), no distortion, clean bright EQ, strong clean compression, light warmth, wide chorus, dotted 1/8 ping-pong delay, big but softer reverb, limiter at -1 dB.",
+  "inserts": [
+    {
+      "typeId": "roy.vocaltune",
+      "name": "Hard Tune",
+      "bypass": false,
+      "state": {
+        "params": {
+          "speed": 5.0,
+          "strength": 0.9,
+          "threshold": 3.0,
+          "offKeyFilter": 1.0,
+          "allowChromatic": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Clear Rage EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 110.0,
+          "lowCutSlope": 24.0,
+          "band2Freq": 380.0,
+          "band2Gain": -3.5,
+          "band2Q": 1.3,
+          "band3Freq": 3500.0,
+          "band3Gain": 3.5,
+          "band3Q": 0.8,
+          "band4Freq": 11000.0,
+          "band4Gain": 5.0,
+          "highCut": 19000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Smash Comp",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -24.0,
+          "ratio": 6.0,
+          "attack": 3.0,
+          "release": 70.0,
+          "knee": 4.0,
+          "makeup": 13.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.saturation",
+      "name": "Light Grit",
+      "bypass": false,
+      "state": {
+        "params": {
+          "drive": 6.0,
+          "mode": 1.0,
+          "tone": 14000.0,
+          "mix": 0.25,
+          "output": -1.5
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 6800.0,
+          "threshold": -33.0,
+          "range": 11.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.chorus",
+      "name": "Wide Chorus",
+      "bypass": false,
+      "state": {
+        "params": {
+          "rate": 0.6,
+          "depth": 2.2,
+          "delay": 12.0,
+          "feedback": 0.0,
+          "mix": 0.2,
+          "spread": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.delay",
+      "name": "Dotted 1/8 Ping-Pong",
+      "bypass": false,
+      "state": {
+        "params": {
+          "syncBeats": 0.75,
+          "feedback": 0.33,
+          "mix": 0.15,
+          "pingPong": 1.0,
+          "lowCut": 350.0,
+          "highCut": 6000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Space",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 2.4,
+          "preDelay": 45.0,
+          "size": 1.3,
+          "damping": 0.45,
+          "width": 1.0,
+          "mix": 0.14,
+          "lowCut": 350.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Safety Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 60.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 0.0
+        }
+      }
+    }
+  ]
+}
