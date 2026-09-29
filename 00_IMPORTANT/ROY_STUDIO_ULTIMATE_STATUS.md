@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| VERSION | 0.2.0 – release stage **BETA** (gate below passed; BETA HARDENING next) |
+| VERSION | 0.2.0 – release stage **BETA** (BETA gate passed; BETA HARDENING done as far as possible without real hardware; RC gate blocked by owner-only items, see below) |
 | BUILD | Linux x86_64 GCC 13.3 RelWithDebInfo; Windows x64 mingw-w64 13.2 cross build (static) |
 | COMMIT | see git log of branch claude/bold-franklin-fybkj5 (snapshot 0002) |
 | DATUM | 2026-09-29 |
@@ -53,6 +53,20 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | Real audio hardware | UNTESTED HARDWARE VALIDATION | allowed by the gate |
 
 **Gate result: all required items PASS → BETA.** Version raised to 0.2.0.
+
+## RELEASE CANDIDATE gate (evaluated 2026-09-29) – NOT PASSED, blocked by owner-only items
+| RC item | Status | What is needed |
+|---|---|---|
+| All automated suites green (Linux, Wine, ASan/UBSan, TSan) | PASS | – |
+| Long-session stability (soak) | PASS | repeat 9.1 on a real PC |
+| Installer / test kit / crash reports / diagnostics | PASS | – |
+| Windows native validation (TEST_PLAN sections 0–9) | **BLOCKED – owner** | run the test kit / installer on a real Windows 10/11 PC and return the filled test plan + diagnostics reports |
+| Real audio interface (latency, xruns, device loss) | **BLOCKED – owner** | TEST_PLAN 3.x, 4.x with your interface |
+| Real MIDI keyboard / controller | **BLOCKED – owner** | TEST_PLAN 5.3–5.3g |
+| Your own third-party plugins | **BLOCKED – owner** | `roy_cli plugin-compat <your plugin folders> --editor --out report.md` (TEST_PLAN 6.0) |
+| Real vocal takes for Pitch Guardian / comping | **BLOCKED – owner** | a few dry vocal recordings (TEST_PLAN 4.6–4.8, 5.4–5.6) |
+| RoY Studio licence text | **BLOCKED – owner decision** | choose the licence (proprietary / open source) |
+| Code signing | **BLOCKED – owner decision** | optional certificate purchase; without it SmartScreen warns |
 
 ## Components
 | Area | Status | Notes |
