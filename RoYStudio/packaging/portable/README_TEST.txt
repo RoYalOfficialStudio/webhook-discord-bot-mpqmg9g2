@@ -94,13 +94,24 @@ CREATE_DIAGNOSTIC_PACKAGE.bat   Diagnose-ZIP erstellen
 Alle Testdaten sind selbst erzeugt – keine fremden Samples, keine Urheberrechtsprobleme.
 
 
-7. CRASH RECOVERY TESTEN
+7. ETWAS ENTFERNEN / RÜCKGÄNGIG MACHEN
+--------------------------------------
+Aufnahme (oranger Take-Block)   Rechtsklick auf den Block > "Delete take"
+                                oder anklicken (weißer Rahmen) und Entf drücken
+Clip (Audio / MIDI / Pattern)   Rechtsklick > "Delete"  oder anklicken und Entf
+Mehrere Clips                   Strg+Klick auf mehrere Clips, dann Entf
+Ganze Spur                      Rechtsklick auf den SPURNAMEN links > "Delete track"
+Rückgängig / Wiederholen        Strg+Z / Strg+Y (auch im Menü Edit)
+Gelöschte Aufnahmen bleiben als WAV im Projektordner Audio\ erhalten.
+
+
+8. CRASH RECOVERY TESTEN
 ------------------------
 Projekt ändern, mindestens 60 Sekunden warten (Autosave), RoYStudio.exe im Task-Manager
 beenden, RoY neu starten, Projekt öffnen -> "RECOVER PROJECT" muss angeboten werden.
 
 
-8. WENN ETWAS NICHT FUNKTIONIERT
+9. WENN ETWAS NICHT FUNKTIONIERT
 --------------------------------
 Help > CREATE DIAGNOSTIC PACKAGE  (oder TestKit\CREATE_DIAGNOSTIC_PACKAGE.bat)
 -> UserData\Diagnostics\RoYStudio_Diagnostics_<Zeit>.zip
@@ -109,7 +120,7 @@ Ergebnisse der Music Session. NICHT enthalten: Benutzername (ersetzt), Projekte,
 Passwörter, Tokens, persönliche Dateien. Es wird NICHTS automatisch hochgeladen.
 
 
-9. BITTE ZURÜCKSCHICKEN
+10. BITTE ZURÜCKSCHICKEN
 -----------------------
 1. TestKit\TEST_RESULTS.md (ausgefüllt)
 2. UserData\Diagnostics\RoYStudio_Diagnostics_<Zeit>.zip

@@ -25,6 +25,8 @@ struct CompDrag {
     bool active = false;
 };
 CompDrag g_comp; // swipe comping: drag over a take lane -> that range plays from this take
+std::string g_selTakeTrack, g_selTake; // take selected by clicking its comp block (Delete key / menu)
+std::string g_lastClip;                 // last clicked clip (Delete key)
 
 // Takes in display order (one row each, oldest lane first).
 std::vector<const Take*> takeRows(const Track& t) {
@@ -199,7 +201,7 @@ void drawPlaylist(App& app) {
     }
 
     // clips
-    std::string hoverClip;
+    std::string hoverClip, hoverCompTrack, hoverCompTake;
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     for (size_t i = 0; i < p.tracks.size(); ++i) {
         const Track& t = p.tracks[i];
@@ -242,10 +244,15 @@ void drawPlaylist(App& app) {
             dl->AddRectFilled(a, b, col::rgb(0xFF8C00, 170), 4);
             dl->AddRectFilled(a, ImVec2(b.x, a.y + 14), col::rgb(0xFF8C00, 255), 4, ImDrawFlags_RoundCornersTop);
             if (k) drawWaveform(app, dl, takeView(p, *k, seg.startBeat, seg.endBeat), ImVec2(a.x, a.y + 14), b);
-            dl->AddRect(a, b, col::rgb(0x000000, 120), 4);
+            const bool sel = g_selTake == seg.takeId && g_selTakeTrack == t.id;
+            dl->AddRect(a, b, sel ? col::Ivory : col::rgb(0x000000, 120), 4, 0, sel ? 2.0f : 1.0f);
             dl->PushClipRect(a, b, true);
             dl->AddText(ImVec2(a.x + 4, a.y), col::Obsidian, k ? k->name.c_str() : "comp");
             dl->PopClipRect();
+            if (mouse.x >= a.x && mouse.x < b.x && mouse.y >= a.y && mouse.y < b.y) {
+                hoverCompTrack = t.id;
+                hoverCompTake = seg.takeId;
+            }
         }
         // take lanes: every take in full, the parts that are in the comp highlighted
         if (takeLanes(t)) {
@@ -293,6 +300,16 @@ void drawPlaylist(App& app) {
         app.selTrack = laneTrack->id;
         app.selChannel = laneTrack->channelId;
     } else if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        g_lastClip = hoverClip;
+        if (hoverClip.empty() && !hoverCompTake.empty()) { // click on a recorded take (comp block)
+            g_selTakeTrack = hoverCompTrack;
+            g_selTake = hoverCompTake;
+            app.selClip.clear();
+            app.selMidiClip.clear();
+            g_multi.clear();
+        } else {
+            g_selTake.clear();
+        }
         if (ImGui::GetIO().KeyCtrl && !hoverClip.empty()) {
             if (!g_multi.erase(hoverClip)) g_multi.insert(hoverClip);
         } else if (!g_multi.count(hoverClip)) {
@@ -359,6 +376,32 @@ void drawPlaylist(App& app) {
         ctxTrack = laneTrack->id;
         ctxTake = laneTake->id;
         ImGui::OpenPopup("takeMenu");
+    } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && hoverClip.empty() && !hoverCompTake.empty()) {
+        ctxTrack = hoverCompTrack; // right-click directly on the orange take block
+        ctxTake = hoverCompTake;
+        g_selTakeTrack = hoverCompTrack;
+        g_selTake = hoverCompTake;
+        ImGui::OpenPopup("takeMenu");
+    }
+    if (ImGui::IsItemHovered() && hoverClip.empty() && !hoverCompTake.empty() && !ImGui::IsPopupOpen("takeMenu"))
+        ImGui::SetTooltip("recorded take - right-click: delete / flatten / rename, Del key: delete (Ctrl+Z undoes)");
+    // DELETE / BACKSPACE: selected take, the Ctrl+click selection or the last clicked clip
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+        (ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false))) {
+        if (!g_selTake.empty()) {
+            app.run("DeleteTake", {{"trackId", g_selTakeTrack}, {"takeId", g_selTake}});
+            g_selTake.clear();
+        } else if (g_multi.size() > 1) {
+            std::vector<std::pair<std::string, json>> steps;
+            for (auto& id : g_multi) steps.push_back({"DeleteClip", {{"clipId", id}}});
+            app.runMacro("Delete clips", steps);
+            g_multi.clear();
+        } else if (!g_lastClip.empty()) {
+            app.run("DeleteClip", {{"clipId", g_lastClip}});
+            if (app.selClip == g_lastClip) app.selClip.clear();
+            if (app.selMidiClip == g_lastClip) app.selMidiClip.clear();
+            g_lastClip.clear();
+        }
     }
     if (ImGui::BeginPopup("takeMenu")) {
         Track* tt = p.findTrack(ctxTrack);
@@ -383,7 +426,10 @@ void drawPlaylist(App& app) {
             ImGui::Separator();
             if (ImGui::MenuItem("Flatten comp to clips", nullptr, false, !tt->comp.empty())) app.run("FlattenComp", {{"trackId", ctxTrack}});
             if (ImGui::MenuItem("Clear comp", nullptr, false, !tt->comp.empty())) app.run("ClearComp", {{"trackId", ctxTrack}});
-            if (ImGui::MenuItem("Delete take (file stays in the project folder)")) app.run("DeleteTake", {{"trackId", ctxTrack}, {"takeId", ctxTake}});
+            if (ImGui::MenuItem("Delete take (file stays in the project folder)", "Del")) {
+                app.run("DeleteTake", {{"trackId", ctxTrack}, {"takeId", ctxTake}});
+                g_selTake.clear();
+            }
         }
         ImGui::EndPopup();
     }
@@ -408,7 +454,7 @@ void drawPlaylist(App& app) {
             app.area = Area::PianoRoll;
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Delete")) app.run("DeleteClip", {{"clipId", ctxClip}});
+        if (ImGui::MenuItem("Delete", "Del")) app.run("DeleteClip", {{"clipId", ctxClip}});
         ImGui::EndPopup();
     }
     // drag & drop from the browser: audio files onto audio tracks
@@ -477,6 +523,8 @@ void drawPlaylist(App& app) {
                 app.selTrack = t.id;
                 app.selChannel = t.channelId;
             }
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("trackMenu"); // right-click on the track name
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("right-click: rename / delete track");
             ImGui::SetCursorScreenPos(ImVec2(hx + headerW - 56, y + 5));
             ImGui::TextDisabled("%s", typeTag(t.type));
             ImGui::SetCursorScreenPos(ImVec2(hx + 10, y + rowH - ImGui::GetFrameHeight() - 5));
@@ -502,7 +550,7 @@ void drawPlaylist(App& app) {
                 ImGui::SameLine();
                 ImGui::TextDisabled("%s", t.instrument->name.c_str());
             }
-            if (ImGui::BeginPopupContextItem("trackMenu")) {
+            if (ImGui::BeginPopup("trackMenu")) {
                 static char name[128];
                 if (ImGui::IsWindowAppearing()) std::snprintf(name, sizeof(name), "%s", t.name.c_str());
                 ImGui::InputText("Name", name, sizeof(name));
@@ -510,7 +558,8 @@ void drawPlaylist(App& app) {
                     app.run("RenameTrack", {{"trackId", t.id}, {"name", std::string(name)}});
                     ImGui::CloseCurrentPopup();
                 }
-                if (ImGui::MenuItem("Delete track")) app.run("DeleteTrack", {{"trackId", t.id}});
+                ImGui::Separator();
+                if (ImGui::MenuItem("Delete track (Ctrl+Z undoes)")) app.run("DeleteTrack", {{"trackId", t.id}});
                 ImGui::EndPopup();
             }
             ImGui::PopID();
