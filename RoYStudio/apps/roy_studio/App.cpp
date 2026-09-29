@@ -579,6 +579,32 @@ const std::vector<presets::PresetFile>& App::channelPresets(bool refresh) {
     return presetList_;
 }
 
+// CRACKLE AUTO-FIX: several dropouts (audio not finished in time) within a few seconds of
+// playback -> the buffer is doubled (256 -> 512 -> 1024) and remembered in the settings.
+void App::autoFixDropouts() {
+    if (!device_.isRunning() || !engine_.transport().isPlaying()) return;
+    const uint64_t n = engine_.stats().overloads;
+    const double now = nowSeconds();
+    if (n < dropBase_) dropBase_ = n; // stats reset (device restart)
+    if (now - dropWindowStart_ > 8.0) {
+        dropWindowStart_ = now;
+        dropBase_ = n;
+        return;
+    }
+    if (n - dropBase_ < 3 || audioCfg_.bufferSize >= 1024 || now < dropCooldown_) return;
+    AudioDeviceConfig cfg = audioCfg_;
+    cfg.bufferSize = audioCfg_.bufferSize < 512 ? 512 : 1024;
+    const bool playing = engine_.transport().isPlaying();
+    if (changeAudio(cfg)) {
+        message(1, std::format("crackles detected (audio dropouts): buffer raised to {} samples automatically - change it in Audio > Buffer",
+                               cfg.bufferSize));
+        if (playing && !engine_.transport().isPlaying()) engine_.transport().play();
+    }
+    dropCooldown_ = now + 10.0;
+    dropWindowStart_ = now;
+    dropBase_ = engine_.stats().overloads;
+}
+
 void App::pollAudition() {
     if (auditionTrack_.empty() || !midiIn_) return;
     const double now = nowSeconds();
@@ -936,6 +962,7 @@ void App::tick() {
     engine_.collectGarbage();
     if (previewer_) previewer_->collect();
     pollAudioDevice();
+    autoFixDropouts();
     pollMidiDevices();
     pollMicTest();
     pollDialogs();

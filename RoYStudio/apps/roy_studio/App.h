@@ -257,7 +257,10 @@ private:
     int auditionKey_ = -1;
     double auditionOff_ = 0, auditionRelease_ = 0;
     void pollAudition();
-    void pollDialogs(); // results of the native file / folder windows (own thread)
+    void pollDialogs();
+    void autoFixDropouts();
+    uint64_t dropBase_ = 0;
+    double dropWindowStart_ = 0, dropCooldown_ = 0; // results of the native file / folder windows (own thread)
     struct LearnTarget {
         std::string channelId, slotId, paramId, label;
     };
