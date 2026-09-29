@@ -1,0 +1,9 @@
+SNAPSHOT 0002 - RoY Studio 0.2.0 BETA hardening: take comping UI, soak test, cache/undo memory fixes
+created:   2026-09-29T00:36:33Z
+branch:    claude/bold-franklin-fybkj5 (pushed to origin)
+commit:    0d639575d09b42fe6083d9f9a1329b00331650e3
+tree sha256 (git archive --format=tar 0d639575d09b42fe6083d9f9a1329b00331650e3 | sha256sum):
+           1054784107898283e23c815c6d0e5578c2d06766b9507b50cd82092b2ef81442
+restore:   git checkout 0d639575d09b42fe6083d9f9a1329b00331650e3      (or: git archive 0d639575d09b42fe6083d9f9a1329b00331650e3 | tar -x -C <folder>)
+verified:  Linux 203/203, Wine 201/201, ASan/UBSan (affected suites, 63 tests), GUI self-test (Wine) 17/17,
+           CLI self-test, soak 2 simulated hours PASS
