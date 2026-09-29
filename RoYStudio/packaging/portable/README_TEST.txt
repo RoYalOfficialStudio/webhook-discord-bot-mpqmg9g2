@@ -125,9 +125,26 @@ PIANO ROLL                      "Preview" an: Klick auf eine Note, neue Note ode
 Vorschau-Töne werden nie aufgenommen und ändern nichts am Projekt.
 
 
-9. BEAT IN DIE SPUR ZIEHEN, STIMME LIVE MIT AUTOTUNE, VOCAL-KETTE SPEICHERN
----------------------------------------------------------------------------
-Beat in die Spur ziehen   PLAYLIST: oben rechts stehen die Patterns als grüne Knöpfe
+9. BEAT (MP3/WAV) EINFÜGEN, STIMME LIVE MIT AUTOTUNE, VOCAL-KETTE SPEICHERN
+----------------------------------------------------------------------------
+GEKAUFTER BEAT (MP3/WAV)  PLAYLIST > gelber Knopf "IMPORT BEAT (MP3/WAV)" (oder Strg+B, oder
+                          File > Import beat). Es öffnet sich der Windows-Dateidialog im
+                          Ordner Downloads -> Beat auswählen -> Öffnen.
+                          ODER: die MP3/WAV einfach aus dem Explorer (Downloads) mit der Maus
+                          ins RoY-Fenster ziehen. Auf eine vorhandene Audio-Spur gezogen ->
+                          landet genau dort; sonst öffnet sich das IMPORT-BEAT-Fenster.
+                          ODER: BROWSER links > "Downloads" > Rechtsklick auf die Datei >
+                          "Import as BEAT".
+                          Im Fenster IMPORT BEAT: LISTEN = vorhören. Tempo und Tonart werden
+                          aus dem Dateinamen gelesen (z. B. "Night 140 BPM Am.mp3") oder
+                          geschätzt – bitte mit den Angaben vom Verkäufer vergleichen
+                          (bei Trap oft x2 drücken). "Set song tempo/key" übernimmt sie für
+                          den Song (Raster, Metronom, LIVE-Autotune). IMPORT BEAT drücken:
+                          der Beat liegt auf einer eigenen Spur ab Takt 1. RoY kopiert die
+                          Datei in den Projektordner (Audio\), dein Download bleibt, wo er
+                          ist. Strg+Z macht alles in einem Schritt rückgängig.
+                          Danach: "+ Vocal" -> LIVE -> REC -> rappen.
+Pattern in die Spur       PLAYLIST: oben rechts stehen die Patterns als grüne Knöpfe
                           ("BEATS: Trap Beat ..."). Knopf mit der Maus festhalten und auf die
                           Drums-Spur an die gewünschte Stelle ziehen. Geht auch aus
                           BEATS > PATTERNS und CHANNELS ("Place in Playlist" ziehen).

@@ -143,6 +143,11 @@ void drawPlaylist(App& app) {
     float ppb = static_cast<float>(app.pixelsPerBeat);
     if (ImGui::SliderFloat("##zoom", &ppb, 4, 160, "%.0f px/beat")) app.pixelsPerBeat = ppb;
     ImGui::SameLine();
+    if (goldButton("IMPORT BEAT (MP3/WAV)")) app.pickAndImportBeat();
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Put your bought / downloaded beat (MP3, WAV, FLAC) on its own track from bar 1 (Ctrl+B).\n"
+                          "Or drag the file from the Windows Explorer / Downloads folder into RoY.");
+    ImGui::SameLine();
     if (ImGui::Button("+ Audio")) app.run("AddTrack", {{"type", "audio"}, {"name", "Audio"}});
     ImGui::SameLine();
     if (ImGui::Button("+ Vocal")) {
@@ -319,6 +324,24 @@ void drawPlaylist(App& app) {
                     if (r < rows.size()) laneTake = rows[r];
                 }
             }
+    }
+    // files dropped from the Windows Explorer onto an AUDIO track lane: placed right there
+    // (anywhere else they go through the IMPORT BEAT window: new track, tempo, key)
+    if (auto& drop = app.droppedFiles(); drop && drop->x >= win0.x + headerW && drop->x < win0.x + winSize.x && drop->y >= gridTop &&
+                                         drop->y < win0.y + winSize.y) {
+        const Track* dropTrack = nullptr;
+        for (size_t i = 0; i < p.tracks.size(); ++i)
+            if (drop->y - gridTop >= rowY[i] && drop->y - gridTop < rowY[i + 1]) dropTrack = &p.tracks[i];
+        const bool allAudio = std::all_of(drop->files.begin(), drop->files.end(), [](auto& f) { return beatimport::isImportableAudio(f); });
+        if (dropTrack && dropTrack->type == TrackType::Audio && allAudio) {
+            const std::string tid = dropTrack->id;
+            double at = std::max(0.0, snap(xToBeat(drop->x), app.snapBeats));
+            const auto files = drop->files;
+            drop.reset();
+            for (auto& f : files)
+                if (app.run("ImportAudio", {{"path", f.string()}, {"trackId", tid}, {"startBeat", at}}))
+                    if (const AudioClip* c = p.findAudioClip(app.lastResult().value("clipId", ""))) at = c->startBeat + c->lengthBeats;
+        }
     }
     if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && laneTake) {
         g_comp = {laneTrack->id, laneTake->id, snap(xToBeat(mouse.x), app.snapBeats), true};
@@ -567,14 +590,15 @@ void drawPlaylist(App& app) {
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("trackMenu"); // right-click on the track name
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("right-click: rename / delete track");
             ImGui::SetCursorScreenPos(ImVec2(hx + headerW - 56, y + 5));
-            if (t.type == TrackType::Audio) liveVocalButton(app, t.id, ImVec2(48 * dpi, 0)); // the free spot of the header
-            else ImGui::TextDisabled("%s", typeTag(t.type));
+            const bool beatAudio = t.type == TrackType::Audio && t.role == "beat"; // an imported MP3/WAV beat
+            if (t.type == TrackType::Audio && !beatAudio) liveVocalButton(app, t.id, ImVec2(48 * dpi, 0)); // the free spot of the header
+            else ImGui::TextDisabled("%s", beatAudio ? "BEAT" : typeTag(t.type));
             ImGui::SetCursorScreenPos(ImVec2(hx + 10, y + rowH - ImGui::GetFrameHeight() - 5));
             const ImVec2 bs(24 * dpi, 0);
             if (ch && toggleButton("M", ch->mute, col::Orange, bs)) app.run("MuteChannel", {{"channelId", ch->id}, {"mute", !ch->mute}});
             ImGui::SameLine();
             if (ch && toggleButton("S", ch->solo, col::Gold, bs)) app.run("SoloChannel", {{"channelId", ch->id}, {"solo", !ch->solo}});
-            if (t.type == TrackType::Audio) {
+            if (t.type == TrackType::Audio && !beatAudio) {
                 ImGui::SameLine();
                 if (toggleButton("R", t.armed, col::Red, bs)) app.run("ArmTrack", {{"trackId", t.id}, {"armed", !t.armed}});
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("R = record on this track when you press REC");

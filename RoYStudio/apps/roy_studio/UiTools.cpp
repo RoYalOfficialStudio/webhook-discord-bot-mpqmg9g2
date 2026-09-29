@@ -448,8 +448,8 @@ void drawBrowser(App& app) {
     static fs::path listed;
     static fs::path selected;
     sectionTitle("BROWSER");
-    const char* tabs[] = {"Project", "Samples", "Drums", "808", "Loops", "Vocals", "Home"};
-    for (int i = 0; i < 7; ++i) {
+    const char* tabs[] = {"Project", "Samples", "Drums", "808", "Loops", "Vocals", "Home", "Downloads"};
+    for (int i = 0; i < 8; ++i) {
         if (i && i != 4) ImGui::SameLine();
         if (toggleButton(tabs[i], tab == i, col::Gold)) {
             tab = i;
@@ -469,6 +469,8 @@ void drawBrowser(App& app) {
 #endif
             );
             root = h ? fs::path(h) : fs::current_path();
+            std::error_code dec;
+            if (tab == 7 && fs::is_directory(root / "Downloads", dec)) root /= "Downloads"; // bought / downloaded beats
         }
         std::snprintf(rootBuf, sizeof(rootBuf), "%s", root.string().c_str());
     }
@@ -543,6 +545,11 @@ void drawBrowser(App& app) {
             }
         }
         ImGui::PopStyleColor();
+        if (audio && ImGui::BeginPopupContextItem("fileMenu")) {
+            if (ImGui::MenuItem("Import as BEAT (own track, tempo + key)", nullptr, false, app.hasProject())) app.beginImportBeat({path});
+            if (ImGui::MenuItem("Preview")) app.previewFile(path);
+            ImGui::EndPopup();
+        }
         if (audio && ImGui::BeginDragDropSource()) {
             const std::string s = path.string();
             ImGui::SetDragDropPayload("ROY_FILE", s.data(), s.size());
@@ -550,7 +557,7 @@ void drawBrowser(App& app) {
             ImGui::EndDragDropSource();
         }
     }
-    ImGui::TextDisabled("click: preview | double-click: import at playhead | drag onto playlist, drum pad, sampler lane or mixer strip");
+    ImGui::TextDisabled("click: preview | double-click: import at playhead | right-click: Import as BEAT | drag onto playlist, drum pad, sampler lane or mixer strip");
     ImGui::EndChild();
 }
 

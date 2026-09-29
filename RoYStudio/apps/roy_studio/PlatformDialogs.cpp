@@ -57,9 +57,51 @@ std::string pickFolder(const std::string& startFolder, const std::string& title)
     if (SUCCEEDED(init)) CoUninitialize();
     return result;
 }
+std::vector<std::string> pickAudioFiles(const std::string& startFolder, const std::string& title) {
+    const HRESULT init = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    std::vector<std::string> result;
+    IFileOpenDialog* dlg = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dlg)))) {
+        DWORD opts = 0;
+        dlg->GetOptions(&opts);
+        dlg->SetOptions(opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_ALLOWMULTISELECT);
+        const COMDLG_FILTERSPEC types[] = {{L"Audio (MP3, WAV, FLAC, OGG, AIFF)", L"*.mp3;*.wav;*.flac;*.ogg;*.aif;*.aiff"},
+                                           {L"All files", L"*.*"}};
+        dlg->SetFileTypes(2, types);
+        const std::wstring t = widen(title);
+        dlg->SetTitle(t.c_str());
+        IShellItem* start = nullptr;
+        if (!startFolder.empty() && SUCCEEDED(SHCreateItemFromParsingName(widen(startFolder).c_str(), nullptr, IID_PPV_ARGS(&start)))) {
+            dlg->SetFolder(start);
+            start->Release();
+        }
+        if (SUCCEEDED(dlg->Show(GetActiveWindow()))) {
+            IShellItemArray* items = nullptr;
+            if (SUCCEEDED(dlg->GetResults(&items))) {
+                DWORD count = 0;
+                items->GetCount(&count);
+                for (DWORD i = 0; i < count; ++i) {
+                    IShellItem* item = nullptr;
+                    if (FAILED(items->GetItemAt(i, &item))) continue;
+                    PWSTR path = nullptr;
+                    if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                        result.push_back(narrow(path));
+                        CoTaskMemFree(path);
+                    }
+                    item->Release();
+                }
+                items->Release();
+            }
+        }
+        dlg->Release();
+    }
+    if (SUCCEEDED(init)) CoUninitialize();
+    return result;
+}
 #else
 bool nativeFolderPickerAvailable() { return false; }
 std::string pickFolder(const std::string&, const std::string&) { return {}; }
+std::vector<std::string> pickAudioFiles(const std::string&, const std::string&) { return {}; }
 #endif
 
 } // namespace roy::gui

@@ -65,6 +65,17 @@ int main(int argc, char** argv) {
     App app;
     if (!app.init(lo.app)) std::fprintf(stderr, "RoY Studio: initialisation reported problems (see log)\n");
     if (!lo.openFile.empty()) app.openProject(lo.openFile);
+    // files dropped from the desktop / file manager (MP3 / WAV beats)
+    static App* dropTarget = nullptr;
+    dropTarget = &app;
+    glfwSetDropCallback(window, [](GLFWwindow* w, int count, const char** paths) {
+        if (!dropTarget) return;
+        std::vector<std::filesystem::path> files;
+        for (int i = 0; i < count; ++i) files.emplace_back(paths[i]);
+        double x = 0, y = 0;
+        glfwGetCursorPos(w, &x, &y);
+        dropTarget->filesDropped(std::move(files), static_cast<float>(x), static_cast<float>(y));
+    });
 
     int shotArea = 0, shotFrame = 0;
     // --benchui: grow the demo to N tracks, then time 90 frames per area (after 10 warm-up frames)

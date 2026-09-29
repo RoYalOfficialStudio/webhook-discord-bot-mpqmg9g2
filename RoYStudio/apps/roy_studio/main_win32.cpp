@@ -10,6 +10,7 @@
 #include <windows.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -68,9 +69,28 @@ void cleanupDevice() {
     if (g_device) g_device->Release();
 }
 
+App* g_app = nullptr; // receives files dropped from the Explorer
+
 LRESULT WINAPI wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) return true;
     switch (msg) {
+    case WM_DROPFILES: { // MP3 / WAV beat dragged from the Explorer / Downloads folder
+        HDROP drop = reinterpret_cast<HDROP>(wParam);
+        std::vector<std::filesystem::path> files;
+        const UINT n = DragQueryFileW(drop, 0xFFFFFFFF, nullptr, 0);
+        for (UINT i = 0; i < n; ++i) {
+            const UINT len = DragQueryFileW(drop, i, nullptr, 0);
+            std::wstring w(len, L'\0');
+            DragQueryFileW(drop, i, w.data(), len + 1);
+            files.emplace_back(w);
+        }
+        POINT pt{};
+        DragQueryPoint(drop, &pt); // client coordinates = ImGui coordinates
+        DragFinish(drop);
+        if (g_app) g_app->filesDropped(std::move(files), static_cast<float>(pt.x), static_cast<float>(pt.y));
+        SetForegroundWindow(hWnd);
+        return 0;
+    }
     case WM_SIZE:
         if (wParam == SIZE_MINIMIZED) return 0;
         g_resizeW = LOWORD(lParam);
@@ -151,6 +171,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int) {
     App app;
     app.init(lo.app);
     if (!lo.openFile.empty()) app.openProject(lo.openFile);
+    g_app = &app;
+    DragAcceptFiles(hwnd, TRUE); // drop MP3 / WAV files from the Explorer
 
     bool done = false;
     while (!done) {
@@ -179,6 +201,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int) {
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
         g_swap->Present(1, 0);
     }
+    g_app = nullptr;
     app.shutdown();
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();

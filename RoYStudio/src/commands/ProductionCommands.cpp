@@ -4,6 +4,7 @@
 #include "core/Files.h"
 #include "instruments/Sampler.h"
 #include "io/AudioFile.h"
+#include "midi/Scale.h"
 #include "project/ProjectIO.h"
 #include "sampler/SampleTools.h"
 #include "stems/StemSeparator.h"
@@ -60,34 +61,70 @@ bool assetChannels(CommandContext& ctx, const std::string& assetId, stems::Chann
 }
 } // namespace
 
+// Imports an audio file (copied into the project) and, with "trackId", places it as a clip.
+static bool importAudioFile(CommandContext& ctx, const json& a) {
+    const fs::path src = str(a, "path");
+    AudioFileInfo info;
+    std::string err;
+    if (!probeAudioFile(src, info, &err)) return fail(ctx, "cannot read audio file: " + err);
+    fs::path file = src;
+    if (flag(a, "copy", true) && !ctx.projectFolder.empty()) {
+        // Copy into the project (never move, never overwrite).
+        file = files::uniquePath(ctx.projectFolder / "Audio" / src.filename());
+        if (!files::safeCopy(src, file, &err)) return fail(ctx, "copy failed: " + err);
+    }
+    AudioAsset asset = assetForFile(file, ctx.projectFolder, "import");
+    ctx.project.assets.push_back(asset);
+    ctx.result["assetId"] = asset.id;
+    if (!str(a, "trackId").empty()) {
+        Track* t = ctx.project.findTrack(str(a, "trackId"));
+        if (!t || t->type != TrackType::Audio) return fail(ctx, "audio track not found");
+        AudioClip c;
+        c.id = files::newId();
+        c.assetId = asset.id;
+        c.name = src.stem().string();
+        c.startBeat = std::max(0.0, num(a, "startBeat", 0.0));
+        const double secs = info.sampleRate > 0 ? static_cast<double>(info.frames) / info.sampleRate : 1.0;
+        c.lengthBeats = ctx.project.tempo.secondsToBeat(ctx.project.tempo.beatToSeconds(c.startBeat) + secs) - c.startBeat;
+        t->audioClips.push_back(c);
+        ctx.result["clipId"] = c.id;
+    }
+    return true;
+}
+
 void registerProductionCommands(CommandRegistry& r) {
     r.add({"ImportAudio", "Import Audio File", "Browser", "Ctrl+I", true, true, [](CommandContext& ctx, const json& a) {
+               return importAudioFile(ctx, a);
+           }});
+    // IMPORT BEAT: a finished beat (MP3/WAV/...) on its own new audio track, optionally with the
+    // song tempo and key taken over - all in ONE undo step.
+    r.add({"ImportBeat", "Import Beat", "Browser", "", true, true, [](CommandContext& ctx, const json& a) {
                const fs::path src = str(a, "path");
                AudioFileInfo info;
                std::string err;
                if (!probeAudioFile(src, info, &err)) return fail(ctx, "cannot read audio file: " + err);
-               fs::path file = src;
-               if (flag(a, "copy", true) && !ctx.projectFolder.empty()) {
-                   // Copy into the project (never move, never overwrite).
-                   file = files::uniquePath(ctx.projectFolder / "Audio" / src.filename());
-                   if (!files::safeCopy(src, file, &err)) return fail(ctx, "copy failed: " + err);
+               // tempo first: the clip length in beats is computed with the new tempo
+               if (a.contains("bpm")) {
+                   const double bpm = num(a, "bpm", 0.0);
+                   if (bpm < 10 || bpm > 999) return fail(ctx, "tempo must be between 10 and 999 BPM");
+                   ctx.project.tempo.setTempo(bpm);
                }
-               AudioAsset asset = assetForFile(file, ctx.projectFolder, "import");
-               ctx.project.assets.push_back(asset);
-               ctx.result["assetId"] = asset.id;
-               if (!str(a, "trackId").empty()) {
-                   Track* t = ctx.project.findTrack(str(a, "trackId"));
-                   if (!t || t->type != TrackType::Audio) return fail(ctx, "audio track not found");
-                   AudioClip c;
-                   c.id = files::newId();
-                   c.assetId = asset.id;
-                   c.name = src.stem().string();
-                   c.startBeat = std::max(0.0, num(a, "startBeat", 0.0));
-                   const double secs = info.sampleRate > 0 ? static_cast<double>(info.frames) / info.sampleRate : 1.0;
-                   c.lengthBeats = ctx.project.tempo.secondsToBeat(ctx.project.tempo.beatToSeconds(c.startBeat) + secs) - c.startBeat;
-                   t->audioClips.push_back(c);
-                   ctx.result["clipId"] = c.id;
+               if (!str(a, "key").empty()) {
+                   auto k = parseKey(str(a, "key"));
+                   if (!k) return fail(ctx, "cannot parse key " + str(a, "key"));
+                   ctx.project.key = *k;
                }
+               std::string trackId = str(a, "trackId");
+               if (trackId.empty()) {
+                   Track& t = addTrack(ctx.project, TrackType::Audio, str(a, "name", src.stem().string()));
+                   t.role = "beat";
+                   trackId = t.id;
+               }
+               json b = a;
+               b["trackId"] = trackId;
+               if (!importAudioFile(ctx, b)) return false;
+               ctx.result["trackId"] = trackId;
+               ctx.result["seconds"] = info.sampleRate > 0 ? static_cast<double>(info.frames) / info.sampleRate : 0.0;
                return true;
            }});
     r.add({"AnalyzeSample", "Analyze Sample", "Browser", "", false, false, [](CommandContext& ctx, const json& a) {

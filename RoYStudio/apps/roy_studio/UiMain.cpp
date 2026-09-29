@@ -62,6 +62,7 @@ void shortcuts(App& app) {
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) app.redo();
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) app.save();
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P, false)) app.showPalette = true;
+    if (ctrl && ImGui::IsKeyPressed(ImGuiKey_B, false) && app.hasProject()) app.pickAndImportBeat();
     if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_R, false)) app.toggleRecord();
     if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) app.seekBeat(0);
     if (app.midiLearning() && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) app.cancelMidiLearn();
@@ -81,6 +82,8 @@ void menuBar(App& app) {
         if (ImGui::MenuItem("New Project...")) g_openNew = true;
         if (ImGui::MenuItem("Open Project...")) g_openOpen = true;
         if (ImGui::MenuItem("Save", "Ctrl+S", false, app.hasProject())) app.save();
+        ImGui::Separator();
+        if (ImGui::MenuItem("Import beat (MP3 / WAV)...", "Ctrl+B", false, app.hasProject())) app.pickAndImportBeat();
         ImGui::Separator();
         if (ImGui::MenuItem("Export...", nullptr, false, app.hasProject())) app.area = Area::Master;
         if (ImGui::MenuItem("Close Project", nullptr, false, app.hasProject())) app.closeProject();
@@ -412,6 +415,7 @@ void drawStudio(App& app) {
     drawSetupWizard(app);
     drawSystemCheck(app);
     drawMusicSession(app);
+    drawImportBeat(app);
     drawTransport(app);
 
     const float statusH = ImGui::GetFrameHeight() + 6;
@@ -450,6 +454,7 @@ void drawStudio(App& app) {
         ImGui::EndChild();
     }
     ImGui::EndChild();
+    app.handleDroppedFiles(); // files dropped from Explorer that the PLAYLIST did not place on a track
     statusBar(app);
     ImGui::End();
     drawPalette(app);

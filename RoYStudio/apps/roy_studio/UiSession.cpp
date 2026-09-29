@@ -390,3 +390,120 @@ void drawMusicSession(App& app) {
 }
 
 } // namespace roy::gui
+
+namespace roy::gui {
+
+// =============================================================================== IMPORT BEAT
+// A bought / downloaded beat (MP3, WAV ...): own track from bar 1, song tempo + key can follow it.
+void drawImportBeat(App& app) {
+    if (!app.showImportBeat) return;
+    const float dpi = ImGui::GetFontSize() / 15.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.4f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(560 * dpi, 0), ImGuiCond_Appearing);
+    bool open = true;
+    if (!ImGui::Begin("IMPORT BEAT (MP3 / WAV)", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::End();
+        if (!open) app.cancelImportBeat();
+        return;
+    }
+    static fs::path shownFile;
+    static bool useTempo = false, useKey = false;
+    static float bpm = 140.0f;
+    static int keyRoot = 9, keyMinor = 1;
+    static char pathBuf[1024] = "";
+    if (app.importBeatFile.empty()) { // no native file dialog (Linux dev build): type or paste the path
+        ImGui::TextWrapped("Path of the beat file (or use the BROWSER: Downloads tab, right-click the file > Import as BEAT):");
+        ImGui::SetNextItemWidth(-1);
+        ImGui::InputText("##beatpath", pathBuf, sizeof(pathBuf));
+        if (goldButton("Analyse") && pathBuf[0]) app.beginImportBeat({fs::path(pathBuf)});
+        ImGui::End();
+        if (!open) app.cancelImportBeat();
+        return;
+    }
+    const auto* info = app.importBeatInfo();
+    if (shownFile != app.importBeatFile) { // new file: defaults are set when its analysis is ready
+        shownFile = app.importBeatFile;
+        useTempo = useKey = false;
+    }
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "%s", app.importBeatFile.filename().string().c_str());
+    static const beatimport::BeatFileInfo* defaultsFor = nullptr;
+    if (!info) {
+        ImGui::TextDisabled("reading the file, finding tempo and key ...");
+        defaultsFor = nullptr;
+    } else if (!info->ok) {
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Red), "cannot read this file: %s", info->error.c_str());
+    } else {
+        if (defaultsFor != info) { // suggestions: file name first, a confident detection second
+            defaultsFor = info;
+            const double sb = info->suggestedBpm();
+            useTempo = sb > 0;
+            bpm = static_cast<float>(sb > 0 ? sb : (info->bpmDetected > 0 ? info->bpmDetected : app.project().tempo.tempoAt(0)));
+            const auto sk = info->suggestedKey();
+            useKey = sk.has_value();
+            const Key k = sk ? *sk : (info->keyRoot >= 0 ? Key{info->keyRoot, info->keyMinor ? ScaleType::NaturalMinor : ScaleType::Major} : app.project().key);
+            keyRoot = k.root;
+            keyMinor = k.scale == ScaleType::Major ? 0 : 1;
+        }
+        const int mins = static_cast<int>(info->seconds) / 60;
+        ImGui::Text("%d:%02d min  |  %.0f Hz  |  %s", mins, static_cast<int>(info->seconds) % 60, info->sampleRate, info->channels > 1 ? "stereo" : "mono");
+        ImGui::SameLine();
+        const bool playing = app.previewer().playing() && app.previewer().current() == app.importBeatFile;
+        if (toggleButton(playing ? "STOP" : "LISTEN", playing, col::Green)) {
+            if (playing) app.previewer().stop();
+            else app.previewFile(app.importBeatFile);
+        }
+        ImGui::Separator();
+        // tempo
+        ImGui::Checkbox("Set song tempo to", &useTempo);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(110 * dpi);
+        ImGui::InputFloat("##bpm", &bpm, 0, 0, "%.1f BPM");
+        bpm = std::clamp(bpm, 10.0f, 999.0f);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("x2")) bpm = std::min(999.0f, bpm * 2);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("/2")) bpm = std::max(10.0f, bpm / 2);
+        if (info->bpmFromName) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Green), "   from the file name: %.1f BPM", *info->bpmFromName);
+        else if (info->bpmDetected > 0)
+            ImGui::TextDisabled("   detected: %.1f BPM (%s) - trap is often double: use x2. Check with the metronome (CLICK).", info->bpmDetected,
+                                info->bpmConfidence >= 0.5 ? "fairly sure" : "unsure");
+        else ImGui::TextDisabled("   no tempo found - the song keeps %.1f BPM", app.project().tempo.tempoAt(0));
+        // key
+        ImGui::Checkbox("Set song key to", &useKey);
+        ImGui::SameLine();
+        static const char* roots[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        static const char* modes[] = {"Major", "Minor"};
+        ImGui::SetNextItemWidth(60 * dpi);
+        ImGui::Combo("##root", &keyRoot, roots, 12);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80 * dpi);
+        ImGui::Combo("##mode", &keyMinor, modes, 2);
+        ImGui::SameLine();
+        ImGui::TextDisabled("(LIVE autotune uses it)");
+        if (info->keyFromName) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Green), "   from the file name: %s", info->keyFromName->name().c_str());
+        else if (info->keyRoot >= 0)
+            ImGui::TextDisabled("   detected: %s %s (%s)", roots[info->keyRoot], info->keyMinor ? "Minor" : "Major",
+                                info->keyConfidence >= 0.6 ? "fairly sure" : "unsure - the seller's key info is better");
+        ImGui::Separator();
+        ImGui::TextWrapped("The beat goes on its OWN new track, starting at bar 1. RoY copies the file into the project "
+                           "(your download stays where it is). One Ctrl+Z undoes everything.");
+        if (goldButton("IMPORT BEAT", ImVec2(160 * dpi, 0))) {
+            const std::string key = std::string(roots[keyRoot]) + (keyMinor ? " Minor" : " Major");
+            if (app.previewer().playing()) app.previewer().stop();
+            if (app.importBeat(app.importBeatFile, useTempo ? bpm : 0.0, useKey ? key : std::string())) {
+                app.showImportBeat = false;
+                app.importNextQueued(); // several files picked / dropped: the next one
+            }
+        }
+        ImGui::SameLine();
+    }
+    if (ImGui::Button("Cancel")) open = false;
+    ImGui::End();
+    if (!open) {
+        if (app.previewer().playing()) app.previewer().stop();
+        app.cancelImportBeat();
+    }
+}
+
+} // namespace roy::gui

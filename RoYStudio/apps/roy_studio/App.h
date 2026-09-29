@@ -10,6 +10,7 @@
 #include "audio/ProjectRuntime.h"
 #include "commands/Commands.h"
 #include "mixer/ChannelPreset.h"
+#include "arrange/BeatImport.h"
 #include "plugins/Sandbox.h"
 #include "plugins/Scanner.h"
 #include "project/Session.h"
@@ -144,6 +145,23 @@ public:
     bool auditionNote(const std::string& trackId, int note, float velocity = 0.9f, double seconds = 0.8);
     bool auditionActive() const { return !auditionTrack_.empty(); }
     bool previewOnEdit = true; // 808 LAB / PIANO ROLL: play the sound after a change
+    // ---- IMPORT BEAT (bought / downloaded MP3, WAV, FLAC ...) ----
+    void pickAndImportBeat();                                     // native file dialog -> IMPORT BEAT window
+    void beginImportBeat(const std::vector<fs::path>& files);      // first file in the window, the rest queued
+    bool importBeat(const fs::path& file, double bpm, const std::string& key); // bpm 0 / key "" keep the song's
+    void cancelImportBeat();
+    bool showImportBeat = false;
+    fs::path importBeatFile;
+    const beatimport::BeatFileInfo* importBeatInfo(); // nullptr while the file is being analysed
+    bool importNextQueued();
+    // Files dropped from Windows Explorer onto the window (client pixel position).
+    struct DroppedFiles {
+        std::vector<fs::path> files;
+        float x = 0, y = 0;
+    };
+    void filesDropped(std::vector<fs::path> files, float x, float y);
+    std::optional<DroppedFiles>& droppedFiles() { return dropped_; } // the PLAYLIST may consume it
+    void handleDroppedFiles();                                        // everything the UI did not take
     // LIVE VOCAL: monitoring + RoY VocalTune in the song key on this track (one undo step)
     bool liveVocal(const std::string& trackId);
     // ---- channel presets ("vocal chains"), stored in <user data>/Presets/Channel ----
@@ -211,6 +229,10 @@ private:
     std::vector<RecordedMidi> midiTake_;
     void updateLiveMidiTarget();
     void finishMidiRecording();
+    std::future<beatimport::BeatFileInfo> importFuture_;
+    std::optional<beatimport::BeatFileInfo> importInfo_;
+    std::vector<fs::path> importQueue_;
+    std::optional<DroppedFiles> dropped_;
     std::vector<presets::PresetFile> presetList_;
     bool presetListValid_ = false;
     std::string auditionTrack_;

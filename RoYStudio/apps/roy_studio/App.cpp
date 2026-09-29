@@ -1,4 +1,5 @@
 #include "App.h"
+#include "PlatformDialogs.h"
 #include "midi/MidiLearn.h"
 
 #include "core/CrashHandler.h"
@@ -358,6 +359,102 @@ bool App::auditionNote(const std::string& trackId, int note, float velocity, dou
     auditionOff_ = nowSeconds() + std::clamp(seconds, 0.05, 10.0);
     auditionRelease_ = auditionOff_ + 0.5;
     return true;
+}
+
+void App::pickAndImportBeat() {
+    const char* h = std::getenv(
+#ifdef _WIN32
+        "USERPROFILE"
+#else
+        "HOME"
+#endif
+    );
+    fs::path start = h ? fs::path(h) / "Downloads" : fs::path();
+    std::error_code ec;
+    if (!start.empty() && !fs::is_directory(start, ec)) start = start.parent_path();
+    std::vector<fs::path> files;
+    for (auto& f : pickAudioFiles(start.string(), "Import beat (MP3, WAV, FLAC ...)")) files.emplace_back(f);
+    if (!files.empty()) beginImportBeat(files);
+    else if (!nativeFolderPickerAvailable()) {
+        showImportBeat = true; // window with a path field
+        importBeatFile.clear();
+    }
+}
+
+void App::beginImportBeat(const std::vector<fs::path>& files) {
+    if (!project_) {
+        message(1, "open or create a project first (File > New Project)");
+        return;
+    }
+    importQueue_.clear();
+    for (auto& f : files)
+        if (beatimport::isImportableAudio(f)) importQueue_.push_back(f);
+    if (importQueue_.empty()) {
+        message(1, "not an audio file RoY can import (MP3, WAV, FLAC, OGG, AIFF)");
+        return;
+    }
+    importBeatFile = importQueue_.front();
+    importQueue_.erase(importQueue_.begin());
+    importInfo_.reset();
+    const fs::path file = importBeatFile;
+    importFuture_ = std::async(std::launch::async, [file] { return beatimport::analyzeBeatFile(file); });
+    showImportBeat = true;
+}
+
+const beatimport::BeatFileInfo* App::importBeatInfo() {
+    if (!importInfo_ && importFuture_.valid() && importFuture_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+        importInfo_ = importFuture_.get();
+    return importInfo_ ? &*importInfo_ : nullptr;
+}
+
+bool App::importBeat(const fs::path& file, double bpm, const std::string& key) {
+    json a = {{"path", file.string()}, {"startBeat", 0.0}};
+    if (bpm > 0) a["bpm"] = bpm;
+    if (!key.empty()) a["key"] = key;
+    if (!run("ImportBeat", a)) {
+        message(2, "beat not imported: " + lastError_);
+        return false;
+    }
+    selTrack = lastResult_.value("trackId", selTrack);
+    if (const Track* t = project_->findTrack(selTrack)) selChannel = t->channelId;
+    area = Area::Playlist;
+    message(0, std::format("beat '{}' imported on its own track from bar 1 ({:.0f} BPM, {}) - a copy is in the project's Audio folder. "
+                           "Ctrl+Z undoes. Next: add a vocal track and press LIVE",
+                           file.stem().string(), project_->tempo.tempoAt(0), project_->key.name()));
+    return true;
+}
+
+bool App::importNextQueued() {
+    if (importQueue_.empty()) return false;
+    const auto rest = importQueue_;
+    beginImportBeat(rest);
+    return true;
+}
+
+void App::cancelImportBeat() {
+    showImportBeat = false;
+    importQueue_.clear();
+    importInfo_.reset();
+}
+
+void App::filesDropped(std::vector<fs::path> files, float x, float y) {
+    if (files.empty()) return;
+    dropped_ = DroppedFiles{std::move(files), x, y};
+}
+
+void App::handleDroppedFiles() {
+    if (!dropped_) return;
+    const auto files = std::move(dropped_->files);
+    dropped_.reset();
+    for (auto& f : files) {
+        std::string ext = f.extension().string();
+        for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (ext == ".roy") {
+            openProject(f);
+            return;
+        }
+    }
+    beginImportBeat(files);
 }
 
 bool App::liveVocal(const std::string& trackId) {
@@ -1040,6 +1137,29 @@ bool App::selfTest(const fs::path& folder) {
             pump(1.0);
             step("808 preview ends by itself", !auditionActive());
         }
+    }
+    // IMPORT BEAT: a WAV "download" with tempo + key in its name -> own track, song tempo/key, one undo step
+    {
+        const size_t u0 = undo_->undoCount();
+        const double bpm0 = project_->tempo.tempoAt(0);
+        const fs::path beatFile = folder / "Selftest Beat 140 BPM Am.wav";
+        std::vector<std::vector<float>> beat(2, std::vector<float>(static_cast<size_t>(44100 * 3)));
+        for (size_t i = 0; i < beat[0].size(); ++i) {
+            const double t = static_cast<double>(i) / 44100.0, tb = std::fmod(t, 60.0 / 140.0);
+            beat[0][i] = beat[1][i] = static_cast<float>(0.5 * std::exp(-tb * 25.0) * std::sin(6.283185307 * 55.0 * tb));
+        }
+        std::string werr;
+        const bool written = writeWavFile(beatFile, beat, 44100.0, SampleFormat::Pcm16, true, &werr);
+        const auto info = beatimport::analyzeBeatFile(beatFile);
+        const auto key = info.suggestedKey();
+        const size_t tracks0 = project_->tracks.size();
+        const bool imported = written && info.ok && importBeat(beatFile, info.suggestedBpm(), key ? key->name() : std::string());
+        step("IMPORT BEAT (WAV, tempo + key from the file name)",
+             imported && project_->tracks.size() == tracks0 + 1 && std::fabs(project_->tempo.tempoAt(0) - 140.0) < 1e-6 && project_->key.name() == "A Minor",
+             std::format("{:.0f} BPM, {}", project_->tempo.tempoAt(0), project_->key.name()));
+        while (undo_->undoCount() > u0) undo_->undo();
+        step("IMPORT BEAT undone in one step", project_->tracks.size() == tracks0 && std::fabs(project_->tempo.tempoAt(0) - bpm0) < 1e-6);
+        area = Area::Playlist;
     }
     // LIVE VOCAL (monitor + autotune) and a vocal chain preset, both one undo step
     {

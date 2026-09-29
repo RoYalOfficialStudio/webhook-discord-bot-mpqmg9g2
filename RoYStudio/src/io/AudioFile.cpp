@@ -46,6 +46,10 @@ ma_result initDecoder(const fs::path& path, ma_decoder* dec) {
 }
 } // namespace
 
+namespace {
+bool mp3GaplessTrim(const fs::path& path, int64_t decodedFrames, int64_t& trimStart, int64_t& trimEnd);
+}
+
 bool probeAudioFile(const fs::path& path, AudioFileInfo& info, std::string* error) {
     ma_decoder dec;
     if (initDecoder(path, &dec) != MA_SUCCESS) {
@@ -58,6 +62,11 @@ bool probeAudioFile(const fs::path& path, AudioFileInfo& info, std::string* erro
     info.channels = static_cast<int>(dec.outputChannels);
     info.frames = static_cast<int64_t>(frames);
     ma_decoder_uninit(&dec);
+    // MP3: report the same (gapless-trimmed) length that readAudioFile delivers
+    std::string ext = path.extension().string();
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    int64_t t0 = 0, t1 = 0;
+    if (ext == ".mp3" && mp3GaplessTrim(path, info.frames, t0, t1) && t0 + t1 < info.frames) info.frames -= t0 + t1;
     return true;
 }
 
