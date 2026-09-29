@@ -1,0 +1,11 @@
+SNAPSHOT 0005 - RoY Studio 0.2.0 free Windows test build (portable + installer)
+created:   2026-09-29T07:52:34Z
+branch:    claude/bold-franklin-fybkj5 (pushed to origin)
+commit:    a25848a4cd2dd017cb4b38959eba9bf87c8214b7 (code of the packages)
+tree sha256 (git archive --format=tar a25848a4cd2dd017cb4b38959eba9bf87c8214b7 | sha256sum):
+           fea8592444d2d7b89c7738e4ed3f5ba5055b97c677764e31250119e779d15ab4
+restore:   git checkout a25848a4cd2dd017cb4b38959eba9bf87c8214b7      (or: git archive a25848a4cd2dd017cb4b38959eba9bf87c8214b7 | tar -x -C <folder>)
+packages:  RoYStudio-0.2.0-PORTABLE-win64.zip sha256 e693d0d6b8aadfc42eba9e20b4e53eef1dcb37f809a7b76e760272a3da8e5806
+           RoYStudio-0.2.0-win64.exe          sha256 795ba4aedaf11cb831929f36d499cb12879af34b4190eef2920f92c53b1f90ff
+           (build artifacts, not in git - rebuild with RoYStudio/packaging/build_windows_test_package.sh)
+verified:  see 00_IMPORTANT/RELEASE_REPORTS/TEST_BUILD_0.2.0_WINDOWS_2026-09-29.md
