@@ -1,8 +1,10 @@
 #include "App.h"
 #include "midi/MidiLearn.h"
 
+#include "core/CrashHandler.h"
 #include "core/Files.h"
 #include "core/Log.h"
+#include "support/Diagnostics.h"
 #include "io/AudioFile.h"
 #include "plugins/Sandbox.h"
 #include "project/ProjectIO.h"
@@ -56,7 +58,11 @@ bool App::init(const AppOptions& o) {
     registerCoreCommands(registry_);
     const fs::path user = files::userDataDirectory();
     log::setFile((user / "roy_studio.log").string());
+    crash::install((user / "CrashReports").string(), "roy_studio"); // RoY's own fatal errors -> report + minidump
     plugins::setCrashReportDirectory((user / "CrashReports").string());
+    for (auto& r : crash::takeUnseenReports((user / "CrashReports").string()))
+        message(2, "RoY Studio closed unexpectedly last time. A crash report was saved (" + fs::path(r).filename().string() +
+                       "). Your project can be restored via RECOVER PROJECT; Help > Create diagnostics report collects the details for a bug report.");
     pluginDbFile_ = user / "plugins.json";
     std::string err;
     if (fs::exists(pluginDbFile_) && !pluginDb_.load(pluginDbFile_, &err)) {
@@ -323,6 +329,39 @@ std::string App::liveMidiTrackName() const {
     if (!project_ || !runtime_) return {};
     const Track* t = project_->findTrack(runtime_->liveMidiTrack());
     return t ? t->name : std::string();
+}
+
+std::string App::createDiagnosticsReport() {
+    support::DiagnosticsInput in;
+    in.userDataDir = files::userDataDirectory();
+    in.audioLines.push_back("backend: " + (device_.isRunning() ? device_.backendName() : std::string("not running")) + " | status: " + audioStatus_);
+    in.audioLines.push_back(std::format("settings: {:.0f} Hz, buffer {} samples, output '{}', input '{}'", audioCfg_.sampleRate, audioCfg_.bufferSize,
+                                        audioCfg_.outputDevice.empty() ? "default" : audioCfg_.outputDevice,
+                                        audioCfg_.inputDevice.empty() ? "default" : audioCfg_.inputDevice));
+    const auto st = engine_.stats();
+    in.audioLines.push_back(std::format("engine: {} callbacks, {} overloads (possible dropouts), peak load {:.0f} %, {} worker threads", st.callbacks,
+                                        st.overloads, st.peakCpuLoad * 100.0, engine_.workerThreads()));
+    for (auto& d : device_.outputDevices()) in.audioLines.push_back("output device: " + d.name + (d.isDefault ? " (default)" : ""));
+    for (auto& d : device_.inputDevices()) in.audioLines.push_back("input device: " + d.name + (d.isDefault ? " (default)" : ""));
+    if (midiIn_) {
+        for (auto& d : midiIn_->devices()) in.midiLines.push_back(d.name + (midiIn_->isOpen(d.id) ? " (open)" : " (off)"));
+        in.midiLines.push_back(std::format("messages received: {}, dropped by the engine: {}", midiIn_->messageCount(), engine_.liveMidiDropped()));
+    }
+    if (project_) { // counts only - no names or content
+        size_t plugins = 0;
+        for (auto& c : project_->channels) plugins += c.inserts.size();
+        in.sessionLines.push_back(std::format("project open: {} tracks, {} mixer channels, {} effect slots, {} assets, safe mode {}", project_->tracks.size(),
+                                              project_->channels.size(), plugins, project_->assets.size(), runtime_->safeMode() ? "on" : "off"));
+        in.sessionLines.push_back(std::format("plugin crashes this session: {}", crashes_.size()));
+    }
+    std::string err;
+    const fs::path out = support::writeReport(in, {}, &err);
+    if (out.empty()) {
+        message(2, "diagnostics report not written: " + err);
+        return {};
+    }
+    message(0, "diagnostics report written: " + out.string() + " - review it, then attach it to your bug report");
+    return out.string();
 }
 
 void App::setMidiInputEnabled(const std::string& id, bool on) {
@@ -735,6 +774,10 @@ bool App::selfTest(const fs::path& folder) {
              std::format("gain {:.2f} dB", g));
         run("SetChannelGain", {{"master", true}, {"gainDb", 0.0}});
         run("ClearMidiMappings", json::object());
+    }
+    {
+        const std::string report = createDiagnosticsReport();
+        step("diagnostics report", !report.empty() && fs::exists(report), report);
     }
     // undo / redo
     const std::string before = projectToJson(*project_).dump();

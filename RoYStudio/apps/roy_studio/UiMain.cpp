@@ -115,6 +115,15 @@ void menuBar(App& app) {
         }
         ImGui::EndMenu();
     }
+    if (ImGui::BeginMenu("Help")) {
+        ImGui::TextDisabled("RoY Studio %s", ROY_VERSION_STRING);
+        if (ImGui::MenuItem("Create diagnostics report")) app.createDiagnosticsReport();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("System, audio + MIDI devices, plugin scan results, crash reports and the end of the log in one file\n"
+                              "(home folder and user name replaced). Nothing is sent anywhere.");
+        ImGui::TextDisabled("logs, crash reports: %s", files::userDataDirectory().string().c_str());
+        ImGui::EndMenu();
+    }
     ImGui::EndMenuBar();
 }
 

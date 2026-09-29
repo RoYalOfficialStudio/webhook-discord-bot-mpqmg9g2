@@ -92,6 +92,8 @@ public:
     // MIDI learn: the next controller moved (CC 0..119) is mapped to this target.
     // MIDI inputs switched on/off by the user (switched-off inputs are not reopened by hot-plug).
     void setMidiInputEnabled(const std::string& id, bool on);
+    // Writes a diagnostics report (system, audio, MIDI, plugins, crash reports, log) for bug reports.
+    std::string createDiagnosticsReport();
     void startMidiLearn(const std::string& channelId, const std::string& slotId, const std::string& paramId, const std::string& label);
     void cancelMidiLearn();
     bool midiLearning() const { return learn_.has_value(); }

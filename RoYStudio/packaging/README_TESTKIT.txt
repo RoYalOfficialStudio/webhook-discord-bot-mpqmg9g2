@@ -27,9 +27,16 @@ Quick check (about 10 minutes)
                                                         (uses your default audio device)
   Then follow 00_IMPORTANT/TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md from the repository.
 
+If something goes wrong
+  roy_cli.exe diagnostics                            -> writes a report (system, audio/MIDI devices,
+                                                        plugin failures, crash reports, log tail) to
+                                                        %APPDATA%\RoYStudio\Diagnostics\ - review it,
+                                                        then attach it to the bug report
+  (in the app: Help > Create diagnostics report)
+
 Notes
   * The crash/hang test plugins crash on purpose; Windows may show them in its reliability log.
     RoY itself must keep running - that is what is being tested.
   * Logs:            %APPDATA%\RoYStudio\roy_studio.log
-  * Crash reports:   %APPDATA%\RoYStudio\CrashReports\
+  * Crash reports:   %APPDATA%\RoYStudio\CrashReports\  (plugin crashes and RoY's own: .txt + .dmp)
   * Licences of all third-party components: licenses\ and licenses\THIRD_PARTY_NOTICES.md

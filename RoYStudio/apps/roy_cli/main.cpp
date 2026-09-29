@@ -7,6 +7,7 @@
 #include "audio/Processor.h"
 #include "audio/ProjectRuntime.h"
 #include "commands/Commands.h"
+#include "core/CrashHandler.h"
 #include "core/Files.h"
 #include "core/Log.h"
 #include "export/Mp3Encoder.h"
@@ -15,6 +16,7 @@
 #include "plugins/Scanner.h"
 #include "project/ProjectIO.h"
 #include "project/Session.h"
+#include "support/Diagnostics.h"
 #include "midi/Scale.h"
 
 #include <cstdio>
@@ -49,6 +51,7 @@ int usage(int code) {
         "  roy_cli recovery <project.roy>                     crash-recovery status\n"
         "  roy_cli scan-plugins [--db file] [--force] [--retry] [--timeout ms] [paths...]\n"
         "  roy_cli mp3-check                                  is the LAME MP3 encoder available?\n"
+        "  roy_cli diagnostics [report.md]                    system/audio/MIDI/plugins/crash reports/log summary for bug reports\n"
         "  roy_cli selftest <folder>                          headless workflow check (new/tracks/beat/export/save/reopen/recovery)\n"
         "  roy_cli plugins <INSTALLED|AVAILABLE|FAILED|BLACKLISTED|FAVORITES|RECENT|INSTRUMENTS|EFFECTS|DUPLICATES> [--db file]\n",
         ROY_VERSION_STRING);
@@ -120,6 +123,34 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (cmd == "help" || cmd == "--help" || cmd == "-h") return usage(0);
+    if (cmd == "crash-test" && a.size() == 3) { // TEST ONLY: verifies the crash handler (roy_tests)
+        crash::install(a[1], "roy_cli");
+        crash::crashForTesting(a[2]);
+    }
+    crash::install((files::userDataDirectory() / "CrashReports").string(), "roy_cli");
+    if (cmd == "diagnostics") {
+        support::DiagnosticsInput in;
+        in.program = "RoY Studio (roy_cli)";
+        in.userDataDir = files::userDataDirectory();
+        DeviceManager dm;
+        if (dm.initialise("auto", &err)) {
+            in.audioLines.push_back("backend: " + dm.backendName());
+            for (auto& d : dm.outputDevices()) in.audioLines.push_back("output: " + d.name + (d.isDefault ? " (default)" : ""));
+            for (auto& d : dm.inputDevices()) in.audioLines.push_back("input: " + d.name + (d.isDefault ? " (default)" : ""));
+        } else {
+            in.audioLines.push_back("audio backend could not start: " + err);
+        }
+        AudioEngine engine;
+        midi::MidiInputManager mi(engine);
+        for (auto& d : mi.devices()) in.midiLines.push_back(d.name + " [" + d.id + "]");
+        const fs::path out = support::writeReport(in, a.size() > 1 ? fs::path(a[1]) : fs::path(), &err);
+        if (out.empty()) {
+            std::fprintf(stderr, "diagnostics report not written: %s\n", err.c_str());
+            return 1;
+        }
+        std::printf("diagnostics report: %s\nReview it before sharing (home folder / user name are already replaced).\n", out.string().c_str());
+        return 0;
+    }
     if (cmd == "mp3-check") {
         std::string why;
         const bool ok = mp3::available(&why);

@@ -91,6 +91,8 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 |---|---|---|
 | 8.1 | Make edits, wait > 60 s (autosave), kill process | on reopen: RECOVER PROJECT restores the edits |
 | 8.2 | Corrupt `.roy` file (truncate) and open | OPEN LAST STABLE uses the newest backup |
+| 8.3 | `roy_cli.exe crash-test C:\RoYCrash segv` (test-only crash) | `C:\RoYCrash` contains `roy_cli_crash_*.txt` (ACCESS_VIOLATION, module roy_cli.exe) and a `.dmp` that opens in WinDbg / Visual Studio |
+| 8.4 | Help > Create diagnostics report (also `roy_cli.exe diagnostics`) | a `.md` file in `%APPDATA%\RoYStudio\Diagnostics\` with Windows version, audio/MIDI devices, plugin failures, crash reports, log tail; your user name does not appear. **Attach this file to every bug report.** |
 
 ## 9. Long session (soak)
 | # | Step | Expected |

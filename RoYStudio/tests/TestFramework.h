@@ -51,6 +51,7 @@ std::string testPath(const char* buildPath, const char* relative = nullptr);
 
 #define ROY_TEST_PLUGIN_DIR ::roytest::testPath(ROY_TEST_PLUGIN_DIR_BUILD, "test_plugins")
 #define ROY_PLUGIN_HOST_EXE ::roytest::testPath(ROY_PLUGIN_HOST_EXE_BUILD)
+#define ROY_CLI_EXE ::roytest::testPath(ROY_CLI_EXE_BUILD)
 #define ROY_TEST_STEM_ENGINE ::roytest::testPath(ROY_TEST_STEM_ENGINE_BUILD, "test_plugins")
 
 #define ROY_CAT2(a, b) a##b

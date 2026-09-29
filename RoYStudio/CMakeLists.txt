@@ -149,8 +149,9 @@ if(ROY_BUILD_TESTS)
   target_compile_definitions(roy_tests PRIVATE
     ROY_TEST_PLUGIN_DIR_BUILD="${CMAKE_BINARY_DIR}/test_plugins"
     ROY_PLUGIN_HOST_EXE_BUILD="$<TARGET_FILE:roy_plugin_host>"
+    ROY_CLI_EXE_BUILD="$<TARGET_FILE:roy_cli>"
     ROY_TEST_STEM_ENGINE_BUILD="$<TARGET_FILE:roy_test_stem_engine>")
-  add_dependencies(roy_tests roy_plugin_host roy_mp3lame roy_test_stem_engine ${ROY_TEST_PLUGINS})
+  add_dependencies(roy_tests roy_plugin_host roy_cli roy_mp3lame roy_test_stem_engine ${ROY_TEST_PLUGINS})
   add_test(NAME roy_tests COMMAND roy_tests)
 endif()
 
