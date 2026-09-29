@@ -28,6 +28,10 @@ ProjectRuntime::ProjectRuntime(AudioEngine& engine) : engine_(engine) {
 }
 ProjectRuntime::~ProjectRuntime() = default;
 
+namespace {
+std::string derivedKey(const AudioClip& c, double sr) { return std::format("{}|{:.6f}|{:.4f}|{}", c.assetId, c.stretch, c.pitchSemitones, sr); }
+} // namespace
+
 fs::path ProjectRuntime::resolveAssetPath(const AudioAsset& a) const {
     fs::path p(a.path);
     if (p.is_absolute() || projectDir_.empty()) return p;
@@ -53,18 +57,32 @@ std::shared_ptr<const AudioData> ProjectRuntime::asset(const Project& project, c
 
 void ProjectRuntime::addLoadedAsset(const std::string& assetId, std::shared_ptr<const AudioData> data) {
     assets_[assetId] = std::move(data);
+    pinnedAssets_.insert(assetId);
 }
 
 void ProjectRuntime::clearAssetCache() {
     assets_.clear();
     derivedAssets_.clear();
+    pinnedAssets_.clear();
+}
+
+size_t ProjectRuntime::pruneAssetCache(const Project& project) {
+    const std::set<std::string> referenced = referencedAssetIds(project);
+    std::set<std::string> referencedDerived;
+    for (auto& t : project.tracks)
+        for (auto& c : t.audioClips) referencedDerived.insert(derivedKey(c, engine_.sampleRate())); // e.g. a muted stretched clip
+    // use_count() == 1: only this cache holds the data (no graph, processor or caller uses it)
+    const size_t before = cachedAssetCount();
+    std::erase_if(assets_, [&](auto& kv) { return kv.second.use_count() == 1 && !pinnedAssets_.count(kv.first) && !referenced.count(kv.first); });
+    std::erase_if(derivedAssets_, [&](auto& kv) { return kv.second.use_count() == 1 && !referencedDerived.count(kv.first); });
+    return before - cachedAssetCount();
 }
 
 std::shared_ptr<const AudioData> ProjectRuntime::derived(const Project& p, const AudioClip& c) {
     auto src = asset(p, c.assetId);
     if (!src) return nullptr;
     if (std::fabs(c.stretch - 1.0) < 1e-6 && std::fabs(c.pitchSemitones) < 1e-6) return src;
-    const std::string key = std::format("{}|{:.6f}|{:.4f}|{}", c.assetId, c.stretch, c.pitchSemitones, engine_.sampleRate());
+    const std::string key = derivedKey(c, engine_.sampleRate());
     auto it = derivedAssets_.find(key);
     if (it != derivedAssets_.end()) return it->second;
     if (!derive_) {
@@ -489,6 +507,7 @@ bool ProjectRuntime::rebuild(const Project& project) {
     syncParams(project);
     engine_.setGraph(std::move(graph));
     resolveLiveTarget(project);
+    pruneAssetCache(project);
     return true;
 }
 

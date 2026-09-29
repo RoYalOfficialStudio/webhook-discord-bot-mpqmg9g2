@@ -189,6 +189,22 @@ bool removeTrack(Project& p, const std::string& trackId) {
     return true;
 }
 
+std::set<std::string> referencedAssetIds(const Project& p) {
+    std::set<std::string> ids;
+    for (auto& t : p.tracks) {
+        for (auto& c : t.audioClips) {
+            ids.insert(c.assetId);
+            if (!c.rawAssetId.empty()) ids.insert(c.rawAssetId);
+            if (!c.tunedAssetId.empty()) ids.insert(c.tunedAssetId);
+        }
+        for (auto& k : t.takes) ids.insert(k.assetId);
+    }
+    for (auto& pat : p.patterns)
+        for (auto& r : pat.rows)
+            if (!r.sampleAssetId.empty()) ids.insert(r.sampleAssetId);
+    return ids;
+}
+
 bool routingWouldLoop(const Project& p, const std::string& from, const std::string& to) {
     if (from == to) return true;
     const MixerChannel* master = p.master();

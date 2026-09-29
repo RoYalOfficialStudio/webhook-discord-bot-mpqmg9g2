@@ -4,8 +4,8 @@
 |---|---|
 | VERSION | 0.2.0 – release stage **BETA** (gate below passed; BETA HARDENING next) |
 | BUILD | Linux x86_64 GCC 13.3 RelWithDebInfo; Windows x64 mingw-w64 13.2 cross build (static) |
-| COMMIT | 2db4c3f + this report commit (branch claude/bold-franklin-fybkj5) |
-| DATUM | 2026-09-28 |
+| COMMIT | see git log of branch claude/bold-franklin-fybkj5 (snapshot 0002) |
+| DATUM | 2026-09-29 |
 
 Statuses: PASS / PARTIAL / UNTESTED / BLOCKED / FAIL only. "PASS" means: implemented and verified by
 automated tests in this environment (Linux + Windows build under Wine, null audio device, Xvfb display).
@@ -15,12 +15,14 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 ## Verification run of this report
 | Check | Result |
 |---|---|
-| Linux full suite | PASS – 197 tests, 0 failed, 101 335 checks (after the plugin-compatibility block) |
-| Windows full suite under Wine 9.0 | PASS – 195 tests, 0 failed, 101 312 checks (SIGSTOP + FIFO tests are POSIX-only) |
-| Windows GUI self-test (roy_studio.exe --selftest, Wine, null audio) | PASS – 17/17 steps |
+| Linux full suite | PASS – 203 tests, 0 failed, 101 432 checks (after the take-comping + soak block) |
+| Windows full suite under Wine 9.0 | PASS – 201 tests, 0 failed, 101 439 checks (SIGSTOP + FIFO tests are POSIX-only) |
+| Windows GUI self-test (roy_studio.exe --audio null --selftest, Wine) | PASS – 17/17 steps |
 | Windows + Linux CLI self-test (roy_cli selftest) | PASS |
 | ASan/UBSan full suite | PASS – 190 tests; only findings are the deliberate crash test plugins. One test expectation failed first (scanner error text when ASan turns the crash into exit code 1) → message fixed, plugin suite re-run under ASan: 8/8 PASS |
 | TSan (parallel, mixer, faults, automation) | PASS – 0 warnings |
+| ASan/UBSan on this block (takes, undo, recording, commands, vocal) | PASS – 63 tests, 0 findings |
+| Soak test (roy_soak, 2 simulated hours) | PASS – RSS flat (−12.7 MB/h), fds/threads flat, 0 failures; before the fix +118 MB/h FAIL |
 | Golden save/reload (WAV bit-identical, MP3 byte-identical, VST3 + CLAP state) | PASS |
 | Fault injection (9 scenarios, see below) | PASS (Linux + Wine) |
 | Performance regression check | PASS – no code regression (same-machine A/B), see BENCHMARKS/REGRESSION_CHECK_2026-09-28.md |
@@ -59,7 +61,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | AUDIO ENGINE | PASS | multi-core mixing (bit-identical to single thread), PDC, automation |
 | AUDIO DEVICES | PARTIAL | device-loss detection (stop notification + stall watchdog) and auto-reconnect with default-device fallback PASS on the null backend; real WASAPI/ALSA devices UNTESTED |
 | PLAYLIST | PASS | clips, waveforms, drag, split, sections, markers, Ctrl+click multi-select → MoveClips (one undo) |
-| RECORDING | PARTIAL | takes, loop, punch, comp, never-lose, disk-full handling PASS headless; real inputs UNTESTED |
+| RECORDING | PARTIAL | takes, loop, punch, comp, never-lose, disk-full handling PASS headless; **take lanes + comping in the playlist** (lanes open after the 2nd take, swipe-comp by dragging over a take, double-click = whole take, rename / delete take / clear / flatten comp – all undoable commands, comp audibly verified); real inputs UNTESTED |
 | MIDI | PARTIAL | editing, SMF import/export PASS; LIVE INPUT PASS (parser, MIDI thru with stopped transport, sustain pedal, target follows the selected track, recording → clip in one undo, panic, overflow-safe) – WinMM / ALSA raw-MIDI backends verified only without real devices (Linux via FIFO, Wine enumeration) → real keyboards UNTESTED; recorded timing resolution = one audio block (5.3 ms at 256) |
 | PIANO ROLL | PASS | |
 | AUTOMATION | PASS | volume, pan, width, sends, plugin + effect params, tempo; curves Linear / Hold / Smooth / Bezier(tension) |
@@ -83,7 +85,8 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | WAV / FLAC / MP3 | PASS | |
 | BACKUP | PASS | |
 | RECOVERY | PASS | |
-| UNDO/REDO | PASS | |
+| UNDO/REDO | PASS | consecutive steps share their state (history memory halved), 512 MB byte budget besides the 500-step limit (oldest steps dropped, newest always kept) |
+| LONG SESSION (SOAK) | PASS | `roy_soak`: 2 simulated hours (120 takes, 24 sandboxed plugin loads, 12 exports) – found and fixed an unbounded runtime audio cache (+118 MB/h → flat), fds/threads flat, 0 failed operations; see BENCHMARKS/SOAK_2026-09-29.md |
 | FAULT INJECTION | PASS | plugin crash, plugin hang, missing audio file, corrupt project, invalid plugin state, device loss, callback stall, export failure (disk full, folder is a file), disk full while saving and recording |
 | PERFORMANCE | PASS | SMALL..XL + UI, regression check with `roy_bench --baseline` |
 | LINUX | PASS | |
@@ -96,10 +99,17 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
   Older projects load with Phase Reset on, so an 808 may sound very slightly different at note starts.
 * `SetRowPattern` defines the whole row (clears leftover ratchets/flams/probabilities on that row).
 * A plugin that ends the scan process without a result is quarantined as crashed (was "failed").
+* (2026-09-29) Audio no longer used by the project (deleted takes/clips, old stretch variants) is released
+  from RAM after each graph rebuild and re-read from its file if an undo brings it back (the first
+  playback after such an undo may load the file again).
+* (2026-09-29) Undo history is additionally limited to 512 MB; with very large projects the oldest steps
+  can drop out before the 500-step limit.
+* (2026-09-29) A comp now shows in the playlist even when the track also has normal clips (it always played).
 
 ## Next blocks (BETA HARDENING → RELEASE CANDIDATE)
 1. Windows-native validation package (installer/zip, first-run checks, crash-report collection).
 2. Live MIDI: sub-block timestamps (driver time stamps), MIDI learn for plugin/mixer parameters, hot-plug rescan.
 3. Real-recording vocal material in the regression suite (needs user-provided takes).
 4. Third-party plugin compatibility: VST3 SDK plugins 53/55 and CLAP example plugins 20/20 done; next: the user's own plugins via `roy_cli plugin-compat` on Windows (TEST_PLAN 6.0).
-5. Long-session soak test (multi-hour playback/record cycles), memory growth check.
+5. ~~Long-session soak test~~ done (2026-09-29, PASS after cache fix); repeat `roy_soak.exe --cycles 240` on a real Windows PC (TEST_PLAN 9.1).
+6. Take comping on real vocal takes (TEST_PLAN 4.6–4.8).

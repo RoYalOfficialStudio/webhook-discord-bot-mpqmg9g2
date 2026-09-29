@@ -70,6 +70,13 @@ if(WIN32)
   target_link_libraries(roy_bench PRIVATE psapi)
 endif()
 
+# Accelerated long-session soak test (memory/handle growth under hours of simulated work).
+add_executable(roy_soak apps/roy_soak/main.cpp)
+target_link_libraries(roy_soak PRIVATE roy_core)
+if(WIN32)
+  target_link_libraries(roy_soak PRIVATE psapi)
+endif()
+
 # Code that loads third-party plugins lives ONLY in the sandbox process.
 file(GLOB ROY_PLUGINHOST_SOURCES CONFIGURE_DEPENDS src_pluginhost/pluginhost/*.cpp src_pluginhost/pluginhost/*.h)
 add_library(roy_pluginhost STATIC ${ROY_PLUGINHOST_SOURCES})
@@ -83,6 +90,7 @@ elseif(WIN32)
 endif()
 add_executable(roy_plugin_host apps/roy_plugin_host/main.cpp)
 target_link_libraries(roy_plugin_host PRIVATE roy_pluginhost)
+add_dependencies(roy_soak roy_plugin_host)
 
 if(ROY_BUILD_GUI)
   add_subdirectory(apps/roy_studio)
@@ -150,7 +158,7 @@ endif()
 # `cmake --build <dir> --target package` -> RoYStudio-<version>-<system>.zip with the programs, the
 # LAME library, all third-party licence texts and (component "tests") the self-contained test kit
 # (roy_tests + test plugins + MOCK engine) for validation on a real Windows PC.
-set(ROY_PKG_TARGETS roy_cli roy_plugin_host roy_bench)
+set(ROY_PKG_TARGETS roy_cli roy_plugin_host roy_bench roy_soak)
 if(TARGET roy_studio)
   list(APPEND ROY_PKG_TARGETS roy_studio)
 endif()

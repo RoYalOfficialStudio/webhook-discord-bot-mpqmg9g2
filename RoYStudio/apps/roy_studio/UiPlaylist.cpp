@@ -1,6 +1,7 @@
 #include "Ui.h"
 
 #include <algorithm>
+#include <map>
 #include <set>
 #include <cmath>
 #include <format>
@@ -17,6 +18,31 @@ struct Drag {
 };
 Drag g_drag;
 std::set<std::string> g_multi; // Ctrl+click multi-selection; dragging one moves all (one undo step)
+std::set<std::string> g_expanded; // tracks whose take lanes are shown
+struct CompDrag {
+    std::string trackId, takeId;
+    double startBeat = 0;
+    bool active = false;
+};
+CompDrag g_comp; // swipe comping: drag over a take lane -> that range plays from this take
+
+// Takes in display order (one row each, oldest lane first).
+std::vector<const Take*> takeRows(const Track& t) {
+    std::vector<const Take*> v;
+    for (auto& k : t.takes) v.push_back(&k);
+    std::stable_sort(v.begin(), v.end(), [](auto* a, auto* b) { return a->lane < b->lane; });
+    return v;
+}
+
+// A comp segment / take drawn like an audio clip starting at `start` inside take `k`.
+AudioClip takeView(const Project& p, const Take& k, double start, double end) {
+    AudioClip c;
+    c.assetId = k.assetId;
+    c.startBeat = start;
+    c.lengthBeats = end - start;
+    c.sourceOffsetSec = p.tempo.beatToSeconds(start) - p.tempo.beatToSeconds(k.startBeat);
+    return c;
+}
 
 const char* typeTag(TrackType t) { return t == TrackType::Audio ? "AUDIO" : t == TrackType::Midi ? "MIDI" : "BEAT"; }
 
@@ -83,7 +109,20 @@ void drawPatternPreview(const Project& p, ImDrawList* dl, const PatternClip& c, 
 void drawPlaylist(App& app) {
     Project& p = app.project();
     const float dpi = ImGui::GetFontSize() / 15.0f;
-    const float headerW = 200 * dpi, rulerH = 22 * dpi, sectionH = 18 * dpi, rowH = 58 * dpi;
+    const float headerW = 200 * dpi, rulerH = 22 * dpi, sectionH = 18 * dpi, rowH = 58 * dpi, takeH = 26 * dpi;
+    // variable track heights: main row + one row per take when the take lanes are expanded
+    std::erase_if(g_expanded, [&](const std::string& id) { return !p.findTrack(id); });
+    // a track that gets its second take (or is loaded with several) opens its take lanes once
+    static std::map<std::string, size_t> seenTakes;
+    for (auto& t : p.tracks) {
+        size_t& seen = seenTakes[t.id];
+        if (t.takes.size() >= 2 && seen < 2) g_expanded.insert(t.id);
+        seen = t.takes.size();
+    }
+    std::vector<float> rowY(p.tracks.size() + 1, 0.0f);
+    auto takeLanes = [&](const Track& t) { return g_expanded.count(t.id) ? t.takes.size() : size_t{0}; };
+    for (size_t i = 0; i < p.tracks.size(); ++i) rowY[i + 1] = rowY[i] + rowH + takeH * static_cast<float>(takeLanes(p.tracks[i]));
+    const float tracksH = rowY.back();
 
     // toolbar
     ImGui::TextDisabled("Snap");
@@ -123,7 +162,7 @@ void drawPlaylist(App& app) {
     const float scrollY = ImGui::GetScrollY();
     const double endBeat = std::max(64.0, p.endBeat() + 16.0);
     const float contentW = headerW + static_cast<float>(endBeat * app.pixelsPerBeat);
-    const float contentH = rulerH + sectionH + rowH * static_cast<float>(p.tracks.size()) + rowH;
+    const float contentH = rulerH + sectionH + tracksH + rowH;
     ImGui::Dummy(ImVec2(contentW, contentH));
     const float scrollX = ImGui::GetScrollX();
     const ImVec2 win0 = ImGui::GetWindowPos();
@@ -146,9 +185,10 @@ void drawPlaylist(App& app) {
     }
     // track lanes
     for (size_t i = 0; i < p.tracks.size(); ++i) {
-        const float y = gridTop + rowH * static_cast<float>(i);
-        if (p.tracks[i].id == app.selTrack) dl->AddRectFilled(ImVec2(laneX0, y), ImVec2(origin.x + contentW, y + rowH), col::rgb(0xD4AF37, 14));
-        dl->AddLine(ImVec2(laneX0, y + rowH), ImVec2(origin.x + contentW, y + rowH), col::Grid);
+        const float y = gridTop + rowY[i], y1 = gridTop + rowY[i + 1];
+        if (p.tracks[i].id == app.selTrack) dl->AddRectFilled(ImVec2(laneX0, y), ImVec2(origin.x + contentW, y1), col::rgb(0xD4AF37, 14));
+        if (y1 - y > rowH) dl->AddRectFilled(ImVec2(laneX0, y + rowH), ImVec2(origin.x + contentW, y1), col::rgb(0x000000, 60));
+        dl->AddLine(ImVec2(laneX0, y1), ImVec2(origin.x + contentW, y1), col::Grid);
     }
     // sections band
     for (auto& s : p.sections) {
@@ -163,7 +203,7 @@ void drawPlaylist(App& app) {
     const ImVec2 mouse = ImGui::GetIO().MousePos;
     for (size_t i = 0; i < p.tracks.size(); ++i) {
         const Track& t = p.tracks[i];
-        const float y0 = gridTop + rowH * static_cast<float>(i) + 2, y1 = y0 + rowH - 4;
+        const float y0 = gridTop + rowY[i] + 2, y1 = y0 + rowH - 4;
         auto clipRect = [&](const std::string& id, double start, double len, uint32_t color, bool muted, const std::string& name, auto&& body) {
             double s = start;
             if (g_drag.active && (g_drag.clipId == id || (g_multi.count(g_drag.clipId) && g_multi.count(id)))) {
@@ -192,21 +232,67 @@ void drawPlaylist(App& app) {
             clipRect(c.id, c.startBeat, c.lengthBeats, c.color, c.muted, pat ? pat->name : "Pattern",
                      [&](ImVec2 a, ImVec2 b) { drawPatternPreview(p, dl, c, a, b, app.pixelsPerBeat); });
         }
-        if (t.comp.size() && t.audioClips.empty())
-            for (auto& seg : t.comp) {
-                const ImVec2 a(beatToX(seg.startBeat), y0), b(beatToX(seg.endBeat), y1);
-                dl->AddRectFilled(a, b, col::rgb(0xFF8C00, 170), 4);
-                dl->AddText(ImVec2(a.x + 4, a.y), col::Obsidian, "comp");
+        // the comp plays together with the regular clips, so it is always drawn
+        for (auto& seg : t.comp) {
+            const Take* k = nullptr;
+            for (auto& x : t.takes)
+                if (x.id == seg.takeId) k = &x;
+            const ImVec2 a(beatToX(seg.startBeat), y0), b(beatToX(seg.endBeat), y1);
+            if (b.x < win0.x || a.x > win0.x + winSize.x + scrollX + 200) continue;
+            dl->AddRectFilled(a, b, col::rgb(0xFF8C00, 170), 4);
+            dl->AddRectFilled(a, ImVec2(b.x, a.y + 14), col::rgb(0xFF8C00, 255), 4, ImDrawFlags_RoundCornersTop);
+            if (k) drawWaveform(app, dl, takeView(p, *k, seg.startBeat, seg.endBeat), ImVec2(a.x, a.y + 14), b);
+            dl->AddRect(a, b, col::rgb(0x000000, 120), 4);
+            dl->PushClipRect(a, b, true);
+            dl->AddText(ImVec2(a.x + 4, a.y), col::Obsidian, k ? k->name.c_str() : "comp");
+            dl->PopClipRect();
+        }
+        // take lanes: every take in full, the parts that are in the comp highlighted
+        if (takeLanes(t)) {
+            const auto rows = takeRows(t);
+            for (size_t r = 0; r < rows.size(); ++r) {
+                const Take& k = *rows[r];
+                const float ty0 = gridTop + rowY[i] + rowH + takeH * static_cast<float>(r) + 1, ty1 = ty0 + takeH - 2;
+                const ImVec2 a(beatToX(k.startBeat), ty0), b(beatToX(k.startBeat + k.lengthBeats), ty1);
+                if (b.x < win0.x || a.x > win0.x + winSize.x + scrollX + 200) continue;
+                dl->AddRectFilled(a, b, col::rgb(0x6A6A78, 110), 3);
+                for (auto& seg : t.comp)
+                    if (seg.takeId == k.id) dl->AddRectFilled(ImVec2(beatToX(seg.startBeat), ty0), ImVec2(beatToX(seg.endBeat), ty1), col::rgb(0xFF8C00, 190), 3);
+                drawWaveform(app, dl, takeView(p, k, k.startBeat, k.startBeat + k.lengthBeats), a, b);
+                if (g_comp.active && g_comp.takeId == k.id) {
+                    const double m = std::clamp(snap(xToBeat(mouse.x), app.snapBeats), k.startBeat, k.startBeat + k.lengthBeats);
+                    const double c0 = std::clamp(g_comp.startBeat, k.startBeat, k.startBeat + k.lengthBeats);
+                    dl->AddRectFilled(ImVec2(beatToX(std::min(m, c0)), ty0), ImVec2(beatToX(std::max(m, c0)), ty1), col::rgb(0xFFF0C8, 90), 3);
+                }
+                dl->AddRect(a, b, col::rgb(0x000000, 140), 3);
             }
+        }
     }
 
     // interactions on the lane area
     ImGui::SetCursorScreenPos(ImVec2(laneX0, gridTop));
-    ImGui::InvisibleButton("lanes", ImVec2(std::max(1.0f, contentW - headerW), std::max(1.0f, rowH * static_cast<float>(p.tracks.size() + 1))),
+    ImGui::InvisibleButton("lanes", ImVec2(std::max(1.0f, contentW - headerW), std::max(1.0f, tracksH + rowH)),
                            ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
-    const int laneIndex = static_cast<int>((mouse.y - gridTop) / rowH);
-    const Track* laneTrack = laneIndex >= 0 && laneIndex < static_cast<int>(p.tracks.size()) ? &p.tracks[static_cast<size_t>(laneIndex)] : nullptr;
-    if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    // hit test: which track, and which take row (-1 = the track's main row)
+    const Track* laneTrack = nullptr;
+    const Take* laneTake = nullptr;
+    {
+        const float my = mouse.y - gridTop;
+        for (size_t i = 0; i < p.tracks.size(); ++i)
+            if (my >= rowY[i] && my < rowY[i + 1]) {
+                laneTrack = &p.tracks[i];
+                if (my - rowY[i] >= rowH) {
+                    const auto rows = takeRows(*laneTrack);
+                    const size_t r = static_cast<size_t>((my - rowY[i] - rowH) / takeH);
+                    if (r < rows.size()) laneTake = rows[r];
+                }
+            }
+    }
+    if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && laneTake) {
+        g_comp = {laneTrack->id, laneTake->id, snap(xToBeat(mouse.x), app.snapBeats), true};
+        app.selTrack = laneTrack->id;
+        app.selChannel = laneTrack->channelId;
+    } else if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::GetIO().KeyCtrl && !hoverClip.empty()) {
             if (!g_multi.erase(hoverClip)) g_multi.insert(hoverClip);
         } else if (!g_multi.count(hoverClip)) {
@@ -236,6 +322,12 @@ void drawPlaylist(App& app) {
             app.selChannel = laneTrack->channelId;
         }
     }
+    if (g_comp.active && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        const double e = snap(xToBeat(mouse.x), app.snapBeats);
+        const double a = std::min(g_comp.startBeat, e), b = std::max(g_comp.startBeat, e);
+        if (b - a > 1e-6) app.run("CompSelect", {{"trackId", g_comp.trackId}, {"takeId", g_comp.takeId}, {"startBeat", a}, {"endBeat", b}});
+        g_comp.active = false;
+    }
     if (g_drag.active && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
         const double ns = snap(xToBeat(mouse.x) - g_drag.grabOffsetBeats, app.snapBeats);
         const std::string target = laneTrack ? laneTrack->id : "";
@@ -248,7 +340,9 @@ void drawPlaylist(App& app) {
         g_drag.active = false;
     }
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-        if (!hoverClip.empty() && p.findMidiClip(hoverClip)) {
+        if (laneTake) {
+            app.run("CompWholeTake", {{"trackId", laneTrack->id}, {"takeId", laneTake->id}});
+        } else if (!hoverClip.empty() && p.findMidiClip(hoverClip)) {
             app.selMidiClip = hoverClip;
             app.area = Area::PianoRoll;
         } else if (hoverClip.empty() && laneTrack && laneTrack->type == TrackType::Midi) {
@@ -260,7 +354,40 @@ void drawPlaylist(App& app) {
     }
     static std::string ctxClip;
     static double ctxBeat = 0;
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !hoverClip.empty()) {
+    static std::string ctxTrack, ctxTake;
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && laneTake) {
+        ctxTrack = laneTrack->id;
+        ctxTake = laneTake->id;
+        ImGui::OpenPopup("takeMenu");
+    }
+    if (ImGui::BeginPopup("takeMenu")) {
+        Track* tt = p.findTrack(ctxTrack);
+        const Take* tk = nullptr;
+        if (tt)
+            for (auto& k : tt->takes)
+                if (k.id == ctxTake) tk = &k;
+        if (!tk) {
+            ImGui::CloseCurrentPopup();
+        } else {
+            ImGui::TextDisabled("%s", tk->name.c_str());
+            if (ImGui::MenuItem("Use whole take")) app.run("CompWholeTake", {{"trackId", ctxTrack}, {"takeId", ctxTake}});
+            static char tname[96];
+            if (ImGui::IsWindowAppearing()) std::snprintf(tname, sizeof(tname), "%s", tk->name.c_str());
+            ImGui::SetNextItemWidth(160 * dpi);
+            ImGui::InputText("##takename", tname, sizeof(tname));
+            ImGui::SameLine();
+            if (ImGui::Button("Rename")) {
+                app.run("RenameTake", {{"trackId", ctxTrack}, {"takeId", ctxTake}, {"name", std::string(tname)}});
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Flatten comp to clips", nullptr, false, !tt->comp.empty())) app.run("FlattenComp", {{"trackId", ctxTrack}});
+            if (ImGui::MenuItem("Clear comp", nullptr, false, !tt->comp.empty())) app.run("ClearComp", {{"trackId", ctxTrack}});
+            if (ImGui::MenuItem("Delete take (file stays in the project folder)")) app.run("DeleteTake", {{"trackId", ctxTrack}, {"takeId", ctxTake}});
+        }
+        ImGui::EndPopup();
+    }
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !hoverClip.empty() && !laneTake) {
         ctxClip = hoverClip;
         ctxBeat = snap(xToBeat(mouse.x), app.snapBeats);
         ImGui::OpenPopup("clipMenu");
@@ -341,7 +468,7 @@ void drawPlaylist(App& app) {
         dl->AddRectFilled(ImVec2(hx, origin.y + scrollY), ImVec2(hx + headerW, gridBottom + rowH), col::Panel);
         for (size_t i = 0; i < p.tracks.size(); ++i) {
             Track& t = p.tracks[i];
-            const float y = gridTop + rowH * static_cast<float>(i);
+            const float y = gridTop + rowY[i];
             const MixerChannel* ch = p.findChannel(t.channelId);
             dl->AddRectFilled(ImVec2(hx, y + 1), ImVec2(hx + 5, y + rowH - 1), clipColor(t.color));
             ImGui::PushID(t.id.c_str());
@@ -362,6 +489,15 @@ void drawPlaylist(App& app) {
                 if (toggleButton("R", t.armed, col::Red, bs)) app.run("ArmTrack", {{"trackId", t.id}, {"armed", !t.armed}});
                 ImGui::SameLine();
                 if (toggleButton("IN", t.monitor, col::Green, ImVec2(30 * dpi, 0))) app.run("MonitorTrack", {{"trackId", t.id}, {"monitor", !t.monitor}});
+                if (!t.takes.empty()) {
+                    ImGui::SameLine();
+                    const bool open = g_expanded.count(t.id) > 0;
+                    if (toggleButton(std::format("T{}", t.takes.size()).c_str(), open, col::Orange, ImVec2(34 * dpi, 0))) {
+                        if (open) g_expanded.erase(t.id);
+                        else g_expanded.insert(t.id);
+                    }
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show take lanes: drag over a take to comp that range, double-click = whole take");
+                }
             } else if (t.instrument) {
                 ImGui::SameLine();
                 ImGui::TextDisabled("%s", t.instrument->name.c_str());
@@ -378,8 +514,16 @@ void drawPlaylist(App& app) {
                 ImGui::EndPopup();
             }
             ImGui::PopID();
-            dl->AddLine(ImVec2(hx, y + rowH), ImVec2(hx + headerW, y + rowH), col::Grid);
-            if (app.selTrack == p.tracks[std::min(i, p.tracks.size() - 1)].id) {}
+            if (takeLanes(t)) {
+                const auto rows = takeRows(t);
+                for (size_t r = 0; r < rows.size(); ++r) {
+                    const bool used = std::any_of(t.comp.begin(), t.comp.end(), [&](auto& s) { return s.takeId == rows[r]->id; });
+                    const float ty = y + rowH + takeH * static_cast<float>(r);
+                    dl->AddText(ImVec2(hx + 18, ty + (takeH - ImGui::GetFontSize()) * 0.5f), used ? col::Orange : col::IvoryDim,
+                                std::format("{} {}", used ? ">" : " ", rows[r]->name).c_str());
+                }
+            }
+            dl->AddLine(ImVec2(hx, gridTop + rowY[i + 1]), ImVec2(hx + headerW, gridTop + rowY[i + 1]), col::Grid);
         }
         dl->AddLine(ImVec2(hx + headerW, origin.y + scrollY), ImVec2(hx + headerW, gridBottom + rowH), col::GoldDim);
         dl->AddRectFilled(ImVec2(hx, origin.y + scrollY), ImVec2(hx + headerW, origin.y + scrollY + rulerH + sectionH), col::Panel2);

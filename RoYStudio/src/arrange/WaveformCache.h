@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,9 @@ public:
     // Returns a cache for the asset, loading from disk or building (and saving) it.
     std::shared_ptr<const WaveformCache> get(const std::string& assetId, const AudioData& data);
     void invalidate(const std::string& assetId);
+    // Drops in-memory caches of assets not in `keep` (the files on disk stay as a cache).
+    size_t retainOnly(const std::set<std::string>& keep);
+    size_t size() const { return caches_.size(); }
     int builtCount() const { return built_; }
     int loadedCount() const { return loaded_; }
 

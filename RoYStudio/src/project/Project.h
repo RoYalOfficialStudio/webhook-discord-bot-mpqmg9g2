@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -326,6 +327,8 @@ bool removeTrack(Project& p, const std::string& trackId);
 bool removeBus(Project& p, const std::string& channelId);
 // True if adding a signal edge from -> to (output, send or sidechain) would close a loop.
 bool routingWouldLoop(const Project& p, const std::string& from, const std::string& to);
+// Assets the project can play or switch to: clips (incl. raw/tuned vocal versions), takes, sample rows.
+std::set<std::string> referencedAssetIds(const Project& p);
 
 // Default pattern with the standard Beat Lab rows.
 Pattern makeDefaultPattern(const std::string& name, int numSteps = 16);

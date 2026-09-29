@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 
@@ -34,6 +35,12 @@ public:
     std::shared_ptr<const AudioData> asset(const Project& project, const std::string& assetId);
     void addLoadedAsset(const std::string& assetId, std::shared_ptr<const AudioData> data);
     void clearAssetCache();
+    // Drops cached audio nothing uses any more: not in the current graph, not referenced by the
+    // project (clips incl. raw/tuned, takes, sample rows) and not injected via addLoadedAsset.
+    // Such audio is reloaded from its file on demand. Called after every rebuild, so deleted
+    // takes/clips and old stretch variants do not accumulate over a long session.
+    size_t pruneAssetCache(const Project& project);
+    size_t cachedAssetCount() const { return assets_.size() + derivedAssets_.size(); }
     std::filesystem::path resolveAssetPath(const AudioAsset& a) const;
 
     // Processor instance for a plugin slot (insert or instrument), if any.
@@ -80,6 +87,7 @@ private:
     std::filesystem::path projectDir_;
     std::map<std::string, std::shared_ptr<const AudioData>> assets_;
     std::map<std::string, std::shared_ptr<const AudioData>> derivedAssets_;
+    std::set<std::string> pinnedAssets_; // injected data without a file: never evicted
     struct ProcEntry { std::string typeId; std::shared_ptr<Processor> proc; double sr = 0; int block = 0; std::string opaqueState; };
     mutable std::map<std::string, ProcEntry> processors_; // captureProcessorStates refreshes opaqueState
     std::map<std::string, std::shared_ptr<ChannelParams>> params_;

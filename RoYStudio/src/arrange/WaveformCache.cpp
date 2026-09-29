@@ -181,6 +181,10 @@ std::shared_ptr<const WaveformCache> WaveformStore::get(const std::string& asset
     return c;
 }
 
+size_t WaveformStore::retainOnly(const std::set<std::string>& keep) {
+    return std::erase_if(caches_, [&](auto& kv) { return !keep.count(kv.first); });
+}
+
 void WaveformStore::invalidate(const std::string& assetId) {
     caches_.erase(assetId);
     if (!dir_.empty()) {

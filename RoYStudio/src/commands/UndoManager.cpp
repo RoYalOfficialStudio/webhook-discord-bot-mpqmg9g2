@@ -2,6 +2,8 @@
 #include "core/Log.h"
 #include "project/ProjectIO.h"
 
+#include <set>
+
 namespace roy {
 
 namespace {
@@ -28,11 +30,24 @@ bool UndoManager::end() {
         before_.clear();
         return false;
     }
-    undo_.push_back({pendingName_, std::move(before_), std::move(after)});
+    // share the state with the previous step when it continues from there (the usual case)
+    State before = !undo_.empty() && *undo_.back().after == before_ ? undo_.back().after : std::make_shared<const std::string>(std::move(before_));
+    undo_.push_back({pendingName_, std::move(before), std::make_shared<const std::string>(std::move(after))});
     redo_.clear();
-    while (undo_.size() > limit_) undo_.pop_front();
+    trim();
     before_.clear();
     return true;
+}
+
+void UndoManager::trim() {
+    while (undo_.size() > limit_) undo_.pop_front();
+    size_t bytes = memoryBytes();
+    while (bytes > memoryLimit_ && undo_.size() > 1) {
+        const size_t n = undo_.size();
+        undo_.pop_front();
+        bytes = memoryBytes();
+        if (undo_.size() == n) break;
+    }
 }
 
 void UndoManager::cancel() {
@@ -58,7 +73,7 @@ bool UndoManager::undo() {
     if (depth_ > 0 || undo_.empty()) return false;
     Entry e = std::move(undo_.back());
     undo_.pop_back();
-    restore(e.before);
+    restore(*e.before);
     redo_.push_back(std::move(e));
     return true;
 }
@@ -67,7 +82,7 @@ bool UndoManager::redo() {
     if (depth_ > 0 || redo_.empty()) return false;
     Entry e = std::move(redo_.back());
     redo_.pop_back();
-    restore(e.after);
+    restore(*e.after);
     undo_.push_back(std::move(e));
     return true;
 }
@@ -78,9 +93,13 @@ void UndoManager::clear() {
 }
 
 size_t UndoManager::memoryBytes() const {
+    std::set<const std::string*> seen;
     size_t n = 0;
-    for (auto& e : undo_) n += e.before.size() + e.after.size();
-    for (auto& e : redo_) n += e.before.size() + e.after.size();
+    auto add = [&](const State& s) {
+        if (s && seen.insert(s.get()).second) n += s->size();
+    };
+    for (auto& e : undo_) add(e.before), add(e.after);
+    for (auto& e : redo_) add(e.before), add(e.after);
     return n;
 }
 

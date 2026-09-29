@@ -327,6 +327,54 @@ TEST_CASE("gmb02", "commands with undo redo and macros") {
     CHECK_NEAR(p.tempo.tempoAt(0), 120.0, 1e-9);
 }
 
+TEST_CASE("gmb02", "undo history: consecutive steps share states, byte budget drops the oldest steps") {
+    Project p = makeNewProject("UndoMem");
+    UndoManager undo(p);
+    CommandRegistry reg;
+    registerCoreCommands(reg);
+    CommandContext ctx{p, undo};
+    // a big model: a MIDI clip with many notes makes every snapshot large
+    REQUIRE(reg.execute(ctx, "AddTrack", {{"type", "midi"}, {"name", "Keys"}}));
+    const std::string track = ctx.result["id"];
+    REQUIRE(reg.execute(ctx, "AddMidiClip", {{"trackId", track}, {"lengthBeats", 256.0}}));
+    const std::string clip = ctx.result["id"];
+    auto* c = p.findMidiClip(clip);
+    for (int i = 0; i < 3000; ++i) {
+        MidiNote n;
+        n.pitch = 36 + i % 48;
+        n.startBeat = i * 0.08;
+        n.lengthBeats = 0.07;
+        c->notes.push_back(n);
+    }
+    undo.clear();
+    const size_t state = canonical(p).size();
+    const std::string start = canonical(p);
+    for (int i = 0; i < 20; ++i) REQUIRE(reg.execute(ctx, "SetChannelGain", {{"trackId", track}, {"gainDb", -0.5 * (i + 1)}}));
+    CHECK(undo.undoCount() == 20);
+    // 20 steps = 21 distinct states (not 40)
+    CHECK(undo.memoryBytes() < state * 22);
+    CHECK(undo.memoryBytes() > state * 19);
+    // undo all / redo all still exact
+    while (undo.undo()) {}
+    CHECK(canonical(p) == start);
+    while (undo.redo()) {}
+    CHECK_NEAR(p.findChannel(p.findTrack(track)->channelId)->gainDb, -10.0f, 1e-6);
+    // budget: about 5 states -> only the newest steps remain, and they still undo correctly
+    undo.setMemoryLimit(state * 5 + state / 2);
+    REQUIRE(reg.execute(ctx, "SetChannelGain", {{"trackId", track}, {"gainDb", -11.0}}));
+    CHECK(undo.memoryBytes() <= state * 5 + state / 2);
+    CHECK(undo.undoCount() >= 3);
+    CHECK(undo.undoCount() <= 5);
+    REQUIRE(undo.undo());
+    CHECK_NEAR(p.findChannel(p.findTrack(track)->channelId)->gainDb, -10.0f, 1e-6);
+    // the newest step always survives even if a single state is over budget
+    undo.setMemoryLimit(1);
+    REQUIRE(reg.execute(ctx, "SetChannelGain", {{"trackId", track}, {"gainDb", -3.0}}));
+    CHECK(undo.undoCount() == 1);
+    REQUIRE(undo.undo());
+    CHECK_NEAR(p.findChannel(p.findTrack(track)->channelId)->gainDb, -10.0f, 1e-6);
+}
+
 TEST_CASE("gmb02", "command palette search and shortcuts") {
     CommandRegistry reg;
     registerCoreCommands(reg);

@@ -46,6 +46,9 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 | 4.3 | Roundtrip latency: loop output→input with a cable, record a click (metronome on) | measured offset ≤ 1 ms after latency compensation; note raw value |
 | 4.4 | Record 20 min with 256 buffer | no dropouts (xruns counter 0), file complete |
 | 4.5 | Kill `roy_studio.exe` via Task Manager while recording, restart, open project | RECOVER PROJECT offered, "recover last performance" works |
+| 4.6 | Record the same 8 bars three times (stop/start between passes) | after the 2nd pass the take lanes open (header button `T2`/`T3`); the newest take plays (orange "comp" block) |
+| 4.7 | In a take lane drag over 2 bars of Take 1; double-click Take 2; right-click → Rename/Delete take | dragged range plays from Take 1 (orange in its lane); double-click = whole Take 2; every step Ctrl+Z-able; deleted take's WAV stays in `Audio\` |
+| 4.8 | Right-click a take → "Flatten comp to clips", play | sound identical to before, the comp became normal clips with short crossfades; takes remain for re-comping |
 
 ## 5. Playback, beat, MIDI, vocals
 | # | Step | Expected |
@@ -86,3 +89,9 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 |---|---|---|
 | 8.1 | Make edits, wait > 60 s (autosave), kill process | on reopen: RECOVER PROJECT restores the edits |
 | 8.2 | Corrupt `.roy` file (truncate) and open | OPEN LAST STABLE uses the newest backup |
+
+## 9. Long session (soak)
+| # | Step | Expected |
+|---|---|---|
+| 9.1 | `roy_soak.exe --cycles 240 --plugin <folder>\test_plugins\roy_test_gain.clap --out C:\RoYSoak` (≈ 4 simulated hours, ~20 min) | `C:\RoYSoak\soak.md` says **Result: PASS** (RSS trend < 20 MB/simulated hour, handles and threads flat, 0 failed operations) |
+| 9.2 | Real use: work 2–3 h in RoY Studio (record, comp, plugins, export), watch Task Manager | memory levels off, no growing handle count, no slowdown |

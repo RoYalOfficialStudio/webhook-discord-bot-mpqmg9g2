@@ -11,6 +11,9 @@ Programs
   roy_plugin_host(.exe)  sandbox process for CLAP/VST3 plugins - keep it next to roy_studio
   roy_mp3lame(.dll/.so)  LAME 3.100 MP3 encoder (LGPL-2.0, separate library, replaceable)
   roy_bench(.exe)        performance benchmark (--baseline <old benchmark.json> flags regressions)
+  roy_soak(.exe)         accelerated long-session test (memory/handle growth), writes soak.md:
+                         roy_soak.exe --cycles 240 --plugin test_plugins\roy_test_gain.clap --out C:\RoYSoak
+                         (synthetic MOCK session content; needs no audio device)
 
 Test kit
   roy_tests(.exe)        full automated suite; finds test_plugins\ next to itself

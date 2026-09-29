@@ -4,6 +4,7 @@
 #include "arrange/ClipOps.h"
 #include "midi/MidiFile.h"
 #include "midi/MidiOps.h"
+#include "record/Takes.h"
 #include "audio/ProjectRuntime.h"
 #include "core/Files.h"
 #include "core/Log.h"
@@ -229,6 +230,58 @@ void registerCoreCommands(CommandRegistry& r) {
                if (!t) return fail(ctx, "track not found");
                t->locked = argBool(a, "locked", !t->locked);
                return true;
+           }});
+
+    // ---- take lanes + comping -------------------------------------------------
+    // Every recorded pass is a Take on its own lane; the comp says which take plays where.
+    // Deleting a take removes it from the model only - its audio file stays in the project.
+    r.add({"CompSelect", "Comp Range From Take", "Take", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t) return fail(ctx, "track not found");
+               if (t->locked) return fail(ctx, "track is locked");
+               const double s = argNum(a, "startBeat", 0.0), e = argNum(a, "endBeat", 0.0);
+               if (!(e > s)) return fail(ctx, "empty comp range");
+               return takes::compSelect(*t, argStr(a, "takeId"), s, e) || fail(ctx, "take not found or range outside the take");
+           }});
+    r.add({"CompWholeTake", "Use Whole Take", "Take", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t) return fail(ctx, "track not found");
+               if (t->locked) return fail(ctx, "track is locked");
+               return takes::compWholeTake(*t, argStr(a, "takeId")) || fail(ctx, "take not found");
+           }});
+    r.add({"ClearComp", "Clear Comp", "Take", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t) return fail(ctx, "track not found");
+               if (t->locked) return fail(ctx, "track is locked");
+               t->comp.clear();
+               return true;
+           }});
+    r.add({"FlattenComp", "Flatten Comp To Clips", "Take", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t) return fail(ctx, "track not found");
+               if (t->locked) return fail(ctx, "track is locked");
+               if (t->comp.empty()) return fail(ctx, "track has no comp");
+               const auto ids = takes::flattenComp(ctx.project, t->id);
+               ctx.result["clipIds"] = ids;
+               return !ids.empty() || fail(ctx, "comp references no existing take");
+           }});
+    r.add({"DeleteTake", "Delete Take", "Take", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t) return fail(ctx, "track not found");
+               if (t->locked) return fail(ctx, "track is locked");
+               return takes::removeTake(*t, argStr(a, "takeId")) || fail(ctx, "take not found");
+           }});
+    r.add({"RenameTake", "Rename Take", "Take", "", true, false, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t) return fail(ctx, "track not found");
+               for (auto& k : t->takes)
+                   if (k.id == argStr(a, "takeId")) {
+                       const std::string n = argStr(a, "name");
+                       if (n.empty()) return fail(ctx, "empty name");
+                       k.name = n;
+                       return true;
+                   }
+               return fail(ctx, "take not found");
            }});
 
     // ---- mixer ---------------------------------------------------------------

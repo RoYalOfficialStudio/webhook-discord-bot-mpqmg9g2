@@ -158,6 +158,7 @@ void App::onProjectChanged(bool structural) {
     dirty_ = true;
     if (structural) {
         if (!runtime_->rebuild(*project_)) message(2, "graph rebuild failed - previous graph kept");
+        waveforms_.retainOnly(referencedAssetIds(*project_)); // deleted takes/clips: peaks leave RAM too
     } else {
         runtime_->syncParams(*project_);
     }
