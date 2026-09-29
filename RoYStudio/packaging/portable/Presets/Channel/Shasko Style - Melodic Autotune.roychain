@@ -1,0 +1,148 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "Shasko Style - Melodic Autotune",
+  "created": "2026-09-29T00:00:00Z",
+  "app": "0.2.0",
+  "description": "Melodic street / Balkan-trap vocal: strong, clearly audible autotune (2 ms, 100 %) for sung lines, warm and clear EQ, tight compression, soft tube warmth, de-esser, doubler, 1/4 ping-pong delay, lush reverb, limiter at -1 dB. No distortion.",
+  "inserts": [
+    {
+      "typeId": "roy.vocaltune",
+      "name": "Melodic Hard Tune",
+      "bypass": false,
+      "state": {
+        "params": {
+          "speed": 2.0,
+          "strength": 1.0,
+          "threshold": 0.0,
+          "offKeyFilter": 1.0,
+          "allowChromatic": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Warm Clear EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 100.0,
+          "lowCutSlope": 24.0,
+          "band1Freq": 220.0,
+          "band1Gain": 1.0,
+          "band2Freq": 500.0,
+          "band2Gain": -2.5,
+          "band2Q": 1.2,
+          "band3Freq": 3000.0,
+          "band3Gain": 3.0,
+          "band3Q": 0.8,
+          "band4Freq": 10000.0,
+          "band4Gain": 3.5,
+          "highCut": 18000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Tight Comp",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -24.0,
+          "ratio": 5.0,
+          "attack": 5.0,
+          "release": 90.0,
+          "knee": 6.0,
+          "makeup": 12.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.saturation",
+      "name": "Tube Warmth",
+      "bypass": false,
+      "state": {
+        "params": {
+          "drive": 6.0,
+          "mode": 1.0,
+          "tone": 13000.0,
+          "mix": 0.3,
+          "output": -1.5
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 6500.0,
+          "threshold": -33.0,
+          "range": 10.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.chorus",
+      "name": "Doubler",
+      "bypass": false,
+      "state": {
+        "params": {
+          "rate": 0.5,
+          "depth": 1.8,
+          "delay": 16.0,
+          "feedback": 0.0,
+          "mix": 0.2,
+          "spread": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.delay",
+      "name": "1/4 Ping-Pong",
+      "bypass": false,
+      "state": {
+        "params": {
+          "syncBeats": 1.0,
+          "feedback": 0.35,
+          "mix": 0.14,
+          "pingPong": 1.0,
+          "lowCut": 400.0,
+          "highCut": 6500.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Lush Hall",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 2.6,
+          "preDelay": 35.0,
+          "size": 1.4,
+          "damping": 0.4,
+          "width": 1.0,
+          "mix": 0.17,
+          "lowCut": 400.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Safety Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 60.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 0.0
+        }
+      }
+    }
+  ]
+}
