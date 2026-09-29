@@ -89,6 +89,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | UNDO/REDO | PASS | consecutive steps share their state (history memory halved), 512 MB byte budget besides the 500-step limit (oldest steps dropped, newest always kept) |
 | LONG SESSION (SOAK) | PASS | `roy_soak`: 2 simulated hours (120 takes, 24 sandboxed plugin loads, 12 exports) – found and fixed an unbounded runtime audio cache (+118 MB/h → flat), fds/threads flat, 0 failed operations; see BENCHMARKS/SOAK_2026-09-29.md |
 | CRASH REPORTS (RoY itself) | PASS | fatal errors of roy_studio / roy_cli (invalid memory access, abort, std::terminate) → text report (error, address, module / backtrace, version) + Windows minidump (system dbghelp.dll) in `CrashReports\`; next start shows "closed unexpectedly" once; verified with real crashes in a child process on Linux and Wine; real Windows UNTESTED |
+| PACKAGING | PASS | ZIP test kit + 64-bit NSIS installer (start menu, optional "Test kit" component, upgrade = uninstall first, uninstaller keeps settings/logs/projects) verified by silent install → self-test → uninstall under Wine; found + fixed: LAME DLL missing from component installs; not code-signed (owner decision) |
 | DIAGNOSTICS | PASS | Help > Create diagnostics report / `roy_cli diagnostics`: system (incl. Wine detection), audio + MIDI devices, engine overloads, plugin scan failures with reasons, quarantine, crash reports, log tail – home folder / user name anonymised, nothing sent anywhere |
 | FAULT INJECTION | PASS | plugin crash, plugin hang, missing audio file, corrupt project, invalid plugin state, device loss, callback stall, export failure (disk full, folder is a file), disk full while saving and recording |
 | PERFORMANCE | PASS | SMALL..XL + UI, regression check with `roy_bench --baseline` |
@@ -117,7 +118,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
   resetting directly; same for plugin parameters (Default value / MIDI Learn).
 
 ## Next blocks (BETA HARDENING → RELEASE CANDIDATE)
-1. Windows-native validation package: ZIP test kit + crash reports + diagnostics report done; next: installer (needs a decision on the installer tool/licence), first-run audio/MIDI check wizard.
+1. Windows-native validation package: ZIP test kit, installer, crash reports, diagnostics report done; next: first-run audio/MIDI check wizard. Owner decisions pending: RoY Studio licence text, code-signing certificate.
 2. ~~Live MIDI: timestamps, MIDI learn, hot-plug~~ done 2026-09-29; next: validation with real keyboards/controllers (TEST_PLAN 5.3–5.3g), NRPN/14-bit CC and relative encoders for MIDI learn.
 3. Real-recording vocal material in the regression suite (needs user-provided takes).
 4. Third-party plugin compatibility: VST3 SDK plugins 53/55 and CLAP example plugins 20/20 done; next: the user's own plugins via `roy_cli plugin-compat` on Windows (TEST_PLAN 6.0).

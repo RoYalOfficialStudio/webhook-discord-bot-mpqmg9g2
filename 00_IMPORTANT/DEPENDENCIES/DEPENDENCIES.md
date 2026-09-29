@@ -24,7 +24,13 @@ from unknown sources. Hashes below were computed after download.
 | Wine (wine64) | 9.0 | Ubuntu 24.04 package (apt) | LGPL | Runs the Windows test suite and GUI self-test on Linux (test only) |
 | GLFW (libglfw3-dev) | 3.3.10 | Ubuntu 24.04 package (apt) | zlib/libpng | Linux GUI window/input (development + CI screenshots); not used on Windows |
 | Xvfb | system | Ubuntu 24.04 package | MIT/X11 | Headless display for GUI screenshots |
+| NSIS (makensis) | 3.09-4ubuntu1 | Ubuntu 24.04 package `nsis` (apt, official archive) | zlib/libpng (installer stub; its LZMA code is CPL with the NSIS installer exception, bzip2 BSD-style) | Builds the Windows installer `RoYStudio-<version>-win64.exe` (64-bit stub via `packaging/makensis-amd64.sh`); the stub is part of the shipped installer | package verified by apt (signed Ubuntu archive) | `apt-get install nsis` |
 
 ## Not used / pending decisions
 - **MP3 encoding**: approved by the owner on 2026-09-28 → LAME 3.100 added (see table and third_party/THIRD_PARTY_NOTICES.md).
+- **RoY Studio licence** (owner decision): the repository root `LICENSE` belongs to the original repository
+  template, not to RoY Studio. The installer shows `packaging/INSTALLER_NOTICE.txt` ("BETA test build,
+  licence not yet published") until the owner decides.
+- **Code signing certificate** (owner decision, costs money): without it Windows SmartScreen warns on the
+  installer and the programs. Not bought, not bypassed.
 - **Stem separation models** (e.g. Demucs, MIT code / model weights with their own terms): not added.

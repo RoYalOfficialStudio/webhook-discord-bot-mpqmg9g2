@@ -1,0 +1,25 @@
+RoY Studio - BETA TEST BUILD
+
+This is a BETA build for testing. It is not a finished product. Keep backups of important
+projects. RoY Studio never deletes your projects or recordings; uninstalling removes only the
+program files. Your settings, logs, crash reports and plugin list stay in
+%APPDATA%\RoYStudio\ and your projects stay where you saved them.
+
+Licence terms of RoY Studio itself: not yet published by the owner (pending decision).
+Until then this build may only be used for testing by the people it was given to.
+
+Third-party components (full licence texts in the "licenses" folder after installation,
+overview in licenses\THIRD_PARTY_NOTICES.md):
+  * miniaudio 0.11.22            - Public Domain / MIT-0
+  * nlohmann/json 3.11.3         - MIT
+  * CLAP 1.2.2 (headers)         - MIT
+  * Dear ImGui 1.92.9            - MIT
+  * Steinberg VST3 SDK 3.8.1     - MIT
+  * LAME 3.100 (roy_mp3lame.dll) - LGPL-2.0; a separate library that you may replace
+                                   with your own build of LAME
+
+VST is a registered trademark of Steinberg Media Technologies GmbH.
+
+Optional component "Test kit": automated tests and RoY TEST plugins, some of which crash or
+hang ON PURPOSE to verify that RoY keeps running. Install it only if you are asked to run the
+tests.

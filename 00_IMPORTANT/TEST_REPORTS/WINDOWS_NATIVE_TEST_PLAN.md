@@ -8,10 +8,21 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 - Easiest: the test kit ZIP (`cmake --build build-win --target package` → `RoYStudio-0.2.0-win64.zip`):
   programs + LAME DLL + licences + `roy_tests.exe` with `test_plugins\` (CLAP/VST3 test plugins, MOCK stem engine).
   Unzip anywhere; `README_TESTKIT.txt` lists the quick check. The tests find their resources next to `roy_tests.exe`.
+- Or the installer `RoYStudio-0.2.0-win64.exe` (same build, `cmake --build build-win --target package`): 64-bit,
+  installs into `C:\Program Files\RoY Studio`, start-menu entries, optional "Test kit" component (off by default),
+  uninstaller. It is **not code-signed** yet → Windows SmartScreen shows "Windows protected your PC" →
+  "More info" → "Run anyway" (only for this test build from a trusted source).
 - Or build: Visual Studio 2022 (x64, Release) – `cmake -S RoYStudio -B build -G "Visual Studio 17 2022" -A x64` then build `ALL_BUILD`.
 - Keep `roy_plugin_host.exe` and `roy_mp3lame.dll` next to `roy_studio.exe`.
 - Note: CPU, RAM, GPU, Windows build, audio interface + driver version, buffer/sample rate defaults.
 - Logs: `%APPDATA%\RoYStudio\roy_studio.log`, crash reports: `%APPDATA%\RoYStudio\CrashReports\`.
+
+### 0.1 Installer
+| # | Step | Expected |
+|---|---|---|
+| 0.1a | Run the installer, accept the notice, keep "RoY Studio", tick "Test kit" only if you run section 1 from the install folder | installs without errors; start menu "RoY Studio 0.2.0 BETA" with RoY Studio + notes; finish page starts RoY Studio |
+| 0.1b | Run the installer again (upgrade/repair) | the old version is uninstalled first, settings + projects untouched |
+| 0.1c | Settings > Apps > RoY Studio > Uninstall | program folder + start menu gone; `%APPDATA%\RoYStudio` (settings, plugin list, logs, crash reports) and all projects still there |
 
 ## 1. Automated checks first (5 min)
 | # | Step | Expected |
