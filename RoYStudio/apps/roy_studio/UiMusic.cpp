@@ -13,6 +13,57 @@ namespace roy::gui {
 namespace {
 const char* kNoteNames[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 bool isBlack(int pc) { return pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10; }
+
+// How many playlist clips play this pattern (shown before deleting).
+int patternUses(const Project& p, const std::string& id) {
+    int n = 0;
+    for (auto& t : p.tracks)
+        for (auto& c : t.patternClips) n += c.patternId == id;
+    return n;
+}
+
+// Deletes a pattern (and its playlist clips) and moves the selection to a neighbour.
+void deletePattern(App& app, const std::string& id) {
+    Project& p = app.project();
+    std::string next;
+    for (size_t i = 0; i < p.patterns.size(); ++i)
+        if (p.patterns[i].id == id) {
+            if (i + 1 < p.patterns.size()) next = p.patterns[i + 1].id;
+            else if (i > 0) next = p.patterns[i - 1].id;
+        }
+    if (app.run("DeletePattern", {{"patternId", id}})) {
+        const int clips = app.lastResult().value("removedClips", 0);
+        app.message(0, clips ? std::format("pattern deleted with {} playlist clip(s) - Ctrl+Z brings it back", clips)
+                             : std::string("pattern deleted - Ctrl+Z brings it back"));
+        if (app.selPattern == id) app.selPattern = next;
+    }
+}
+
+// Right-click menu of a pattern entry: rename, duplicate, delete. Returns the id to delete
+// (deleting is deferred by the caller so the pattern list is not changed while iterating).
+std::string patternMenu(App& app, const Pattern& pat) {
+    std::string del;
+    if (!ImGui::BeginPopupContextItem("patmenu")) return del;
+    const float dpi = ImGui::GetFontSize() / 15.0f;
+    ImGui::TextDisabled("%s", pat.name.c_str());
+    static char pname[96];
+    if (ImGui::IsWindowAppearing()) std::snprintf(pname, sizeof(pname), "%s", pat.name.c_str());
+    ImGui::SetNextItemWidth(160 * dpi);
+    const bool enter = ImGui::InputText("##patname", pname, sizeof(pname), ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::SameLine();
+    if (ImGui::Button("Rename") || enter) {
+        app.run("RenamePattern", {{"patternId", pat.id}, {"name", std::string(pname)}});
+        ImGui::CloseCurrentPopup();
+    }
+    if (ImGui::MenuItem("Duplicate") && app.run("MakeVariation", {{"patternId", pat.id}, {"seed", 1}, {"amount", 0.0}, {"name", pat.name + " copy"}}))
+        app.selPattern = app.lastResult().value("id", app.selPattern);
+    ImGui::Separator();
+    const int uses = patternUses(app.project(), pat.id);
+    const std::string label = uses ? std::format("Delete pattern (+ {} playlist clip{})", uses, uses == 1 ? "" : "s") : std::string("Delete pattern");
+    if (ImGui::MenuItem(label.c_str(), "Del")) del = pat.id;
+    ImGui::EndPopup();
+    return del;
+}
 } // namespace
 
 // ---------------------------------------------------------------- PIANO ROLL
@@ -66,6 +117,9 @@ void drawPianoRoll(App& app) {
     if (ImGui::Button("-12")) app.run("TransposeNotes", {{"clipId", clip->id}, {"amount", -12}});
     ImGui::SameLine();
     if (ImGui::Button("+12")) app.run("TransposeNotes", {{"clipId", clip->id}, {"amount", 12}});
+    ImGui::SameLine();
+    ImGui::Checkbox("Preview", &app.previewOnEdit);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hear a note when you click it, add it or click a piano key on the left");
     if (!selection.empty()) {
         ImGui::SameLine();
         json idx = json::array();
@@ -137,6 +191,15 @@ void drawPianoRoll(App& app) {
         if (n.slide) dl->AddText(ImVec2(nx0 + 3, ny), col::Obsidian, "~");
         if (mouse.x >= nx0 && mouse.x < nx1 && mouse.y >= ny && mouse.y < ny + h) hover = static_cast<int>(i);
     }
+    // piano keys: click = hear the note (submitted before the canvas so the sticky keys win the hover)
+    const std::string ownerId = owner ? owner->id : std::string();
+    auto audition = [&](int pitch) {
+        if (app.previewOnEdit && !ownerId.empty() && pitch >= 0 && pitch < 128) app.auditionNote(ownerId, pitch, 0.85f, 0.6);
+    };
+    ImGui::SetCursorScreenPos(ImVec2(o.x + ImGui::GetScrollX(), o.y));
+    ImGui::InvisibleButton("keys", ImVec2(keysW, H));
+    if (ImGui::IsItemActivated()) audition(127 - static_cast<int>((mouse.y - o.y) / h));
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("click: hear this note");
     // canvas interaction
     ImGui::SetCursorScreenPos(ImVec2(x0, o.y));
     ImGui::InvisibleButton("canvas", ImVec2(std::max(1.0f, W - keysW), H), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
@@ -146,9 +209,11 @@ void drawPianoRoll(App& app) {
         if (hover >= 0) {
             if (!ImGui::GetIO().KeyShift) selection.clear();
             selection.push_back(static_cast<size_t>(hover));
+            audition(clip->notes[static_cast<size_t>(hover)].pitch);
         } else if (mp >= 0 && mp < 128 && mb >= 0 && mb < clip->lengthBeats) {
             selection.clear();
-            app.run("AddNote", {{"clipId", clip->id}, {"pitch", mp}, {"startBeat", mb}, {"lengthBeats", gridBeats * (gridBeats < 0.5 ? 2 : 1)}, {"velocity", 100}});
+            if (app.run("AddNote", {{"clipId", clip->id}, {"pitch", mp}, {"startBeat", mb}, {"lengthBeats", gridBeats * (gridBeats < 0.5 ? 2 : 1)}, {"velocity", 100}}))
+                audition(mp);
         }
     }
     if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && hover >= 0) {
@@ -193,11 +258,25 @@ void drawChannels(App& app) {
             if (ImGui::Selectable(q.name.c_str(), q.id == pat->id)) app.selPattern = q.id;
         ImGui::EndCombo();
     }
+    if (const std::string d = patternMenu(app, *pat); !d.empty()) {
+        deletePattern(app, d);
+        return;
+    }
     ImGui::SameLine();
     if (ImGui::Button("New")) {
         app.run("AddPattern", {{"name", std::format("Pattern {}", p.patterns.size() + 1)}, {"steps", pat->numSteps}});
         app.selPattern = app.lastResult().value("id", app.selPattern);
         return;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Delete")) {
+        deletePattern(app, pat->id);
+        return;
+    }
+    if (ImGui::IsItemHovered()) {
+        const int uses = patternUses(p, pat->id);
+        ImGui::SetTooltip("%s", uses ? std::format("Delete '{}' + its {} playlist clip(s) (Ctrl+Z undoes)", pat->name, uses).c_str()
+                                     : std::format("Delete '{}' (Ctrl+Z undoes)", pat->name).c_str());
     }
     ImGui::SameLine();
     float swing = pat->swing;
@@ -319,13 +398,37 @@ void drawBeats(App& app) {
     const float dpi = ImGui::GetFontSize() / 15.0f;
     ImGui::BeginChild("patterns", ImVec2(320 * dpi, 0), ImGuiChildFlags_Borders);
     sectionTitle("PATTERNS");
+    std::string toDelete;
+    bool listFocused = false;
     for (auto& pat : p.patterns) {
         int steps = 0;
         for (auto& r : pat.rows)
             for (auto& s : r.steps) steps += s.on;
-        if (ImGui::Selectable(std::format("{}   ({} steps, {} hits)", pat.name, pat.numSteps, steps).c_str(), pat.id == app.selPattern))
+        ImGui::PushID(pat.id.c_str());
+        const float xW = ImGui::GetFrameHeight();
+        if (ImGui::Selectable(std::format("{}   ({} steps, {} hits)", pat.name, pat.numSteps, steps).c_str(), pat.id == app.selPattern,
+                              ImGuiSelectableFlags_AllowOverlap, ImVec2(ImGui::GetContentRegionAvail().x - xW - 4 * dpi, 0)))
             app.selPattern = pat.id;
+        if (ImGui::IsItemFocused()) listFocused = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("click: select  |  right-click: rename / duplicate / delete  |  Del: delete");
+        if (const std::string d = patternMenu(app, pat); !d.empty()) toDelete = d;
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(col::rgb(0x3A1C1C)));
+        if (ImGui::Button("x", ImVec2(xW, 0))) toDelete = pat.id;
+        ImGui::PopStyleColor();
+        if (ImGui::IsItemHovered()) {
+            const int uses = patternUses(p, pat.id);
+            ImGui::SetTooltip("%s", uses ? std::format("Delete pattern + its {} playlist clip(s) (Ctrl+Z undoes)", uses).c_str()
+                                         : "Delete pattern (Ctrl+Z undoes)");
+        }
+        ImGui::PopID();
     }
+    // Del / Backspace deletes the selected pattern while the pattern list has focus or the mouse is over it.
+    if (!app.selPattern.empty() && !ImGui::GetIO().WantTextInput &&
+        (listFocused || ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) &&
+        (ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false)) && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId))
+        toDelete = app.selPattern;
+    if (!toDelete.empty()) deletePattern(app, toDelete);
     if (goldButton("New 16")) app.run("AddPattern", {{"steps", 16}});
     ImGui::SameLine();
     if (ImGui::Button("New 32")) app.run("AddPattern", {{"steps", 32}});
@@ -339,6 +442,7 @@ void drawBeats(App& app) {
                                      {"Drill", "X......x.x......", "......X.......X.", "x..x..x.x..x..x."},
                                      {"Four on the floor", "X...X...X...X...", "....X.......X...", "..x...x...x...x."}};
     Pattern* sel = p.findPattern(app.selPattern);
+    ImGui::PushID("quickgrooves"); // same labels as GENERATE ("Trap", "Boom Bap", ...) -> own ID scope
     for (auto& g : grooves) {
         if (ImGui::Button(g.name) && sel) // one button = one undo step
             app.runMacro(std::string("Quick Groove: ") + g.name,
@@ -347,9 +451,12 @@ void drawBeats(App& app) {
                           {"SetRowPattern", {{"patternId", sel->id}, {"voice", "closed_hat"}, {"text", g.hat}}}});
         ImGui::SameLine();
     }
+    ImGui::PopID();
     ImGui::NewLine();
+    if (!sel) ImGui::TextDisabled("select a pattern above first");
     ImGui::Spacing();
     sectionTitle("GENERATE");
+    ImGui::PushID("generate");
     static int seed = 1;
     ImGui::SetNextItemWidth(90 * dpi);
     ImGui::InputInt("seed", &seed);
@@ -358,6 +465,7 @@ void drawBeats(App& app) {
             app.selPattern = app.lastResult().value("id", app.selPattern);
         ImGui::SameLine();
     }
+    ImGui::PopID();
     ImGui::NewLine();
     if (sel && ImGui::Button("Make Variation") && app.run("MakeVariation", {{"patternId", sel->id}, {"seed", seed++}, {"amount", 0.35}}))
         app.selPattern = app.lastResult().value("id", app.selPattern);
@@ -391,12 +499,44 @@ void drawBeats(App& app) {
     ImGui::BeginChild("808lab", ImVec2(0, 0), ImGuiChildFlags_Borders);
     ImGui::BeginChild("808params", ImVec2(340 * dpi, 0));
     sectionTitle("808 LAB");
+    static int previewNote = 36; // C2 - a typical 808 root
     int n808 = 0;
+    std::string previewTrack; // after a parameter change: hear the 808 (deferred, the track list must not change mid-loop)
     for (auto& t : p.tracks) {
         if (!t.instrument || t.instrument->typeId != "roy.808") continue;
         ++n808;
         ImGui::PushID(t.id.c_str());
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "%s", t.name.c_str());
+        // PREVIEW: hear the 808 without playing the song
+        if (goldButton(std::format("PLAY 808  {}{}", kNoteNames[previewNote % 12], previewNote / 12 - 1).c_str(), ImVec2(150 * dpi, 0)))
+            app.auditionNote(t.id, previewNote, 1.0f, 1.0);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Hear this 808 (works with the song stopped)");
+        ImGui::SameLine();
+        if (ImGui::Button("oct -") && previewNote >= 24) previewNote -= 12;
+        ImGui::SameLine(0, 2);
+        if (ImGui::Button("oct +") && previewNote < 72) previewNote += 12;
+        // one octave of keys: click = choose the note and hear it
+        const float keyW = std::floor((std::min(ImGui::GetContentRegionAvail().x, 330 * dpi) - 11 * 2) / 12.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, ImGui::GetStyle().FramePadding.y));
+        for (int k = 0; k < 12; ++k) {
+            const int note = (previewNote / 12) * 12 + k;
+            ImGui::PushID(k);
+            if (k) ImGui::SameLine(0, 2);
+            const bool cur = note == previewNote;
+            if (cur) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(col::Orange));
+            else if (isBlack(k)) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(col::rgb(0x202028)));
+            else ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(col::rgb(0x3A3A44)));
+            if (ImGui::Button(kNoteNames[k], ImVec2(keyW, 0))) {
+                previewNote = note;
+                app.auditionNote(t.id, note, 1.0f, 1.0);
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s%d: choose + hear", kNoteNames[k], note / 12 - 1);
+            ImGui::PopStyleColor();
+            ImGui::PopID();
+        }
+        ImGui::PopStyleVar();
+        ImGui::Checkbox("preview on change", &app.previewOnEdit);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Play the 808 automatically after you change a knob below");
         if (auto proc = app.runtime().processorForSlot(t.instrument->id)) {
             for (int i = 0; i < proc->numParams(); ++i) {
                 const auto& pi = proc->paramInfo(i);
@@ -404,13 +544,15 @@ void drawBeats(App& app) {
                 ImGui::SetNextItemWidth(220 * dpi);
                 if (pi.steps == 2) {
                     bool b = v > 0.5f;
-                    if (ImGui::Checkbox(pi.name.c_str(), &b))
-                        app.run("SetParam", {{"slotId", t.instrument->id}, {"paramId", pi.id}, {"value", b ? 1.0 : 0.0}});
+                    if (ImGui::Checkbox(pi.name.c_str(), &b) &&
+                        app.run("SetParam", {{"slotId", t.instrument->id}, {"paramId", pi.id}, {"value", b ? 1.0 : 0.0}}))
+                        previewTrack = t.id;
                 } else if (ImGui::SliderFloat(pi.name.c_str(), &v, pi.minValue, pi.maxValue, "%.2f")) {
                     proc->setParam(i, v); // live while dragging
                 }
-                if (ImGui::IsItemDeactivatedAfterEdit() && pi.steps != 2)
-                    app.run("SetParam", {{"slotId", t.instrument->id}, {"paramId", pi.id}, {"value", proc->getParam(i)}});
+                if (ImGui::IsItemDeactivatedAfterEdit() && pi.steps != 2 &&
+                    app.run("SetParam", {{"slotId", t.instrument->id}, {"paramId", pi.id}, {"value", proc->getParam(i)}}))
+                    previewTrack = t.id;
                 ImGui::PushID(i);
                 if (ImGui::BeginPopupContextItem("p808ctx")) {
                     if (ImGui::MenuItem("Default value"))
@@ -425,6 +567,7 @@ void drawBeats(App& app) {
         ImGui::Separator();
         ImGui::PopID();
     }
+    if (!previewTrack.empty() && app.previewOnEdit) app.auditionNote(previewTrack, previewNote, 1.0f, 1.0);
     if (!n808) {
         ImGui::TextDisabled("No 808 track yet.");
         if (goldButton("Create 808 track"))

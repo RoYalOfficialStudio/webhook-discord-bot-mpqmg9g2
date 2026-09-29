@@ -261,3 +261,34 @@ TEST_CASE("beatlab", "undo macros: 100 tracks, moving several clips - one undo s
     CHECK(!b.reg.executeMacro(*b.ctx, "Broken", {{"AddTrack", {{"type", "audio"}}}, {"DeleteTrack", {{"trackId", "nope"}}}}));
     CHECK(b.p.tracks.size() == n);
 }
+
+TEST_CASE("beatlab", "delete pattern removes its playlist clips, keeps others, one undo brings both back") {
+    Beat b;
+    REQUIRE(b.run("SetRowPattern", {{"patternId", b.patId}, {"voice", "kick"}, {"text", "x...x...x...x..."}}));
+    REQUIRE(b.run("AddPattern", {{"steps", 32}, {"name", "Keep"}}));
+    const std::string keep = b.ctx->result["id"];
+    REQUIRE(b.run("PlacePatternChain", {{"trackId", b.trackId}, {"patternIds", {b.patId, keep, b.patId}}}));
+    REQUIRE(b.p.findTrack(b.trackId)->patternClips.size() == 3);
+    const size_t u = b.undo.undoCount();
+    REQUIRE(b.run("DeletePattern", {{"patternId", b.patId}}));
+    CHECK(b.ctx->result.value("removedClips", 0) == 2);
+    CHECK(b.undo.undoCount() == u + 1);
+    CHECK(b.p.findPattern(b.patId) == nullptr);
+    REQUIRE(b.p.patterns.size() == 1);
+    REQUIRE(b.p.findTrack(b.trackId)->patternClips.size() == 1);
+    CHECK(b.p.findTrack(b.trackId)->patternClips[0].patternId == keep);
+    CHECK(!b.run("DeletePattern", {{"patternId", b.patId}})); // already gone: error, no undo step
+    CHECK(b.undo.undoCount() == u + 1);
+    REQUIRE(b.undo.undo());
+    REQUIRE(b.p.findPattern(b.patId) != nullptr);
+    CHECK(b.p.findTrack(b.trackId)->patternClips.size() == 3);
+    CHECK(b.row("kick").steps[4].on); // the steps come back too
+    // locked track protects its clips
+    REQUIRE(b.run("LockTrack", {{"trackId", b.trackId}, {"locked", true}}));
+    CHECK(!b.run("DeletePattern", {{"patternId", b.patId}}));
+    CHECK(b.p.findPattern(b.patId) != nullptr);
+    // rename
+    REQUIRE(b.run("RenamePattern", {{"patternId", keep}, {"name", "Hook"}}));
+    CHECK(b.p.findPattern(keep)->name == "Hook");
+    CHECK(!b.run("RenamePattern", {{"patternId", keep}, {"name", ""}}));
+}

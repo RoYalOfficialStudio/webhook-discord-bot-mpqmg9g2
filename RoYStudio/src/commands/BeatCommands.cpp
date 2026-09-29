@@ -364,6 +364,29 @@ void registerBeatCommands(CommandRegistry& r) {
                ctx.result["id"] = c.id;
                return true;
            }});
+    // Removes the pattern and every playlist clip that plays it (one undo step brings both back).
+    r.add({"DeletePattern", "Delete Pattern", "Beat", "", true, true, [](CommandContext& ctx, const json& a) {
+               Pattern* p = patternArg(ctx, a);
+               if (!p) return false;
+               const std::string id = p->id;
+               for (auto& t : ctx.project.tracks)
+                   if (t.locked && std::ranges::any_of(t.patternClips, [&](const PatternClip& c) { return c.patternId == id; }))
+                       return fail(ctx, "pattern is used on locked track '" + t.name + "'");
+               int clips = 0;
+               for (auto& t : ctx.project.tracks)
+                   clips += static_cast<int>(std::erase_if(t.patternClips, [&](const PatternClip& c) { return c.patternId == id; }));
+               std::erase_if(ctx.project.patterns, [&](const Pattern& q) { return q.id == id; });
+               ctx.result["removedClips"] = clips;
+               return true;
+           }});
+    r.add({"RenamePattern", "Rename Pattern", "Beat", "", true, false, [](CommandContext& ctx, const json& a) {
+               Pattern* p = patternArg(ctx, a);
+               if (!p) return false;
+               const std::string n = str(a, "name");
+               if (n.empty()) return fail(ctx, "empty name");
+               p->name = n;
+               return true;
+           }});
 }
 
 } // namespace roy

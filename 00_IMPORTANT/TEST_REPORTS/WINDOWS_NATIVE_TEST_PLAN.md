@@ -83,6 +83,9 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 | 5.5 | VOCALS: Preview → pitch editor shows waveform, pitch curve, notes with IN SCALE / OFF KEY / UNCERTAIN / CORRECTED | statuses plausible for your take |
 | 5.6 | Apply, then A ORIGINAL / B CORRECTED while playing | instant switch, both play in sync; Apply again with other settings starts from the original |
 | 5.7 | BEATS: Generate (Trap/Drill/...), groove templates, note repeat 1/16T, pattern chain | timing feel audible, one undo per action |
+| 5.7b | BEATS > PATTERNS: red "x", right-click > Delete pattern, select + Del; CHANNELS > Delete; Ctrl+Z | pattern and its playlist clips disappear; one Ctrl+Z brings both back; hovering QUICK GROOVES / GENERATE shows no red ImGui error |
+| 5.7c | Tempo field top bar: "+" / "−", drag, double-click + type 95 + Enter, mouse wheel, Ctrl+Z | tempo changes each time and playback follows; Ctrl+Z restores |
+| 5.7d | BEATS > 808 LAB: PLAY 808 with the song stopped, click note keys, oct −/+; turn Decay with "preview on change"; PIANO ROLL: click a key on the left / a note | 808 audible on your output each time, notes stop by themselves, nothing is added to the project |
 | 5.8 | BEATS: 808 Start Phase / Phase Reset, "Analyze kick vs 808" | plots appear, suggestions sensible, nothing changed in the project |
 
 ## 6. Plugins

@@ -63,6 +63,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | First start: WELCOME + STEP 1–5 + SYSTEM CHECK | PASS | output list + PLAY TEST TONE, WASAPI shared (default) / exclusive option, input list + LIVE INPUT LEVEL + TEST MICROPHONE (3 s record + playback), buffer 64–1024 with dropout warning, native sample rates, MIDI with SKIP, PASS/WARNING/FAIL system check |
 | FIRST REAL MUSIC SESSION | PASS (automated) | 43 guided steps A beat … F plugins, DO IT / done by hand, results file for the diagnostic package |
 | HELP > CREATE DIAGNOSTIC PACKAGE | PASS | RoYStudio_Diagnostics_<time>.zip (report, system check, log, crash reports text-only, plugin scan, settings, session results); user name / home / computer name replaced; no minidumps, no projects |
+| Owner feedback round 1 (real PC screenshots) | FIXED | playlist: take block deletable (right-click / Del), track menu on the name; BEATS: patterns deletable (x button, right-click Rename / Duplicate / Delete, Del key; also "Delete" in CHANNELS; its playlist clips go with it, one Ctrl+Z restores both); ImGui "conflicting ID" error in QUICK GROOVES vs GENERATE fixed (own ID scopes); tempo field was frozen while dragging (re-read every frame) – now drag / double-click-to-type / mouse wheel / − + buttons, undoable, also in PROJECT; 808 preview: PLAY 808 + one-octave note keys + "preview on change" in 808 LAB, piano roll plays clicked / added notes and piano keys (live-MIDI path, never recorded) – self-test step "808 preview audible (transport stopped)" PASS on Linux + Wine |
 | Real Windows PC | **BLOCKED – owner** | run the portable ZIP (README_TEST.txt), return TEST_RESULTS.md + diagnostic package |
 | ASIO | not in this build | WASAPI shared/exclusive needs no driver; the free ASIO SDK is GPLv3 (would force a licence decision) |
 
@@ -95,8 +96,8 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | VOCALS | PASS | pitch editor: waveform, pitch curve, detected/target notes, cents, confidence, IN SCALE / OFF KEY / UNCERTAIN / CORRECTED; Strength, Speed, Humanize, Formant, Vibrato + Slide preserve; A/B ORIGINAL/CORRECTED; original never modified; real recordings UNTESTED |
 | PITCH GUARDIAN | PASS | always tunes from the original take (no stacked corrections) |
 | OFF-KEY FILTER | PASS | 6 scale modes + chromatic allow |
-| BEAT LAB | PASS | swing, groove templates (MPC 54–66 %, triplet, boom bap, trap, drill, humanize), velocity curves, probability, ratchets, flams, note repeat incl. triplets, variations, generator (5 styles), pattern chains |
-| 808 LAB | PASS | root detection (note + cents), tune, glide, slides, mono/legato, AHDSR, distortion/saturation/soft clip, start phase + phase reset (de-clicked) |
+| BEAT LAB | PASS | patterns: delete (with their playlist clips, undoable) / rename / duplicate; swing, groove templates (MPC 54–66 %, triplet, boom bap, trap, drill, humanize), velocity curves, probability, ratchets, flams, note repeat incl. triplets, variations, generator (5 styles), pattern chains |
+| 808 LAB | PASS | PREVIEW (PLAY 808, note keys, preview on change – audible with the song stopped); root detection (note + cents), tune, glide, slides, mono/legato, AHDSR, distortion/saturation/soft clip, start phase + phase reset (de-clicked) |
 | KICK ↔ 808 ANALYZER | PASS | visual: low-band envelopes, spectrum overlap, running phase correlation; suggestions only, nothing changed |
 | SAMPLER | PASS | zones, loops, slicing, auto root on drop |
 | MIXER | PASS | busses, sends pre/post (switch live), send UI, sidechain, solo / solo safe, mute, PDC, loop refusal across outputs+sends+sidechains, delete bus with re-routing, random graph tests |

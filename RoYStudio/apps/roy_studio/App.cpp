@@ -342,10 +342,41 @@ void App::finishMidiRecording() {
         message(0, std::format("MIDI take recorded: {} notes", lastResult_.value("notes", 0)));
 }
 
+bool App::auditionNote(const std::string& trackId, int note, float velocity, double seconds) {
+    if (!project_ || !runtime_ || !midiIn_ || midiRecording_) return false; // never lands in a MIDI recording
+    const Track* t = project_->findTrack(trackId);
+    if (!t || !t->instrument) return false;
+    if (auditionKey_ >= 0) { // previous preview note off first
+        const uint8_t off[3] = {0x80, static_cast<uint8_t>(auditionKey_), 0};
+        midiIn_->inject(off, 3);
+    }
+    auditionTrack_ = trackId;
+    updateLiveMidiTarget(); // the engine sends all-notes-off to a previous target by itself
+    auditionKey_ = std::clamp(note, 0, 127);
+    const uint8_t on[3] = {0x90, static_cast<uint8_t>(auditionKey_), static_cast<uint8_t>(std::clamp(static_cast<int>(velocity * 127.0f), 1, 127))};
+    midiIn_->inject(on, 3);
+    auditionOff_ = nowSeconds() + std::clamp(seconds, 0.05, 10.0);
+    auditionRelease_ = auditionOff_ + 0.5;
+    return true;
+}
+
+void App::pollAudition() {
+    if (auditionTrack_.empty() || !midiIn_) return;
+    const double now = nowSeconds();
+    if (auditionKey_ >= 0 && now >= auditionOff_) {
+        const uint8_t off[3] = {0x80, static_cast<uint8_t>(auditionKey_), 0};
+        midiIn_->inject(off, 3);
+        auditionKey_ = -1;
+    }
+    // keep the preview track as live target a little longer so the note-off reaches it
+    if (auditionKey_ < 0 && now >= auditionRelease_) auditionTrack_.clear();
+}
+
 void App::updateLiveMidiTarget() {
     if (!project_ || !runtime_) return;
     std::string target;
     if (midiRecording_) target = midiRecordTrack_;
+    else if (!auditionTrack_.empty() && project_->findTrack(auditionTrack_)) target = auditionTrack_;
     else if (const Track* t = project_->findTrack(selTrack); t && t->instrument) target = t->id;
     else
         for (auto& t : project_->tracks)
@@ -685,6 +716,7 @@ void App::tick() {
     pollMidiDevices();
     pollMicTest();
     if (!project_) return;
+    pollAudition();
     updateLiveMidiTarget();
     processMidiControls();
     engine_.metronome().setEnabled(project_->settings.metronome); // CLICK button / project setting
@@ -939,6 +971,26 @@ bool App::selfTest(const fs::path& folder) {
         run("SetMetronome", {{"enabled", false}, {"countInBars", 0}});
     }
     run("ArmTrack", {{"trackId", vocal}, {"armed", false}});
+    // 808 preview (transport stopped): the note must reach the master and end by itself
+    {
+        std::string bass;
+        for (auto& t : project_->tracks)
+            if (t.instrument && t.instrument->typeId == "roy.808") bass = t.id;
+        if (step("808 track for preview", !bass.empty())) {
+            stop();
+            pump(0.3);
+            if (master) master->peakL.store(0.0f);
+            float peak = 0.0f;
+            const bool started = auditionNote(bass, 36, 1.0f, 0.4);
+            for (int i = 0; i < 40; ++i) {
+                pump(0.01);
+                if (master) peak = std::max(peak, master->peakL.exchange(0.0f));
+            }
+            step("808 preview audible (transport stopped)", started && peak > 0.001f, std::format("peak {:.3f}", peak));
+            pump(1.0);
+            step("808 preview ends by itself", !auditionActive());
+        }
+    }
     // vocal lab
     std::string clip;
     for (auto& c : project_->findTrack(vocal)->audioClips) clip = c.id;

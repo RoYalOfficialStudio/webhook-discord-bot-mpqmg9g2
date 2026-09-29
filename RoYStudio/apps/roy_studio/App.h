@@ -138,6 +138,11 @@ public:
     void openFolder(const fs::path& folder);
     void finishFirstRun();
     void playTestTone();
+    // Instrument preview (808 / bass / synth): plays one note on the track's instrument, also with
+    // the transport stopped. Nothing is recorded or changed in the project.
+    bool auditionNote(const std::string& trackId, int note, float velocity = 0.9f, double seconds = 0.8);
+    bool auditionActive() const { return !auditionTrack_.empty(); }
+    bool previewOnEdit = true; // 808 LAB / PIANO ROLL: play the sound after a change
     bool pluginScanRunning() const { return scanning_; }
     const AudioDeviceConfig& audioConfig() const { return audioCfg_; }
 
@@ -199,6 +204,10 @@ private:
     std::vector<RecordedMidi> midiTake_;
     void updateLiveMidiTarget();
     void finishMidiRecording();
+    std::string auditionTrack_;
+    int auditionKey_ = -1;
+    double auditionOff_ = 0, auditionRelease_ = 0;
+    void pollAudition();
     struct LearnTarget {
         std::string channelId, slotId, paramId, label;
     };

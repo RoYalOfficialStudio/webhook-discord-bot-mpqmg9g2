@@ -565,10 +565,9 @@ void drawProject(App& app) {
     ImGui::SetNextItemWidth(220 * dpi);
     ImGui::InputText("Name", name, sizeof(name));
     if (ImGui::IsItemDeactivatedAfterEdit()) app.run("RenameProject", {{"name", std::string(name)}});
-    float bpm = static_cast<float>(p.tempo.tempoAt(0));
-    ImGui::SetNextItemWidth(220 * dpi);
-    ImGui::DragFloat("Tempo", &bpm, 0.1f, 40, 250, "%.1f BPM");
-    if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetTempo", {{"bpm", bpm}, {"atBeat", 0.0}});
+    tempoField(app, "projTempo", 150 * dpi, true);
+    ImGui::SameLine();
+    ImGui::TextUnformatted("Tempo");
     static int root = 9, scale = 1;
     const char* roots[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
     root = p.key.root;

@@ -101,18 +101,38 @@ Aufnahme (oranger Take-Block)   Rechtsklick auf den Block > "Delete take"
 Clip (Audio / MIDI / Pattern)   Rechtsklick > "Delete"  oder anklicken und Entf
 Mehrere Clips                   Strg+Klick auf mehrere Clips, dann Entf
 Ganze Spur                      Rechtsklick auf den SPURNAMEN links > "Delete track"
+Pattern (BEATS > PATTERNS)      rotes "x" rechts neben dem Pattern, oder Rechtsklick >
+                                "Delete pattern", oder Pattern anklicken und Entf.
+                                Auch in CHANNELS: Knopf "Delete" neben "New".
+                                Die Playlist-Clips dieses Patterns werden mit entfernt.
+                                Rechtsklick > Rename / Duplicate zum Umbenennen / Kopieren.
 Rückgängig / Wiederholen        Strg+Z / Strg+Y (auch im Menü Edit)
 Gelöschte Aufnahmen bleiben als WAV im Projektordner Audio\ erhalten.
 
 
-8. CRASH RECOVERY TESTEN
+8. TEMPO UND 808-VORSCHAU
+-------------------------
+Tempo (oben, "142.0 BPM")       jederzeit änderbar: "-" / "+" = 1 BPM, Feld nach links/rechts
+                                ziehen, Doppelklick und Zahl eintippen + Enter, oder Mausrad
+                                (Shift = 0,1 BPM). Strg+Z macht es rückgängig.
+808 anhören (BEATS > 808 LAB)   "PLAY 808" spielt die 808 – auch wenn der Song gestoppt ist.
+                                Tasten C ... B wählen den Ton und spielen ihn sofort,
+                                "oct -" / "oct +" wechseln die Oktave.
+                                "preview on change": nach jeder Knopf-Änderung (Tune, Decay,
+                                Distortion ...) ist die 808 sofort zu hören.
+PIANO ROLL                      "Preview" an: Klick auf eine Note, neue Note oder eine
+                                Klaviertaste links spielt den Ton auf dem Instrument der Spur.
+Vorschau-Töne werden nie aufgenommen und ändern nichts am Projekt.
+
+
+9. CRASH RECOVERY TESTEN
 ------------------------
 Projekt ändern, mindestens 60 Sekunden warten (Autosave), RoYStudio.exe im Task-Manager
 beenden, RoY neu starten, Projekt öffnen -> "RECOVER PROJECT" muss angeboten werden.
 
 
-9. WENN ETWAS NICHT FUNKTIONIERT
---------------------------------
+10. WENN ETWAS NICHT FUNKTIONIERT
+---------------------------------
 Help > CREATE DIAGNOSTIC PACKAGE  (oder TestKit\CREATE_DIAGNOSTIC_PACKAGE.bat)
 -> UserData\Diagnostics\RoYStudio_Diagnostics_<Zeit>.zip
 Enthält: Logs, Build-Version, Audio-Geräte, Plugin-Scan, Crash-Reports (Text), Systemcheck,
@@ -120,8 +140,8 @@ Ergebnisse der Music Session. NICHT enthalten: Benutzername (ersetzt), Projekte,
 Passwörter, Tokens, persönliche Dateien. Es wird NICHTS automatisch hochgeladen.
 
 
-10. BITTE ZURÜCKSCHICKEN
------------------------
+11. BITTE ZURÜCKSCHICKEN
+------------------------
 1. TestKit\TEST_RESULTS.md (ausgefüllt)
 2. UserData\Diagnostics\RoYStudio_Diagnostics_<Zeit>.zip
 3. optional: TestKit\automated_tests_result.txt und TestKit\SessionTest\session_test_report.md

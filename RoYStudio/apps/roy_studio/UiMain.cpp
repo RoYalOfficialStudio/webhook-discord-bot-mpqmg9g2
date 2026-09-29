@@ -287,6 +287,50 @@ void welcome(App& app) {
 }
 } // namespace
 
+bool tempoField(App& app, const char* id, float width, bool stepButtons) {
+    Project& p = app.project();
+    // The project tempo is re-read every frame, so the value being dragged/typed is kept here until
+    // the edit ends - otherwise a drag would snap back to the old tempo each frame.
+    static ImGuiID editing = 0;
+    static float editBpm = 0;
+    const float current = static_cast<float>(p.tempo.tempoAt(0));
+    auto apply = [&](double bpm) {
+        bpm = std::clamp(std::round(bpm * 10.0) / 10.0, 10.0, 999.0);
+        if (std::abs(bpm - current) < 0.05) return false;
+        return app.run("SetTempo", {{"bpm", bpm}, {"atBeat", 0.0}});
+    };
+    bool changed = false;
+    ImGui::PushID(id);
+    const float bw = ImGui::GetFrameHeight();
+    if (stepButtons) {
+        if (ImGui::Button("-", ImVec2(bw, 0))) changed |= apply(current - 1.0);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("tempo -1 BPM");
+        ImGui::SameLine(0, 2);
+    }
+    const ImGuiID wid = ImGui::GetID("##tempo");
+    float bpm = editing == wid ? editBpm : current;
+    ImGui::SetNextItemWidth(width);
+    ImGui::DragFloat("##tempo", &bpm, 0.2f, 10.0f, 999.0f, "%.1f BPM", ImGuiSliderFlags_AlwaysClamp);
+    if (ImGui::IsItemActive()) {
+        editing = wid;
+        editBpm = bpm;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) changed |= apply(bpm);
+    if (ImGui::IsItemDeactivated() && editing == wid) editing = 0;
+    if (ImGui::IsItemHovered() && !ImGui::IsItemActive()) {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) changed |= apply(current + (wheel > 0 ? 1.0 : -1.0) * (ImGui::GetIO().KeyShift ? 0.1 : 1.0));
+        ImGui::SetTooltip("Tempo: drag left/right, double-click to type a value,\nmouse wheel +-1 BPM (Shift: +-0.1). Ctrl+Z undoes.");
+    }
+    if (stepButtons) {
+        ImGui::SameLine(0, 2);
+        if (ImGui::Button("+", ImVec2(bw, 0))) changed |= apply(current + 1.0);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("tempo +1 BPM");
+    }
+    ImGui::PopID();
+    return changed;
+}
+
 void drawTransport(App& app) {
     const float h = ImGui::GetFrameHeight() * 1.6f;
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(col::Panel));
@@ -321,11 +365,8 @@ void drawTransport(App& app) {
     if (app.hasProject()) {
         auto& p = app.project();
         ImGui::SameLine();
-        float bpm = static_cast<float>(p.tempo.tempoAt(0));
-        ImGui::SetNextItemWidth(90);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (h - ImGui::GetFrameHeight()) * 0.5f);
-        ImGui::DragFloat("##bpm", &bpm, 0.1f, 40, 250, "%.1f BPM");
-        if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetTempo", {{"bpm", bpm}, {"atBeat", 0.0}});
+        tempoField(app, "##bpm", 90 * ImGui::GetFontSize() / 15.0f, true);
         ImGui::SameLine();
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Ivory), "%s", p.key.name().c_str());
         ImGui::SameLine();

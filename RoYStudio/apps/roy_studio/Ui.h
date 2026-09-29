@@ -57,5 +57,8 @@ ImU32 clipColor(uint32_t rgb, int alpha = 255);
 void midiLearnMenuItems(App& app, const std::string& channelId, const std::string& slotId, const std::string& paramId, const std::string& label);
 // Small "CC n" tag after a mapped control (nothing if unmapped). Returns true if mapped.
 bool midiMappedTag(App& app, const std::string& channelId, const std::string& slotId, const std::string& paramId);
+// Project tempo: drag left/right, double-click to type, mouse wheel +-1 (Shift +-0.1), optional -/+ buttons.
+// Every change is one undoable "Set Tempo". Returns true when the tempo was changed.
+bool tempoField(App& app, const char* id, float width, bool stepButtons);
 
 } // namespace roy::gui
