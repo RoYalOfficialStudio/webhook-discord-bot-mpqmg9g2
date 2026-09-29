@@ -936,6 +936,16 @@ void App::toggleRecord() {
 
 void App::seekBeat(double beat) {
     if (!project_) return;
+    // While recording, a jump of the playhead ends the take and starts a new one: dragging the
+    // playhead would create a new take on every frame. The playhead is locked instead.
+    if (recorder_.isRecording() || midiRecording_) {
+        const double now = nowSeconds();
+        if (now > seekLockedMsgUntil_) {
+            message(1, "recording: the playhead is locked - press STOP first, then move it");
+            seekLockedMsgUntil_ = now + 3.0;
+        }
+        return;
+    }
     engine_.transport().seek(static_cast<int64_t>(std::llround(project_->tempo.beatToSeconds(std::max(0.0, beat)) * engine_.sampleRate())));
 }
 

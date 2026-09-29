@@ -259,6 +259,7 @@ private:
     void pollAudition();
     void pollDialogs();
     void autoFixDropouts();
+    double seekLockedMsgUntil_ = 0;
     uint64_t dropBase_ = 0;
     double dropWindowStart_ = 0, dropCooldown_ = 0; // results of the native file / folder windows (own thread)
     struct LearnTarget {

@@ -713,7 +713,35 @@ void drawPlaylist(App& app) {
                         if (open) g_expanded.erase(t.id);
                         else g_expanded.insert(t.id);
                     }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Show take lanes: drag over a take to comp that range, double-click = whole take");
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Show take lanes: drag over a take to comp that range, double-click = whole take\nright-click: clean up takes");
+                    if (ImGui::BeginPopupContextItem("takeCleanup")) {
+                        // clean up: many takes (e.g. from loop recording) - each option is ONE undo step
+                        auto deleteWhere = [&](const char* name, auto&& pred) {
+                            std::vector<std::pair<std::string, json>> steps;
+                            for (auto& k : t.takes)
+                                if (pred(k)) steps.push_back({"DeleteTake", {{"trackId", t.id}, {"takeId", k.id}}});
+                            if (steps.empty()) app.message(0, "no takes to delete");
+                            else if (app.runMacro(name, steps))
+                                app.message(0, std::format("{} takes deleted (files stay in the project folder) - Ctrl+Z brings them back", steps.size()));
+                        };
+                        auto inComp = [&](const Take& k) {
+                            return std::any_of(t.comp.begin(), t.comp.end(), [&](auto& s) { return s.takeId == k.id; });
+                        };
+                        auto seconds = [&](const Take& k) {
+                            return p.tempo.beatToSeconds(k.startBeat + k.lengthBeats) - p.tempo.beatToSeconds(k.startBeat);
+                        };
+                        ImGui::TextDisabled("%zu takes on %s", t.takes.size(), t.name.c_str());
+                        if (ImGui::MenuItem("Delete takes shorter than 1 second"))
+                            deleteWhere("Delete Short Takes", [&](const Take& k) { return seconds(k) < 1.0; });
+                        if (ImGui::MenuItem("Delete takes that are not playing (not in the comp)"))
+                            deleteWhere("Delete Unused Takes", [&](const Take& k) { return !inComp(k); });
+                        if (ImGui::MenuItem("Keep only the newest take")) {
+                            const std::string newest = t.takes.empty() ? std::string() : t.takes.back().id;
+                            deleteWhere("Keep Newest Take", [&](const Take& k) { return k.id != newest; });
+                        }
+                        ImGui::EndPopup();
+                    }
                 }
             } else if (t.instrument) {
                 ImGui::SameLine();

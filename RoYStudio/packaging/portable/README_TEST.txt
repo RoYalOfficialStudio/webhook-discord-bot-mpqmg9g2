@@ -102,6 +102,10 @@ AUFNAHME SCHNEIDEN        Rechtsklick auf den orangen Take an der Schnittstelle 
                                 "Split here (cut)". Oder: Take anklicken, Playhead (goldene
                                 Linie) an die Stelle, Strg+E. Danach sind es normale Clips:
                                 verschieben, löschen (Entf), nochmal schneiden. Strg+Z geht.
+VIELE TAKES AUFRÄUMEN     Rechtsklick auf den T-Knopf der Spur (z. B. "T12") > "Delete takes
+                          shorter than 1 second" / "... not playing" / "Keep only the newest".
+                          Während der Aufnahme ist die Abspiellinie gesperrt (sonst entsteht
+                          bei jedem Verschieben ein neuer Take).
 AUFNAHME VERSCHIEBEN      Orangen Take anklicken und ziehen (wird dabei zum normalen Clip).
 CLIP KÜRZEN               Maus an den linken/rechten Rand eines Clips (Pfeil <->), ziehen.
 CLIP LAUTSTÄRKE / FADE    Rechtsklick auf den Clip > volume, fade in, fade out.
