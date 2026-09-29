@@ -372,12 +372,32 @@ void App::pickAndImportBeat() {
     fs::path start = h ? fs::path(h) / "Downloads" : fs::path();
     std::error_code ec;
     if (!start.empty() && !fs::is_directory(start, ec)) start = start.parent_path();
-    std::vector<fs::path> files;
-    for (auto& f : pickAudioFiles(start.string(), "Import beat (MP3, WAV, FLAC ...)")) files.emplace_back(f);
-    if (!files.empty()) beginImportBeat(files);
-    else if (!nativeFolderPickerAvailable()) {
+    if (!project_) {
+        message(1, "open or create a project first (File > New Project)");
+        return;
+    }
+    if (!nativeDialogsAvailable()) {
         showImportBeat = true; // window with a path field
         importBeatFile.clear();
+        return;
+    }
+    // the dialog runs on its own thread; the result arrives in tick() (pollDialogs)
+    if (startDialog(DialogKind::AudioFiles, start.string(), "Import beat (MP3, WAV, FLAC ...)", "beat"))
+        message(0, "choose your beat in the Windows file window (Downloads folder)");
+    else if (dialogRunning())
+        message(1, "a file window is already open - finish or cancel it first");
+}
+
+void App::pollDialogs() {
+    std::string tag;
+    std::vector<std::string> paths;
+    if (!takeDialogResult(tag, paths)) return;
+    if (tag == "beat" && !paths.empty()) {
+        std::vector<fs::path> files;
+        for (auto& p : paths) files.emplace_back(p);
+        beginImportBeat(files);
+    } else if (tag == "exportFolder" && !paths.empty()) {
+        exportFolder = paths.front();
     }
 }
 
@@ -862,6 +882,7 @@ void App::tick() {
     pollAudioDevice();
     pollMidiDevices();
     pollMicTest();
+    pollDialogs();
     if (!project_) return;
     pollAudition();
     updateLiveMidiTarget();

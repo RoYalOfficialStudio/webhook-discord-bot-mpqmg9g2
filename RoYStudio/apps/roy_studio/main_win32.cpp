@@ -1,6 +1,7 @@
 // RoY Studio - Windows entry point (Win32 + Direct3D 11), per-monitor DPI aware.
 #include "MusicSession.h"
 #include "Options.h"
+#include "PlatformDialogs.h"
 #include "Ui.h"
 
 #include <d3d11.h>
@@ -173,6 +174,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int) {
     if (!lo.openFile.empty()) app.openProject(lo.openFile);
     g_app = &app;
     DragAcceptFiles(hwnd, TRUE); // drop MP3 / WAV files from the Explorer
+    roy::gui::setDialogOwner(hwnd); // file / folder windows open on top of RoY
 
     bool done = false;
     while (!done) {

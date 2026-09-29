@@ -240,6 +240,7 @@ private:
     int auditionKey_ = -1;
     double auditionOff_ = 0, auditionRelease_ = 0;
     void pollAudition();
+    void pollDialogs(); // results of the native file / folder windows (own thread)
     struct LearnTarget {
         std::string channelId, slotId, paramId, label;
     };

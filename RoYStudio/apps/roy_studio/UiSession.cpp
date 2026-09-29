@@ -352,18 +352,17 @@ void drawMusicSession(App& app) {
             ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(t >= 10.0 ? col::Green : col::Red), "REC %.0f s", t);
         } else if (s.title == "Choose the export folder") {
             static char folder[1024] = "";
-            if (ImGui::IsWindowAppearing() || !folder[0]) std::snprintf(folder, sizeof(folder), "%s", app.currentExportFolder().string().c_str());
+            static std::string shown;
+            if (ImGui::IsWindowAppearing() || !folder[0] || (shown != app.exportFolder && !app.exportFolder.empty())) {
+                std::snprintf(folder, sizeof(folder), "%s", app.currentExportFolder().string().c_str());
+                shown = app.exportFolder;
+            }
             ImGui::SetNextItemWidth(300 * dpi);
-            if (ImGui::InputText("##exportFolder", folder, sizeof(folder))) app.exportFolder = folder;
-            if (nativeFolderPickerAvailable()) {
+            if (ImGui::InputText("##exportFolder", folder, sizeof(folder))) shown = app.exportFolder = folder;
+            if (nativeDialogsAvailable()) {
                 ImGui::SameLine();
-                if (ImGui::Button("Browse...")) {
-                    const std::string f = pickFolder(app.currentExportFolder().string(), "RoY Studio - export folder");
-                    if (!f.empty()) {
-                        app.exportFolder = f;
-                        std::snprintf(folder, sizeof(folder), "%s", f.c_str());
-                    }
-                }
+                if (ImGui::Button(dialogRunning() ? "(window open)" : "Browse...") && !dialogRunning())
+                    startDialog(DialogKind::Folder, app.currentExportFolder().string(), "RoY Studio - export folder", "exportFolder");
             }
         } else if (s.title == "A/B original / corrected" && !st.vocalClip.empty() && app.project().findAudioClip(st.vocalClip)) {
             if (ImGui::SmallButton("A ORIGINAL")) app.run("VocalAB", {{"clipId", st.vocalClip}, {"use", "original"}});

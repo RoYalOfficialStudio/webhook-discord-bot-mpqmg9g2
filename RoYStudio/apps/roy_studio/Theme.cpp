@@ -99,6 +99,24 @@ void loadFonts(float dpi) {
 
 ImU32 clipColor(uint32_t rgb, int alpha) { return col::rgb(rgb, alpha); }
 
+namespace {
+template <typename T> bool editFinishedImpl(T& v) {
+    static ImGuiID activeId = 0; // only one widget can be active at a time
+    static T last{};
+    const ImGuiID id = ImGui::GetItemID();
+    if (ImGui::IsItemActive()) {
+        activeId = id;
+        last = v;
+    }
+    if (!ImGui::IsItemDeactivatedAfterEdit()) return false;
+    if (activeId == id) v = last;
+    activeId = 0;
+    return true;
+}
+} // namespace
+bool editFinished(float& v) { return editFinishedImpl(v); }
+bool editFinished(int& v) { return editFinishedImpl(v); }
+
 bool goldButton(const char* label, const ImVec2& size) {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.83f, 0.69f, 0.22f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.83f, 0.35f, 1.0f));

@@ -291,7 +291,7 @@ void drawChannels(App& app) {
     float swing = pat->swing;
     ImGui::SetNextItemWidth(140 * dpi);
     ImGui::SliderFloat("Swing", &swing, 0, 1, "%.2f");
-    if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetPatternSwing", {{"patternId", pat->id}, {"swing", swing}});
+    if (editFinished(swing)) app.run("SetPatternSwing", {{"patternId", pat->id}, {"swing", swing}});
     ImGui::SameLine();
     ImGui::SetNextItemWidth(150 * dpi);
     if (ImGui::BeginCombo("Groove", pat->groove.c_str())) {
@@ -305,7 +305,7 @@ void drawChannels(App& app) {
     float gAmt = pat->grooveAmount;
     ImGui::SetNextItemWidth(90 * dpi);
     ImGui::SliderFloat("##gamt", &gAmt, 0, 1, "groove %.2f");
-    if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetPatternGroove", {{"patternId", pat->id}, {"amount", gAmt}});
+    if (editFinished(gAmt)) app.run("SetPatternGroove", {{"patternId", pat->id}, {"amount", gAmt}});
     ImGui::SameLine();
     std::string beatTrack;
     for (auto& t : p.tracks)
@@ -362,7 +362,7 @@ void drawChannels(App& app) {
         float vol = row.volume;
         ImGui::SetNextItemWidth(60 * dpi);
         ImGui::SliderFloat("##vol", &vol, 0, 1, "");
-        if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetRowMix", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"volume", vol}});
+        if (editFinished(vol)) app.run("SetRowMix", {{"patternId", pid}, {"row", static_cast<int>(r)}, {"volume", vol}});
         for (size_t s = 0; s < row.steps.size(); ++s) {
             ImGui::SameLine(0, s % 4 == 0 ? 8 * dpi : 2 * dpi);
             const Step& st = row.steps[s];
@@ -380,14 +380,14 @@ void drawChannels(App& app) {
                 auto set = [&](const char* k, const json& v) { json a = key; a[k] = v; app.run("SetStep", a); };
                 float prob = st.probability;
                 if (ImGui::SliderFloat("probability", &prob, 0, 1, "%.2f")) {}
-                if (ImGui::IsItemDeactivatedAfterEdit()) set("probability", prob);
+                if (editFinished(prob)) set("probability", prob);
                 int ratchet = st.roll;
                 if (ImGui::SliderInt("ratchet", &ratchet, 0, 8)) {}
-                if (ImGui::IsItemDeactivatedAfterEdit()) set("roll", ratchet);
+                if (editFinished(ratchet)) set("roll", ratchet);
                 if (ImGui::MenuItem("flam", nullptr, st.flam)) set("flam", !st.flam);
                 float micro = st.microTiming;
                 if (ImGui::SliderFloat("micro timing", &micro, -0.5f, 0.5f, "%.2f step")) {}
-                if (ImGui::IsItemDeactivatedAfterEdit()) set("microTiming", micro);
+                if (editFinished(micro)) set("microTiming", micro);
                 ImGui::EndPopup();
             }
             if (st.on && (st.roll > 1 || st.flam || st.probability < 1.0f)) {

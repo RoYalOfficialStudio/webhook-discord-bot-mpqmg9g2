@@ -50,6 +50,11 @@ void drawImportBeat(App& app);    // IMPORT BEAT window (MP3 / WAV beat -> own t
 
 // Shared widgets
 bool goldButton(const char* label, const ImVec2& size = ImVec2(0, 0));
+// For a slider that shows a project value re-read every frame: on the frame the mouse is released
+// the widget no longer writes its value, so the local variable holds the OLD value again. Call
+// right after the widget: returns true once when the edit is finished, `v` = the final value.
+bool editFinished(float& v);
+bool editFinished(int& v);
 bool toggleButton(const char* label, bool on, ImU32 onColor, const ImVec2& size = ImVec2(0, 0));
 void sectionTitle(const char* text);
 void levelMeter(float peakL, float peakR, const ImVec2& size);

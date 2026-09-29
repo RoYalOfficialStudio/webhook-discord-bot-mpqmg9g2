@@ -329,7 +329,7 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
         const std::string fmt = t->name + " %.0f dB";
         if (ImGui::SliderFloat("##send", &lvl, -60.0f, 6.0f, fmt.c_str()) && params && si < ChannelParams::kMaxSends)
             params->sendLevelDb[si].store(lvl); // live while dragging
-        if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetSend", {{"sendId", s.id}, {"levelDb", lvl}});
+        if (editFinished(lvl)) app.run("SetSend", {{"sendId", s.id}, {"levelDb", lvl}});
         if (ImGui::BeginPopupContextItem("sendctx")) {
             if (ImGui::MenuItem(s.preFader ? "Switch to POST fader" : "Switch to PRE fader"))
                 app.run("SetSend", {{"sendId", s.id}, {"preFader", !s.preFader}});
@@ -390,7 +390,7 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
     float pan = ch.pan;
     ImGui::SetNextItemWidth(-1);
     if (ImGui::SliderFloat("##pan", &pan, -1, 1, pan == 0 ? "C" : pan < 0 ? "L %.2f" : "R %.2f") && params) params->pan.store(pan);
-    if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetChannelPan", {{"channelId", ch.id}, {"master", master}, {"pan", pan}});
+    if (editFinished(pan)) app.run("SetChannelPan", {{"channelId", ch.id}, {"master", master}, {"pan", pan}});
     if (ImGui::BeginPopupContextItem("panctx")) {
         if (ImGui::MenuItem("Center")) app.run("SetChannelPan", {{"channelId", ch.id}, {"master", master}, {"pan", 0.0}});
         midiLearnMenuItems(app, ch.id, "", "pan", ch.name + " · Pan");
@@ -401,7 +401,7 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
     const float faderH = bottomH - ImGui::GetFrameHeight() * (master ? 3.2f : 4.4f); // room for solo safe / delete bus
     ImGui::VSliderFloat("##fader", ImVec2(width * 0.42f, faderH), &gain, -60.0f, 12.0f, "%.1f dB");
     if (ImGui::IsItemActive() && params) params->gainDb.store(gain);
-    if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetChannelGain", {{"channelId", ch.id}, {"master", master}, {"gainDb", gain}});
+    if (editFinished(gain)) app.run("SetChannelGain", {{"channelId", ch.id}, {"master", master}, {"gainDb", gain}});
     if (ImGui::BeginPopupContextItem("faderctx")) {
         if (ImGui::MenuItem("Reset to 0 dB")) app.run("SetChannelGain", {{"channelId", ch.id}, {"master", master}, {"gainDb", 0.0}});
         midiLearnMenuItems(app, ch.id, "", "gain", ch.name + " · Volume");
