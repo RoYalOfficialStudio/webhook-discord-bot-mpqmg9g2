@@ -15,13 +15,14 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 ## Verification run of this report
 | Check | Result |
 |---|---|
-| Linux full suite | PASS – 203 tests, 0 failed, 101 432 checks (after the take-comping + soak block) |
-| Windows full suite under Wine 9.0 | PASS – 201 tests, 0 failed, 101 439 checks (SIGSTOP + FIFO tests are POSIX-only) |
-| Windows GUI self-test (roy_studio.exe --audio null --selftest, Wine) | PASS – 17/17 steps |
+| Linux full suite | PASS – 209 tests, 0 failed, 101 600 checks (after the live-MIDI block: learn, hot-plug, timestamps) |
+| Windows full suite under Wine 9.0 | PASS – 205 tests, 0 failed, 101 552 checks (SIGSTOP + FIFO tests are POSIX-only) |
+| Windows GUI self-test (roy_studio.exe --audio null --selftest, Wine) | PASS – 18/18 steps (new: MIDI learn) |
 | Windows + Linux CLI self-test (roy_cli selftest) | PASS |
 | ASan/UBSan full suite | PASS – 190 tests; only findings are the deliberate crash test plugins. One test expectation failed first (scanner error text when ASan turns the crash into exit code 1) → message fixed, plugin suite re-run under ASan: 8/8 PASS |
 | TSan (parallel, mixer, faults, automation) | PASS – 0 warnings |
-| ASan/UBSan on this block (takes, undo, recording, commands, vocal) | PASS – 63 tests, 0 findings |
+| ASan/UBSan on the last blocks (takes, undo, recording, commands, vocal, live MIDI, MIDI learn) | PASS – 0 findings |
+| TSan live MIDI + MIDI learn | PASS – 0 warnings |
 | Soak test (roy_soak, 2 simulated hours) | PASS – RSS flat (−12.7 MB/h), fds/threads flat, 0 failures; before the fix +118 MB/h FAIL |
 | Golden save/reload (WAV bit-identical, MP3 byte-identical, VST3 + CLAP state) | PASS |
 | Fault injection (9 scenarios, see below) | PASS (Linux + Wine) |
@@ -62,7 +63,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | AUDIO DEVICES | PARTIAL | device-loss detection (stop notification + stall watchdog) and auto-reconnect with default-device fallback PASS on the null backend; real WASAPI/ALSA devices UNTESTED |
 | PLAYLIST | PASS | clips, waveforms, drag, split, sections, markers, Ctrl+click multi-select → MoveClips (one undo) |
 | RECORDING | PARTIAL | takes, loop, punch, comp, never-lose, disk-full handling PASS headless; **take lanes + comping in the playlist** (lanes open after the 2nd take, swipe-comp by dragging over a take, double-click = whole take, rename / delete take / clear / flatten comp – all undoable commands, comp audibly verified); real inputs UNTESTED |
-| MIDI | PARTIAL | editing, SMF import/export PASS; LIVE INPUT PASS (parser, MIDI thru with stopped transport, sustain pedal, target follows the selected track, recording → clip in one undo, panic, overflow-safe) – WinMM / ALSA raw-MIDI backends verified only without real devices (Linux via FIFO, Wine enumeration) → real keyboards UNTESTED; recorded timing resolution = one audio block (5.3 ms at 256) |
+| MIDI | PARTIAL | editing, SMF import/export PASS; LIVE INPUT PASS (parser, MIDI thru with stopped transport, sustain pedal, target follows the selected track, recording → clip in one undo, panic, overflow-safe); **sample-accurate timing** (arrival time stamps, constant one-callback latency instead of block jitter, verified with a deterministic clock); **hot-plug** (inputs appear/disappear automatically, stable WinMM ids by device name, all-notes-off on unplug, switched-off inputs stay off); **MIDI LEARN** (CC → volume / pan / width / sends / any effect or instrument parameter, saved in the project, undoable, mapped CCs no longer reach the instrument, mapping list in the Audio menu, removed with its target) – WinMM / ALSA raw-MIDI backends verified only without real devices (Linux via FIFO, Wine enumeration) → real keyboards/controllers UNTESTED |
 | PIANO ROLL | PASS | |
 | AUTOMATION | PASS | volume, pan, width, sends, plugin + effect params, tempo; curves Linear / Hold / Smooth / Bezier(tension) |
 | VOCALS | PASS | pitch editor: waveform, pitch curve, detected/target notes, cents, confidence, IN SCALE / OFF KEY / UNCERTAIN / CORRECTED; Strength, Speed, Humanize, Formant, Vibrato + Slide preserve; A/B ORIGINAL/CORRECTED; original never modified; real recordings UNTESTED |
@@ -105,10 +106,15 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 * (2026-09-29) Undo history is additionally limited to 512 MB; with very large projects the oldest steps
   can drop out before the 500-step limit.
 * (2026-09-29) A comp now shows in the playlist even when the track also has normal clips (it always played).
+* (2026-09-29) Live MIDI keeps the played timing: one audio buffer of constant latency instead of 0..1
+  buffer of jitter (at 256 samples: 5.3 ms constant instead of 0–5.3 ms varying).
+* (2026-09-29) Windows MIDI input ids are now "winmm:<device name>" (were "winmm:<index>").
+* (2026-09-29) Right-click on a mixer fader / pan now opens a menu (Reset / MIDI Learn) instead of
+  resetting directly; same for plugin parameters (Default value / MIDI Learn).
 
 ## Next blocks (BETA HARDENING → RELEASE CANDIDATE)
 1. Windows-native validation package (installer/zip, first-run checks, crash-report collection).
-2. Live MIDI: sub-block timestamps (driver time stamps), MIDI learn for plugin/mixer parameters, hot-plug rescan.
+2. ~~Live MIDI: timestamps, MIDI learn, hot-plug~~ done 2026-09-29; next: validation with real keyboards/controllers (TEST_PLAN 5.3–5.3g), NRPN/14-bit CC and relative encoders for MIDI learn.
 3. Real-recording vocal material in the regression suite (needs user-provided takes).
 4. Third-party plugin compatibility: VST3 SDK plugins 53/55 and CLAP example plugins 20/20 done; next: the user's own plugins via `roy_cli plugin-compat` on Windows (TEST_PLAN 6.0).
 5. ~~Long-session soak test~~ done (2026-09-29, PASS after cache fix); repeat `roy_soak.exe --cycles 240` on a real Windows PC (TEST_PLAN 9.1).

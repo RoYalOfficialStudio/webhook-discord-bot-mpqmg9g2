@@ -53,6 +53,7 @@ struct EngineStats {
 struct LiveMidiMessage {
     uint8_t status = 0, data1 = 0, data2 = 0;
     uint8_t port = 0; // input device index
+    int64_t timeNs = 0; // arrival time (steady clock, ns); 0 = unknown -> start of the next block
 };
 // A live message received while recording, stamped with the timeline sample of its block.
 struct RecordedMidi {
@@ -111,7 +112,10 @@ public:
 
     // ---- live MIDI (MIDI keyboard) ---------------------------------------------
     // Any ONE producer thread (the MIDI input thread). Delivered to the instrument of the
-    // live target channel at the next block - also while the transport is stopped (MIDI thru).
+    // live target channel - also while the transport is stopped (MIDI thru). Timing: a message
+    // stamped with its arrival time (timeNs) is placed sample-accurately: the previous device
+    // callback period is mapped onto the current callback, i.e. constant latency of one
+    // callback instead of up to one block of jitter. Unstamped messages start the next block.
     // Sustain pedal (CC64) holds note-offs. Never allocates or locks.
     bool pushLiveMidi(const LiveMidiMessage& m) noexcept;
     // Message thread: channel index in the CURRENT graph that plays live MIDI (-1 = none).
@@ -123,6 +127,10 @@ public:
     bool liveMidiRecording() const { return liveRecording_.load(std::memory_order_acquire); }
     // Message thread: takes the recorded messages collected so far.
     size_t drainRecordedMidi(std::vector<RecordedMidi>& out);
+    // Clock used for live MIDI timing (default: std::chrono::steady_clock in ns). TEST hook.
+    using ClockFn = int64_t (*)();
+    void setLiveMidiClock(ClockFn fn) { clock_ = fn ? fn : &AudioEngine::steadyNowNs; }
+    static int64_t steadyNowNs() noexcept;
     uint64_t liveMidiReceived() const { return liveReceived_.load(std::memory_order_relaxed); }
     uint64_t liveMidiDropped() const { return liveDropped_.load(std::memory_order_relaxed); }
 
@@ -167,7 +175,12 @@ private:
     std::atomic<uint64_t> blocksProcessed_{0};
     std::atomic<bool> inProcess_{false};
     // live MIDI
-    void collectLiveMidi(bool rolling, int64_t timeline) noexcept;
+    void collectLiveMidi(bool rolling, int64_t timeline, int outOffset, int frames) noexcept;
+    ClockFn clock_ = &AudioEngine::steadyNowNs;
+    int64_t cbStartNs_ = 0, prevCbStartNs_ = 0; // current / previous device callback start
+    int cbFrames_ = 0;
+    LiveMidiMessage pendingLive_{};
+    bool hasPendingLive_ = false;               // popped, but due in a later chunk/callback
     std::unique_ptr<SpscQueue<LiveMidiMessage>> liveIn_;
     std::unique_ptr<SpscQueue<RecordedMidi>> liveRec_;
     std::atomic<int> liveTarget_{-1};

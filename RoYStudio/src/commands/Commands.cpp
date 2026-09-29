@@ -3,6 +3,7 @@
 #include "project/AutomationShape.h"
 #include "arrange/ClipOps.h"
 #include "midi/MidiFile.h"
+#include "midi/MidiLearn.h"
 #include "midi/MidiOps.h"
 #include "record/Takes.h"
 #include "audio/ProjectRuntime.h"
@@ -232,6 +233,52 @@ void registerCoreCommands(CommandRegistry& r) {
                return true;
            }});
 
+    // ---- MIDI learn -------------------------------------------------------------
+    // One controller drives one target and one target listens to one controller: a new
+    // mapping replaces older ones on the same CC (same channel) or the same target.
+    r.add({"AddMidiMapping", "MIDI Learn: Map Controller", "MIDI", "", true, false, [](CommandContext& ctx, const json& a) {
+               const int cc = static_cast<int>(argNum(a, "cc", -1));
+               const int channel = std::clamp(static_cast<int>(argNum(a, "channel", -1)), -1, 15);
+               if (!midi::learnableCc(cc)) return fail(ctx, "controller number must be 0..119");
+               midi::MidiTarget t{argStr(a, "channelId"), argStr(a, "slotId"), argStr(a, "paramId")};
+               if (argBool(a, "master", false) && ctx.project.master()) t.channelId = ctx.project.master()->id;
+               float lo = 0, hi = 1;
+               std::string err;
+               if (!midi::resolveTarget(ctx.project, ctx.runtime, t, &lo, &hi, &err)) return fail(ctx, err);
+               MidiMapping m;
+               m.id = files::newId();
+               m.channel = channel;
+               m.cc = cc;
+               m.channelId = t.channelId;
+               m.slotId = t.slotId;
+               m.paramId = t.paramId;
+               m.minValue = static_cast<float>(argNum(a, "min", lo));
+               m.maxValue = static_cast<float>(argNum(a, "max", hi));
+               if (!std::isfinite(m.minValue) || !std::isfinite(m.maxValue)) return fail(ctx, "invalid range");
+               std::erase_if(ctx.project.midiMappings, [&](const MidiMapping& o) {
+                   const bool sameCc = o.cc == cc && (o.channel < 0 || channel < 0 || o.channel == channel);
+                   const bool sameTarget = o.paramId == m.paramId && o.slotId == m.slotId && (!m.slotId.empty() || o.channelId == m.channelId);
+                   return sameCc || sameTarget;
+               });
+               ctx.project.midiMappings.push_back(m);
+               ctx.result["id"] = m.id;
+               return true;
+           }});
+    r.add({"RemoveMidiMapping", "MIDI Learn: Remove Mapping", "MIDI", "", true, false, [](CommandContext& ctx, const json& a) {
+               const std::string id = argStr(a, "mappingId");
+               const auto n = id.empty() ? std::erase_if(ctx.project.midiMappings, [&](const MidiMapping& m) {
+                   return m.paramId == argStr(a, "paramId") && m.slotId == argStr(a, "slotId") &&
+                          (!m.slotId.empty() || m.channelId == argStr(a, "channelId"));
+               })
+                                         : std::erase_if(ctx.project.midiMappings, [&](const MidiMapping& m) { return m.id == id; });
+               return n > 0 || fail(ctx, "mapping not found");
+           }});
+    r.add({"ClearMidiMappings", "MIDI Learn: Remove All Mappings", "MIDI", "", true, false, [](CommandContext& ctx, const json&) {
+               if (ctx.project.midiMappings.empty()) return fail(ctx, "no MIDI mappings");
+               ctx.project.midiMappings.clear();
+               return true;
+           }});
+
     // ---- take lanes + comping -------------------------------------------------
     // Every recorded pass is a Take on its own lane; the comp says which take plays where.
     // Deleting a take removes it from the model only - its audio file stays in the project.
@@ -386,6 +433,7 @@ void registerCoreCommands(CommandRegistry& r) {
                for (auto& ch : ctx.project.channels)
                    if (std::erase_if(ch.sends, [&](const Send& s) { return s.id == id; }) > 0) {
                        std::erase_if(ctx.project.automation, [&](const AutomationLane& l) { return l.paramId == "send:" + id; });
+                       std::erase_if(ctx.project.midiMappings, [&](const MidiMapping& m) { return m.paramId == "send:" + id; });
                        return true;
                    }
                return fail(ctx, "send not found");
@@ -445,6 +493,7 @@ void registerCoreCommands(CommandRegistry& r) {
                for (auto& ch : ctx.project.channels)
                    if (std::erase_if(ch.inserts, [&](auto& s) { return s.id == id; }) > 0) {
                        std::erase_if(ctx.project.automation, [&](auto& l) { return l.slotId == id; });
+                       std::erase_if(ctx.project.midiMappings, [&](auto& m) { return m.slotId == id; });
                        return true;
                    }
                return fail(ctx, "effect not found");

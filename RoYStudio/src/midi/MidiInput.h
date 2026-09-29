@@ -5,7 +5,9 @@
 // all of them feed ONE parser path into AudioEngine::pushLiveMidi (serialised here, so the
 // engine queue keeps a single producer and the audio thread stays lock-free).
 #include "audio/AudioEngine.h"
+#include "midi/MidiLearn.h"
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -16,7 +18,7 @@
 namespace roy::midi {
 
 struct MidiInputDevice {
-    std::string id;   // "winmm:2", "/dev/snd/midiC1D0" or any byte-stream path
+    std::string id;   // "winmm:<device name>" (stable across re-plugging), "/dev/snd/midiC1D0" or any byte-stream path
     std::string name; // human readable
 };
 
@@ -70,8 +72,31 @@ public:
     std::vector<std::string> openDevices() const;
     bool isOpen(const std::string& id) const;
 
+    // HOT-PLUG: opens inputs that appeared since the last call (except `skip`, e.g. inputs the
+    // user switched off) and closes inputs whose device is gone. Cheap; call every ~2 s.
+    struct RescanResult {
+        std::vector<MidiInputDevice> added;
+        std::vector<std::string> removed; // ids
+        std::vector<std::string> failed;  // "name: error"
+    };
+    RescanResult rescan(const std::vector<std::string>& skip = {});
+#ifndef _WIN32
+    // Where raw MIDI device files are listed (default /dev/snd). Tests point it at FIFOs.
+    void setDeviceDirectory(const std::string& dir) { deviceDir_ = dir; }
+#endif
+
     // Feeds bytes as if they came from input `port` (on-screen keyboard, tests).
     void inject(const uint8_t* data, size_t n, int port = 0);
+
+    // Controller moves for the message thread (MIDI learn / mapped controls); bounded, the
+    // oldest are dropped if nobody drains.
+    std::vector<ControlChange> drainControlChanges();
+    // Controllers that drive mapped parameters are consumed here (not sent to the instrument).
+    // `anyChannel` entries block the CC on all 16 channels. While learning, every learnable
+    // CC is consumed so a knob turned to learn does not also change the synth.
+    void setConsumedControls(const std::vector<std::pair<int, int>>& channelAndCc);
+    void setLearning(bool on) { learning_.store(on, std::memory_order_relaxed); }
+    bool isConsumed(int channel, int cc) const;
 
     uint64_t messageCount() const { return messages_.load(std::memory_order_relaxed); }
     // "Note On C3 vel 100" - last message, for the activity indicator.
@@ -85,6 +110,12 @@ private:
     std::vector<std::unique_ptr<Input>> inputs_;
     std::unique_ptr<Input> virtual_;
     std::atomic<uint64_t> messages_{0};
+    std::vector<ControlChange> ccQueue_;          // guarded by mutex_
+    std::array<std::atomic<uint64_t>, 32> consumed_{}; // 16 channels x 128 CC bits
+    std::atomic<bool> learning_{false};
+#ifndef _WIN32
+    std::string deviceDir_ = "/dev/snd";
+#endif
     std::atomic<uint32_t> last_{0};
     friend struct MidiInputAccess;
 };

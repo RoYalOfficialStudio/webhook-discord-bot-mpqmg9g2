@@ -1,6 +1,7 @@
 #include "Ui.h"
 
 #include "core/Files.h"
+#include "midi/MidiLearn.h"
 
 #include <algorithm>
 #include <cmath>
@@ -27,6 +28,7 @@ void shortcuts(App& app) {
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_P, false)) app.showPalette = true;
     if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_R, false)) app.toggleRecord();
     if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) app.seekBeat(0);
+    if (app.midiLearning() && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) app.cancelMidiLearn();
     const ImGuiKey fkeys[] = {ImGuiKey_F1, ImGuiKey_F2, ImGuiKey_F3, ImGuiKey_F4, ImGuiKey_F5, ImGuiKey_F6, ImGuiKey_F7, ImGuiKey_F8, ImGuiKey_F9};
     for (int i = 0; i < static_cast<int>(Area::Count); ++i)
         if (ImGui::IsKeyPressed(fkeys[i], false)) app.area = static_cast<Area>(i);
@@ -84,19 +86,32 @@ void menuBar(App& app) {
         ImGui::TextDisabled("MIDI INPUTS");
         if (auto* mi = app.midiInput()) {
             const auto devs = mi->devices();
-            if (devs.empty()) ImGui::TextDisabled("no MIDI input found - connect a keyboard");
+            if (devs.empty()) ImGui::TextDisabled("no MIDI input found - connect a keyboard (detected automatically)");
             for (auto& d : devs) {
                 const bool open = mi->isOpen(d.id);
-                if (ImGui::MenuItem(d.name.c_str(), nullptr, open)) {
-                    std::string err;
-                    if (open) mi->close(d.id);
-                    else if (!mi->open(d.id, &err)) app.message(2, err);
-                }
+                if (ImGui::MenuItem(d.name.c_str(), nullptr, open)) app.setMidiInputEnabled(d.id, !open);
             }
             ImGui::TextDisabled("last: %s", mi->lastMessageText().c_str());
             const std::string target = app.liveMidiTrackName();
             ImGui::TextDisabled("plays: %s", target.empty() ? "(select a track with an instrument)" : target.c_str());
             if (ImGui::MenuItem("MIDI panic (all notes off)")) app.midiPanic();
+            if (app.hasProject() && ImGui::BeginMenu("MIDI controller mappings")) {
+                auto& maps = app.project().midiMappings;
+                if (maps.empty()) ImGui::TextDisabled("none - right-click a fader, knob or plugin parameter > MIDI Learn");
+                std::string removeId;
+                for (auto& m : maps) {
+                    const bool ok = midi::mappingTargetExists(app.project(), &app.runtime(), m);
+                    const std::string line = std::format("CC {:3}{}  ->  {}{}", m.cc, m.channel >= 0 ? std::format(" ch {:2}", m.channel + 1) : " any  ",
+                                                         midi::targetName(app.project(), &app.runtime(), m), ok ? "" : "  (target missing)");
+                    if (ImGui::MenuItem(line.c_str(), "remove")) removeId = m.id;
+                }
+                if (!removeId.empty()) app.run("RemoveMidiMapping", {{"mappingId", removeId}});
+                if (!maps.empty()) {
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Remove all mappings")) app.run("ClearMidiMappings", json::object());
+                }
+                ImGui::EndMenu();
+            }
         }
         ImGui::EndMenu();
     }
@@ -166,6 +181,10 @@ void statusBar(App& app) {
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(cpuC), "CPU %3.0f%%", st.cpuLoad * 100.0);
     ImGui::SameLine();
     ImGui::TextDisabled("| xruns %llu | %s", static_cast<unsigned long long>(st.overloads), app.audioStatus().c_str());
+    if (app.midiLearning()) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "| MIDI LEARN: move a controller for %s (Esc cancels)", app.midiLearnLabel().c_str());
+    }
     if (auto* mi = app.midiInput(); mi && mi->messageCount() > 0) {
         ImGui::SameLine();
         ImGui::TextDisabled("| MIDI %s -> %s", mi->lastMessageText().c_str(), app.liveMidiTrackName().c_str());

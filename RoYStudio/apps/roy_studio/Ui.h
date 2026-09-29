@@ -50,5 +50,9 @@ bool toggleButton(const char* label, bool on, ImU32 onColor, const ImVec2& size 
 void sectionTitle(const char* text);
 void levelMeter(float peakL, float peakR, const ImVec2& size);
 ImU32 clipColor(uint32_t rgb, int alpha = 255);
+// Context-menu entries "MIDI Learn" / "Remove MIDI mapping (CC n)" for a parameter.
+void midiLearnMenuItems(App& app, const std::string& channelId, const std::string& slotId, const std::string& paramId, const std::string& label);
+// Small "CC n" tag after a mapped control (nothing if unmapped). Returns true if mapped.
+bool midiMappedTag(App& app, const std::string& channelId, const std::string& slotId, const std::string& paramId);
 
 } // namespace roy::gui

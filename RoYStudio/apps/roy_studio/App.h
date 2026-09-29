@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <future>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -88,6 +89,13 @@ public:
     midi::MidiInputManager* midiInput() { return midiIn_.get(); }
     void midiPanic();
     std::string liveMidiTrackName() const;
+    // MIDI learn: the next controller moved (CC 0..119) is mapped to this target.
+    // MIDI inputs switched on/off by the user (switched-off inputs are not reopened by hot-plug).
+    void setMidiInputEnabled(const std::string& id, bool on);
+    void startMidiLearn(const std::string& channelId, const std::string& slotId, const std::string& paramId, const std::string& label);
+    void cancelMidiLearn();
+    bool midiLearning() const { return learn_.has_value(); }
+    std::string midiLearnLabel() const { return learn_ ? learn_->label : std::string(); }
     void seekBeat(double beat);
     double positionBeats() const;
     std::string positionText() const;
@@ -154,6 +162,16 @@ private:
     std::vector<RecordedMidi> midiTake_;
     void updateLiveMidiTarget();
     void finishMidiRecording();
+    struct LearnTarget {
+        std::string channelId, slotId, paramId, label;
+    };
+    std::optional<LearnTarget> learn_;
+    std::string consumedSig_;
+    void processMidiControls();
+    void pollMidiDevices();
+    std::vector<std::string> midiUserOff_;
+    std::set<std::string> midiFailReported_;
+    double nextMidiRescan_ = 0;
     uint32_t diskErrorsSeen_ = 0;
     std::set<std::string> invalidWarned_;
     void pollAudioDevice();

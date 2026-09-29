@@ -2,6 +2,7 @@
 #include "Ui.h"
 
 #include "export/Mp3Encoder.h"
+#include "midi/MidiLearn.h"
 #include "plugins/Sandbox.h"
 
 #include <algorithm>
@@ -9,6 +10,27 @@
 #include <format>
 
 namespace roy::gui {
+
+void midiLearnMenuItems(App& app, const std::string& channelId, const std::string& slotId, const std::string& paramId, const std::string& label) {
+    const MidiMapping* m = midi::findMappingForTarget(app.project(), channelId, slotId, paramId);
+    if (!app.midiInput()) {
+        ImGui::MenuItem("MIDI Learn (no MIDI input)", nullptr, false, false);
+        return;
+    }
+    if (ImGui::MenuItem(m ? "MIDI Learn (re-map)" : "MIDI Learn")) app.startMidiLearn(channelId, slotId, paramId, label);
+    if (m && ImGui::MenuItem(std::format("Remove MIDI mapping (CC {}{})", m->cc, m->channel >= 0 ? std::format(", ch {}", m->channel + 1) : "").c_str()))
+        app.run("RemoveMidiMapping", {{"mappingId", m->id}});
+}
+
+bool midiMappedTag(App& app, const std::string& channelId, const std::string& slotId, const std::string& paramId) {
+    const MidiMapping* m = midi::findMappingForTarget(app.project(), channelId, slotId, paramId);
+    if (!m) return false;
+    ImGui::SameLine();
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Green), "CC%d", m->cc);
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("controlled by MIDI CC %d%s - right-click the control to re-map or remove", m->cc,
+                                                  m->channel >= 0 ? std::format(" on channel {}", m->channel + 1).c_str() : "");
+    return true;
+}
 
 namespace {
 // Generic parameter editor for any processor (built-in or sandboxed plugin):
@@ -99,15 +121,20 @@ void paramEditor(App& app, const std::string& slotId) {
                 if (ImGui::SliderFloat(pi.name.c_str(), &v, pi.minValue, pi.maxValue, pi.unit.empty() ? "%.3f" : ("%.3f " + pi.unit).c_str()))
                     proc->setParam(i, v); // live, lock-free
                 edited = ImGui::IsItemDeactivatedAfterEdit();
-                if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+            }
+            if (ImGui::BeginPopupContextItem("pctx")) {
+                if (ImGui::MenuItem("Default value")) {
                     proc->setParam(i, pi.defaultValue);
                     edited = true;
                 }
+                if (owner) midiLearnMenuItems(app, owner->id, slotId, pi.id, (slot ? slot->name + " · " : std::string()) + pi.name);
+                ImGui::EndPopup();
             }
+            if (owner) midiMappedTag(app, owner->id, slotId, pi.id);
             if (edited) app.run("SetParam", {{"slotId", slotId}, {"paramId", pi.id}, {"value", proc->getParam(i)}});
             ImGui::PopID();
         }
-    ImGui::TextDisabled("right-click a slider: default value | + / *: favourite");
+    ImGui::TextDisabled("right-click a control: default value, MIDI Learn | + / *: favourite");
     ImGui::EndChild();
 }
 
@@ -189,10 +216,12 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
                 app.run("CreateAutomation", {{"channelId", ch.id}, {"paramId", "send:" + s.id}, {"points", {{b, s.levelDb}, {b + 4.0, s.levelDb}}}});
             }
             if (ImGui::MenuItem("Remove send")) app.run("RemoveSend", {{"sendId", s.id}});
+            ImGui::Separator();
+            midiLearnMenuItems(app, ch.id, "", "send:" + s.id, ch.name + " · Send " + t->name);
             ImGui::EndPopup();
         }
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("%s %s%s - right-click: pre/post, on/off, automate, remove", s.preFader ? "PRE" : "POST", t->name.c_str(),
+            ImGui::SetTooltip("%s %s%s - right-click: pre/post, on/off, automate, remove, MIDI learn", s.preFader ? "PRE" : "POST", t->name.c_str(),
                               s.enabled ? "" : " (off)");
         ImGui::PopID();
     }
@@ -219,14 +248,25 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
     float pan = ch.pan;
     ImGui::SetNextItemWidth(-1);
     if (ImGui::SliderFloat("##pan", &pan, -1, 1, pan == 0 ? "C" : pan < 0 ? "L %.2f" : "R %.2f") && params) params->pan.store(pan);
-    if (ImGui::IsItemDeactivatedAfterEdit()) app.run(master ? "SetChannelPan" : "SetChannelPan", {{"channelId", ch.id}, {"master", master}, {"pan", pan}});
+    if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetChannelPan", {{"channelId", ch.id}, {"master", master}, {"pan", pan}});
+    if (ImGui::BeginPopupContextItem("panctx")) {
+        if (ImGui::MenuItem("Center")) app.run("SetChannelPan", {{"channelId", ch.id}, {"master", master}, {"pan", 0.0}});
+        midiLearnMenuItems(app, ch.id, "", "pan", ch.name + " · Pan");
+        ImGui::EndPopup();
+    }
     // fader + meter
     float gain = ch.gainDb;
     const float faderH = bottomH - ImGui::GetFrameHeight() * (master ? 3.2f : 4.4f); // room for solo safe / delete bus
     ImGui::VSliderFloat("##fader", ImVec2(width * 0.42f, faderH), &gain, -60.0f, 12.0f, "%.1f dB");
     if (ImGui::IsItemActive() && params) params->gainDb.store(gain);
     if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetChannelGain", {{"channelId", ch.id}, {"master", master}, {"gainDb", gain}});
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) app.run("SetChannelGain", {{"channelId", ch.id}, {"master", master}, {"gainDb", 0.0}});
+    if (ImGui::BeginPopupContextItem("faderctx")) {
+        if (ImGui::MenuItem("Reset to 0 dB")) app.run("SetChannelGain", {{"channelId", ch.id}, {"master", master}, {"gainDb", 0.0}});
+        midiLearnMenuItems(app, ch.id, "", "gain", ch.name + " · Volume");
+        ImGui::EndPopup();
+    }
+    if (const MidiMapping* mm = midi::findMappingForTarget(app.project(), ch.id, "", "gain"); mm && ImGui::IsItemHovered())
+        ImGui::SetTooltip("volume controlled by MIDI CC %d - right-click: reset, MIDI learn", mm->cc);
     ImGui::SameLine();
     float pl = 0, pr = 0;
     if (params) {

@@ -212,6 +212,19 @@ struct AutomationLane {
     std::vector<AutomationPoint> points;
 };
 
+// MIDI LEARN: a hardware controller (CC) drives a mixer or plugin parameter.
+// Target addressing is the same as for automation lanes.
+struct MidiMapping {
+    std::string id;
+    int channel = -1;       // MIDI channel 0..15, -1 = any
+    int cc = 0;             // controller number 0..119
+    std::string channelId;  // mixer channel (strip parameters)
+    std::string slotId;     // effect/instrument slot (processor parameters); empty = strip
+    std::string paramId;    // "gain" | "pan" | "width" | "send:<sendId>" | processor param id
+    float minValue = 0.0f;  // parameter value at CC 0
+    float maxValue = 1.0f;  // parameter value at CC 127
+};
+
 enum class TrackType : int { Audio = 0, Midi = 1, Beat = 2 };
 
 struct Track {
@@ -292,6 +305,7 @@ struct Project {
     std::vector<MixerChannel> channels;
     std::vector<AutomationLane> automation;
     std::vector<Pattern> patterns;
+    std::vector<MidiMapping> midiMappings;
     json presets = json::object();
     json producerMemory = json::object();
     json vocalSettings = json::object();  // per-track Pitch Guardian etc.: {trackId: {...}}

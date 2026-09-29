@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <map>
 #include <thread>
 
 #ifdef _WIN32
@@ -62,11 +63,41 @@ MidiInputManager::~MidiInputManager() { closeAll(); }
 
 void MidiInputManager::deliver(Input& in, const uint8_t* data, size_t n) {
     std::lock_guard l(mutex_); // serialises producers; the audio thread never takes it
+    const int64_t stamp = AudioEngine::steadyNowNs(); // arrival time -> sample-accurate placement
     in.parser.feed(data, n, [&](uint8_t s, uint8_t d1, uint8_t d2) {
-        engine_.pushLiveMidi(LiveMidiMessage{s, d1, d2, static_cast<uint8_t>(in.port)});
+        bool consumed = false;
+        if ((s & 0xF0) == 0xB0 && learnableCc(d1)) {
+            if (ccQueue_.size() >= 4096) ccQueue_.erase(ccQueue_.begin(), ccQueue_.begin() + 1024);
+            ccQueue_.push_back({static_cast<uint8_t>(s & 0x0F), d1, d2});
+            consumed = isConsumed(s & 0x0F, d1);
+        }
+        if (!consumed) engine_.pushLiveMidi(LiveMidiMessage{s, d1, d2, static_cast<uint8_t>(in.port), stamp});
         messages_.fetch_add(1, std::memory_order_relaxed);
         last_.store(static_cast<uint32_t>(s) | static_cast<uint32_t>(d1) << 8 | static_cast<uint32_t>(d2) << 16, std::memory_order_relaxed);
     });
+}
+
+std::vector<ControlChange> MidiInputManager::drainControlChanges() {
+    std::lock_guard l(mutex_);
+    std::vector<ControlChange> out;
+    out.swap(ccQueue_);
+    return out;
+}
+
+void MidiInputManager::setConsumedControls(const std::vector<std::pair<int, int>>& list) {
+    std::array<uint64_t, 32> bits{};
+    for (auto [ch, cc] : list) {
+        if (!learnableCc(cc)) continue;
+        for (int c = 0; c < 16; ++c)
+            if (ch < 0 || ch == c) bits[static_cast<size_t>(c * 2 + cc / 64)] |= uint64_t{1} << (cc % 64);
+    }
+    for (size_t i = 0; i < bits.size(); ++i) consumed_[i].store(bits[i], std::memory_order_relaxed);
+}
+
+bool MidiInputManager::isConsumed(int channel, int cc) const {
+    if (!learnableCc(cc) || channel < 0 || channel > 15) return false;
+    if (learning_.load(std::memory_order_relaxed)) return true;
+    return (consumed_[static_cast<size_t>(channel * 2 + cc / 64)].load(std::memory_order_relaxed) >> (cc % 64)) & 1;
 }
 
 void MidiInputManager::inject(const uint8_t* data, size_t n, int port) {
@@ -116,26 +147,42 @@ struct MidiInputAccess {
     }
 };
 
-std::vector<MidiInputDevice> MidiInputManager::devices() const {
-    std::vector<MidiInputDevice> v;
+namespace {
+// WinMM numbers devices 0..n-1 and renumbers them when one is unplugged, so ids are built from
+// the device name ("winmm:<name>", "winmm:<name> #2" for identical devices) and resolved to the
+// current index when opening.
+std::vector<std::pair<MidiInputDevice, UINT>> winmmDevices() {
+    std::vector<std::pair<MidiInputDevice, UINT>> v;
+    std::map<std::string, int> seen;
     const UINT n = midiInGetNumDevs();
     for (UINT i = 0; i < n; ++i) {
         MIDIINCAPSW caps{};
         if (midiInGetDevCapsW(i, &caps, sizeof(caps)) != MMSYSERR_NOERROR) continue;
         char name[128] = {};
         WideCharToMultiByte(CP_UTF8, 0, caps.szPname, -1, name, sizeof(name) - 1, nullptr, nullptr);
-        v.push_back({std::format("winmm:{}", i), name});
+        const int k = ++seen[name];
+        const std::string display = k > 1 ? std::format("{} #{}", name, k) : std::string(name);
+        v.push_back({{"winmm:" + display, display}, i});
     }
+    return v;
+}
+} // namespace
+
+std::vector<MidiInputDevice> MidiInputManager::devices() const {
+    std::vector<MidiInputDevice> v;
+    for (auto& [d, index] : winmmDevices()) v.push_back(d);
     return v;
 }
 
 bool MidiInputManager::open(const std::string& id, std::string* error) {
     if (isOpen(id)) return true;
-    if (id.rfind("winmm:", 0) != 0) {
-        if (error) *error = "unknown MIDI device id " + id;
+    UINT index = UINT(-1);
+    for (auto& [d, i] : winmmDevices())
+        if (d.id == id) index = i;
+    if (index == UINT(-1)) {
+        if (error) *error = "MIDI device not found: " + id;
         return false;
     }
-    const UINT index = static_cast<UINT>(std::atoi(id.c_str() + 6));
     auto in = std::make_unique<Input>();
     in->id = id;
     in->port = static_cast<int>(index) + 1;
@@ -171,7 +218,7 @@ void MidiInputManager::close(const std::string& id) {
 std::vector<MidiInputDevice> MidiInputManager::devices() const {
     std::vector<MidiInputDevice> v;
     std::error_code ec;
-    for (auto& e : fs::directory_iterator("/dev/snd", ec)) {
+    for (auto& e : fs::directory_iterator(deviceDir_, ec)) {
         const std::string f = e.path().filename().string();
         if (f.rfind("midiC", 0) != 0) continue;
         std::string name = f;
@@ -235,6 +282,26 @@ void MidiInputManager::close(const std::string& id) {
     ::close(victim->fd);
 }
 #endif
+
+MidiInputManager::RescanResult MidiInputManager::rescan(const std::vector<std::string>& skip) {
+    RescanResult r;
+    const auto present = devices();
+    for (auto& id : openDevices()) {
+        if (id == "virtual") continue;
+        const bool there = std::any_of(present.begin(), present.end(), [&](auto& d) { return d.id == id; });
+        if (!there) {
+            close(id);
+            r.removed.push_back(id);
+        }
+    }
+    for (auto& d : present) {
+        if (isOpen(d.id) || std::find(skip.begin(), skip.end(), d.id) != skip.end()) continue;
+        std::string err;
+        if (open(d.id, &err)) r.added.push_back(d);
+        else r.failed.push_back(d.name + ": " + err);
+    }
+    return r;
+}
 
 void MidiInputManager::closeAll() {
     for (auto& id : openDevices()) close(id);

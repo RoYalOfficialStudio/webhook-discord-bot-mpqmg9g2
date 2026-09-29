@@ -177,6 +177,12 @@ void removeChannelRefs(Project& p, const std::string& chId) {
             if (a.paramId == "send:" + id) return true;
         return false;
     });
+    std::erase_if(p.midiMappings, [&](auto& m) {
+        if (m.channelId == chId) return true; // strip, inserts and instrument of that channel
+        for (auto& id : deadSends)
+            if (m.paramId == "send:" + id) return true;
+        return false;
+    });
 }
 } // namespace
 

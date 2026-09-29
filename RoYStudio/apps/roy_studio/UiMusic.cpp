@@ -411,6 +411,15 @@ void drawBeats(App& app) {
                 }
                 if (ImGui::IsItemDeactivatedAfterEdit() && pi.steps != 2)
                     app.run("SetParam", {{"slotId", t.instrument->id}, {"paramId", pi.id}, {"value", proc->getParam(i)}});
+                ImGui::PushID(i);
+                if (ImGui::BeginPopupContextItem("p808ctx")) {
+                    if (ImGui::MenuItem("Default value"))
+                        app.run("SetParam", {{"slotId", t.instrument->id}, {"paramId", pi.id}, {"value", pi.defaultValue}});
+                    midiLearnMenuItems(app, t.channelId, t.instrument->id, pi.id, t.name + " · " + pi.name);
+                    ImGui::EndPopup();
+                }
+                ImGui::PopID();
+                midiMappedTag(app, t.channelId, t.instrument->id, pi.id);
             }
         }
         ImGui::Separator();

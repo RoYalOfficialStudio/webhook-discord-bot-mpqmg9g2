@@ -8,6 +8,7 @@
 #include "commands/Commands.h"
 #include "midi/MidiInput.h"
 
+#include <fstream>
 #include <thread>
 
 #ifndef _WIN32
@@ -217,6 +218,86 @@ TEST_CASE("live-midi", "flooding the input never blocks or crashes; offline rend
 }
 
 #ifndef _WIN32
+namespace {
+int64_t g_fakeNow = 0;
+int64_t fakeClock() { return g_fakeNow; }
+} // namespace
+
+TEST_CASE("live-midi", "timestamps: sample-accurate placement with constant latency, late messages wait, chunked callbacks") {
+    AudioEngine e;
+    e.prepare(SR, 240); // 240 frames @ 48 kHz = exactly 5 ms per callback
+    e.setLiveMidiClock(&fakeClock);
+    e.setLiveMidiRecording(true);
+    e.transport().play();
+    const int64_t T0 = 1'000'000'000, period = 5'000'000;
+    std::vector<float> l(1024), r(1024);
+    float* outs[2] = {l.data(), r.data()};
+    auto callback = [&](int k, int frames = 240) {
+        g_fakeNow = T0 + k * period;
+        e.process(nullptr, 0, outs, 2, frames);
+    };
+    // 1) notes played every 1000 samples (20.833 ms) at arbitrary moments between callbacks
+    callback(0);
+    std::vector<int64_t> sent;
+    int k = 0;
+    for (int n = 0; n < 12; ++n) {
+        const int64_t t = T0 + 7'777'777 + static_cast<int64_t>(n) * 20'833'333; // not aligned to callbacks
+        while (T0 + (k + 1) * period <= t) callback(++k);                        // run callbacks up to the arrival
+        e.pushLiveMidi(LiveMidiMessage{0x90, static_cast<uint8_t>(60 + n), 100, 0, t});
+        sent.push_back(t);
+    }
+    for (int i = 0; i < 3; ++i) callback(++k);
+    std::vector<RecordedMidi> rec;
+    e.drainRecordedMidi(rec);
+    REQUIRE(rec.size() == sent.size());
+    for (size_t i = 0; i < rec.size(); ++i) {
+        // arrival time in samples + exactly one callback (240) of latency, +-1 sample rounding
+        const double expect = static_cast<double>(sent[i] - T0) * SR / 1e9 + 240.0;
+        CHECK_NEAR(static_cast<double>(rec[i].timeline), expect, 1.01);
+    }
+    // spacing is kept (block-start quantisation would give multiples of 240)
+    for (size_t i = 1; i < rec.size(); ++i) CHECK_NEAR(static_cast<double>(rec[i].timeline - rec[i - 1].timeline), 1000.0, 1.01);
+
+    // 2) a message stamped after the current callback began waits for the next callback
+    const int64_t late = T0 + (k + 1) * period + 100; // arrives while callback k+1 runs
+    e.pushLiveMidi(LiveMidiMessage{0x90, 90, 100, 0, late});
+    callback(++k);
+    rec.clear();
+    e.drainRecordedMidi(rec);
+    CHECK(rec.empty());
+    callback(++k);
+    e.drainRecordedMidi(rec);
+    REQUIRE(rec.size() == 1);
+    CHECK_NEAR(static_cast<double>(rec[0].timeline), static_cast<double>(late - T0) * SR / 1e9 + 240.0, 1.01);
+
+    // 3) unstamped messages (on-screen keyboard, tests) start the next block as before
+    e.pushLiveMidi(LiveMidiMessage{0x90, 91, 100, 0, 0});
+    const int64_t before = e.transport().position();
+    callback(++k);
+    rec.clear();
+    e.drainRecordedMidi(rec);
+    REQUIRE(rec.size() == 1);
+    CHECK(rec[0].timeline == before);
+
+    // 4) one 960-frame callback is processed in 4 chunks of 240: an event due at 700 lands in chunk 3
+    e.prepare(SR, 240);
+    e.transport().seek(0);
+    e.transport().play();
+    g_fakeNow = T0 + 100 * period;
+    e.process(nullptr, 0, outs, 2, 960);
+    const int64_t prevStart = g_fakeNow, longPeriod = 20'000'000; // 960 frames = 20 ms
+    const int64_t t = prevStart + longPeriod * 700 / 960;
+    e.pushLiveMidi(LiveMidiMessage{0x90, 92, 100, 0, t});
+    rec.clear();
+    g_fakeNow = prevStart + longPeriod;
+    const int64_t cbTimeline = e.transport().position();
+    e.process(nullptr, 0, outs, 2, 960);
+    e.drainRecordedMidi(rec);
+    REQUIRE(rec.size() == 1);
+    CHECK_NEAR(static_cast<double>(rec[0].timeline - cbTimeline), 700.0, 1.01);
+    e.setLiveMidiClock(nullptr);
+}
+
 TEST_CASE("live-midi", "raw MIDI device reader (FIFO in place of /dev/snd/midiC*D*)") {
     Live l;
     const auto dir = tempDir("live_midi_fifo");
@@ -238,5 +319,55 @@ TEST_CASE("live-midi", "raw MIDI device reader (FIFO in place of /dev/snd/midiC*
     CHECK(!l.in.isOpen(fifo));
     CHECK(!l.in.open((dir / "missing").string(), &err));
     CHECK(!err.empty());
+}
+
+TEST_CASE("live-midi", "hot-plug: rescan opens new inputs, closes unplugged ones, respects switched-off inputs") {
+    Live l;
+    const auto dir = tempDir("live_midi_hotplug");
+    l.in.setDeviceDirectory(dir.string());
+    CHECK(l.in.devices().empty());
+    auto r = l.in.rescan();
+    CHECK(r.added.empty());
+    CHECK(r.removed.empty());
+    // plug in two devices (+ an unrelated file that is not a MIDI device)
+    const std::string a = (dir / "midiC5D0").string(), b = (dir / "midiC6D0").string();
+    REQUIRE(::mkfifo(a.c_str(), 0600) == 0);
+    REQUIRE(::mkfifo(b.c_str(), 0600) == 0);
+    { std::ofstream((dir / "pcmC0D0p").string()) << "x"; }
+    r = l.in.rescan();
+    CHECK(r.added.size() == 2);
+    CHECK(l.in.isOpen(a));
+    CHECK(l.in.isOpen(b));
+    CHECK(l.in.rescan().added.empty()); // nothing new
+    // the new input works right away
+    const int w = ::open(a.c_str(), O_WRONLY);
+    REQUIRE(w >= 0);
+    const uint8_t on[] = {0x90, 64, 90};
+    REQUIRE(::write(w, on, sizeof(on)) == 3);
+    for (int i = 0; i < 200 && l.in.messageCount() < 1; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    CHECK(l.in.messageCount() == 1);
+    ::close(w);
+    // unplug one: its reader is stopped and the input closed
+    ::unlink(b.c_str());
+    r = l.in.rescan();
+    REQUIRE(r.removed.size() == 1);
+    CHECK(r.removed[0] == b);
+    CHECK(!l.in.isOpen(b));
+    CHECK(l.in.isOpen(a));
+    // an input the user switched off is not reopened; re-plugging b opens it again
+    l.in.close(a);
+    REQUIRE(::mkfifo(b.c_str(), 0600) == 0);
+    r = l.in.rescan({a});
+    CHECK(r.added.size() == 1);
+    CHECK(!l.in.isOpen(a));
+    CHECK(l.in.isOpen(b));
+    // a device that cannot be opened is reported, not retried silently into a crash
+    const std::string c = (dir / "midiC7D0").string();
+    { std::ofstream(c) << ""; }
+    ::chmod(c.c_str(), 0);
+    r = l.in.rescan({a});
+    if (::geteuid() != 0) CHECK(r.failed.size() == 1); // root can open anything
+    l.in.closeAll();
+    CHECK(l.in.openDevices().empty());
 }
 #endif

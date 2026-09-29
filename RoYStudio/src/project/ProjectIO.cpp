@@ -345,7 +345,7 @@ const std::set<std::string>& knownTopLevelKeys() {
     static const std::set<std::string> k = {"format", "formatVersion", "id", "name", "author", "createdAt", "modifiedAt",
                                             "appVersion", "sampleRate", "tempo", "key", "settings", "loop", "markers",
                                             "sections", "assets", "tracks", "channels", "automation", "patterns",
-                                            "presets", "producerMemory", "vocalSettings", "metadata"};
+                                            "midiMappings", "presets", "producerMemory", "vocalSettings", "metadata"};
     return k;
 }
 
@@ -396,6 +396,12 @@ json projectToJson(const Project& p) {
         }
         j["automation"].push_back({{"id", a.id}, {"channelId", a.channelId}, {"slotId", a.slotId}, {"paramId", a.paramId},
                                    {"enabled", a.enabled}, {"points", pts}});
+    }
+    if (!p.midiMappings.empty()) {
+        j["midiMappings"] = json::array();
+        for (auto& m : p.midiMappings)
+            j["midiMappings"].push_back({{"id", m.id}, {"channel", m.channel}, {"cc", m.cc}, {"channelId", m.channelId}, {"slotId", m.slotId},
+                                         {"paramId", m.paramId}, {"min", m.minValue}, {"max", m.maxValue}});
     }
     j["patterns"] = json::array();
     for (auto& pat : p.patterns) j["patterns"].push_back(toJ(pat));
@@ -526,6 +532,20 @@ bool projectFromJson(const json& jIn, Project& p, std::string* error, std::vecto
         out.automation.push_back(lane);
     }
     for (auto& pat : j.value("patterns", json::array())) out.patterns.push_back(patternFrom(pat));
+    for (auto& m : j.value("midiMappings", json::array())) {
+        if (!m.is_object()) continue;
+        MidiMapping mm;
+        mm.id = get<std::string>(m, "id", files::newId());
+        mm.channel = std::clamp(get<int>(m, "channel", -1), -1, 15);
+        mm.cc = get<int>(m, "cc", -1);
+        mm.channelId = get<std::string>(m, "channelId", "");
+        mm.slotId = get<std::string>(m, "slotId", "");
+        mm.paramId = get<std::string>(m, "paramId", "");
+        mm.minValue = get<float>(m, "min", 0.0f);
+        mm.maxValue = get<float>(m, "max", 1.0f);
+        if (mm.cc < 0 || mm.cc > 119 || mm.paramId.empty() || !std::isfinite(mm.minValue) || !std::isfinite(mm.maxValue)) continue;
+        out.midiMappings.push_back(mm);
+    }
     out.presets = j.value("presets", json::object());
     out.producerMemory = j.value("producerMemory", json::object());
     out.vocalSettings = j.value("vocalSettings", json::object());

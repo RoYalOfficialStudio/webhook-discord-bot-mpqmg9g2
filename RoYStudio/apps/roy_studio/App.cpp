@@ -1,4 +1,5 @@
 #include "App.h"
+#include "midi/MidiLearn.h"
 
 #include "core/Files.h"
 #include "core/Log.h"
@@ -76,7 +77,7 @@ bool App::init(const AppOptions& o) {
     midiIn_ = std::make_unique<midi::MidiInputManager>(engine_);
     for (auto& d : midiIn_->devices()) {
         std::string err;
-        if (!midiIn_->open(d.id, &err)) message(1, "MIDI input " + d.name + ": " + err);
+        if (!midiIn_->open(d.id, &err) && midiFailReported_.insert(d.id).second) message(1, "MIDI input " + d.name + ": " + err);
     }
     if (o.demo) return buildDemo(o.demoFolder.empty() ? fs::temp_directory_path() / "RoYStudioDemo" : o.demoFolder);
     return true;
@@ -210,6 +211,10 @@ bool App::save() {
 
 void App::closeProject() {
     if (!project_) return;
+    learn_.reset();
+    if (midiIn_) midiIn_->setLearning(false);
+    consumedSig_ = "-"; // re-sync the consumed controllers for the next project
+    if (midiIn_) midiIn_->setConsumedControls({});
     if (engine_.transport().isPlaying()) stop();
     if (dirty_) {
         // Never lose work silently: keep a recovery snapshot of unsaved changes.
@@ -320,6 +325,81 @@ std::string App::liveMidiTrackName() const {
     return t ? t->name : std::string();
 }
 
+void App::setMidiInputEnabled(const std::string& id, bool on) {
+    if (!midiIn_) return;
+    std::erase(midiUserOff_, id);
+    if (!on) {
+        midiUserOff_.push_back(id);
+        midiIn_->close(id);
+        return;
+    }
+    std::string err;
+    midiFailReported_.erase(id);
+    if (!midiIn_->open(id, &err)) message(2, err);
+}
+
+void App::pollMidiDevices() {
+    if (!midiIn_) return;
+    const double now = nowSeconds();
+    if (now < nextMidiRescan_) return;
+    nextMidiRescan_ = now + 2.0;
+    const auto r = midiIn_->rescan(midiUserOff_);
+    for (auto& d : r.added) {
+        midiFailReported_.erase(d.id);
+        message(0, "MIDI input connected: " + d.name);
+    }
+    for (auto& id : r.removed) {
+        for (uint8_t ch = 0; ch < 16; ++ch) { // device gone mid-note: no hanging notes (serialised input path)
+            const uint8_t off[3] = {static_cast<uint8_t>(0xB0 | ch), 123, 0};
+            midiIn_->inject(off, 3);
+        }
+        message(1, "MIDI input disconnected: " + (id.rfind("winmm:", 0) == 0 ? id.substr(6) : id));
+    }
+    for (auto& f : r.failed)
+        if (midiFailReported_.insert(f.substr(0, f.find(':'))).second) message(1, "MIDI input " + f);
+}
+
+void App::startMidiLearn(const std::string& channelId, const std::string& slotId, const std::string& paramId, const std::string& label) {
+    if (!midiIn_) return;
+    learn_ = LearnTarget{channelId, slotId, paramId, label};
+    midiIn_->drainControlChanges(); // only a controller moved from now on counts
+    midiIn_->setLearning(true);
+    message(0, "MIDI LEARN: move a knob or fader on your controller for " + label + " (Esc cancels)");
+}
+
+void App::cancelMidiLearn() {
+    if (!learn_) return;
+    learn_.reset();
+    if (midiIn_) midiIn_->setLearning(false);
+    message(0, "MIDI learn cancelled");
+}
+
+void App::processMidiControls() {
+    if (!midiIn_ || !project_) return;
+    auto ccs = midiIn_->drainControlChanges();
+    if (learn_ && !ccs.empty()) {
+        const auto c = ccs.front();
+        const LearnTarget t = *learn_;
+        learn_.reset();
+        midiIn_->setLearning(false);
+        if (run("AddMidiMapping", {{"cc", c.cc}, {"channel", c.channel}, {"channelId", t.channelId}, {"slotId", t.slotId}, {"paramId", t.paramId}}))
+            message(0, std::format("MIDI LEARN: CC {} (channel {}) now controls {}", c.cc, c.channel + 1, t.label));
+        ccs.clear(); // the learning move itself does not change the value
+    }
+    if (!ccs.empty() && midi::applyControls(*project_, runtime_.get(), ccs) > 0) dirty_ = true;
+    // mapped controllers are consumed by the input (not sent to the instrument)
+    std::string sig;
+    std::vector<std::pair<int, int>> list;
+    for (auto& m : project_->midiMappings) {
+        list.push_back({m.channel, m.cc});
+        sig += std::format("{}:{},", m.channel, m.cc);
+    }
+    if (sig != consumedSig_) {
+        midiIn_->setConsumedControls(list);
+        consumedSig_ = sig;
+    }
+}
+
 void App::midiPanic() {
     if (!midiIn_) return;
     for (uint8_t ch = 0; ch < 16; ++ch) {
@@ -389,8 +469,10 @@ void App::tick() {
     engine_.collectGarbage();
     if (previewer_) previewer_->collect();
     pollAudioDevice();
+    pollMidiDevices();
     if (!project_) return;
     updateLiveMidiTarget();
+    processMidiControls();
     if (midiRecording_) engine_.drainRecordedMidi(midiTake_); // keep the engine queue short
     if (recorder_.diskErrors() != diskErrorsSeen_) {
         diskErrorsSeen_ = recorder_.diskErrors();
@@ -638,6 +720,22 @@ bool App::selfTest(const fs::path& folder) {
     std::string out = exported ? lastResult_["files"][0].value("path", "") : "";
     step("export wav", exported && fs::exists(out), out);
     step("audio device resumed after export", device_.isRunning());
+    // MIDI learn: learn mode -> a controller move maps it -> further moves drive the master volume
+    if (midiIn_ && project_->master()) {
+        const std::string masterId = project_->master()->id;
+        startMidiLearn(masterId, "", "gain", "Master · Volume");
+        const uint8_t learnMove[3] = {0xB0, 102, 40}, fullUp[3] = {0xB0, 102, 127};
+        midiIn_->inject(learnMove, 3);
+        tick();
+        const MidiMapping* m = midi::findMappingForTarget(*project_, masterId, "", "gain");
+        midiIn_->inject(fullUp, 3);
+        tick();
+        const float g = project_->master()->gainDb;
+        step("MIDI learn (CC 102 -> master volume)", m && m->cc == 102 && !midiLearning() && std::fabs(g - 6.0f) < 1e-3f,
+             std::format("gain {:.2f} dB", g));
+        run("SetChannelGain", {{"master", true}, {"gainDb", 0.0}});
+        run("ClearMidiMappings", json::object());
+    }
     // undo / redo
     const std::string before = projectToJson(*project_).dump();
     step("undo", undo() && projectToJson(*project_).dump() != before);

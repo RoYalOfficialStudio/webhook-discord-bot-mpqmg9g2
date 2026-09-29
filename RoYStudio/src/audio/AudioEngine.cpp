@@ -253,6 +253,9 @@ void AudioEngine::process(const float* const* inputs, int numInputs, float* cons
     inProcess_.store(true, std::memory_order_release);
     const auto t0 = std::chrono::steady_clock::now();
 
+    prevCbStartNs_ = cbStartNs_;
+    cbStartNs_ = clock_();
+    cbFrames_ = numFrames;
     RenderGraph* g = current_.load(std::memory_order_acquire);
     int done = 0;
     while (done < numFrames) {
@@ -311,7 +314,7 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
                               seg.countIn);
     }
 
-    if (!offlineRendering_) collectLiveMidi(anyRolling, automationPos);
+    if (!offlineRendering_) collectLiveMidi(anyRolling, automationPos, outOffset, frames);
     else liveCount_ = 0, liveBlockTarget_ = -1, liveOffTarget_ = -1;
 
     if (auto* l = listener_.load(std::memory_order_acquire)) l->onAudioInput(inPtrs, nIn, frames, segs, numSegs);
@@ -409,8 +412,12 @@ size_t AudioEngine::drainRecordedMidi(std::vector<RecordedMidi>& out) {
     return n;
 }
 
+int64_t AudioEngine::steadyNowNs() noexcept {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
 // Audio thread, once per chunk before the channels run: live messages -> NoteEvents for the target.
-void AudioEngine::collectLiveMidi(bool rolling, int64_t timeline) noexcept {
+void AudioEngine::collectLiveMidi(bool rolling, int64_t timeline, int outOffset, int frames) noexcept {
     liveCount_ = 0;
     const int target = liveTarget_.load(std::memory_order_acquire);
     liveOffTarget_ = target != lastLiveTarget_ ? lastLiveTarget_ : -1;
@@ -421,11 +428,35 @@ void AudioEngine::collectLiveMidi(bool rolling, int64_t timeline) noexcept {
     lastLiveTarget_ = target;
     liveBlockTarget_ = target;
     const bool record = rolling && liveRecording_.load(std::memory_order_acquire);
+    // Position of a stamped message inside this callback: the previous callback period
+    // [prevCbStart, cbStart) is mapped onto [0, cbFrames). Messages that arrived after this
+    // callback began wait for the next one; unstamped ones go to the start of this chunk.
+    const int64_t period = cbStartNs_ - prevCbStartNs_;
+    auto callbackOffset = [&](const LiveMidiMessage& msg) -> int64_t {
+        if (msg.timeNs <= 0 || prevCbStartNs_ <= 0 || period <= 0) return outOffset;
+        if (msg.timeNs >= cbStartNs_) return INT64_MAX; // next callback
+        const int64_t rel = std::max<int64_t>(0, msg.timeNs - prevCbStartNs_);
+        return std::min<int64_t>(cbFrames_ - 1, static_cast<int64_t>(static_cast<double>(rel) / static_cast<double>(period) * cbFrames_));
+    };
     LiveMidiMessage m;
-    while (liveCount_ < kMaxLiveEvents && liveIn_->pop(m)) {
-        if (record) liveRec_->push(RecordedMidi{timeline, m});
+    while (liveCount_ < kMaxLiveEvents) {
+        if (hasPendingLive_) {
+            m = pendingLive_;
+        } else if (!liveIn_->pop(m)) {
+            break;
+        }
+        const int64_t at = callbackOffset(m);
+        if (at >= outOffset + frames) { // due in a later chunk or callback: keep it (FIFO order)
+            pendingLive_ = m;
+            hasPendingLive_ = true;
+            break;
+        }
+        hasPendingLive_ = false;
+        const int offset = static_cast<int>(std::max<int64_t>(0, at - outOffset));
+        if (record) liveRec_->push(RecordedMidi{timeline + offset, m});
         const int type = m.status & 0xF0;
         NoteEvent e;
+        e.offset = offset;
         e.channel = static_cast<uint8_t>(m.status & 0x0F);
         e.note = static_cast<int16_t>(m.data1 & 0x7F);
         if (type == 0x90 && m.data2 > 0) {
@@ -448,6 +479,7 @@ void AudioEngine::collectLiveMidi(bool rolling, int64_t timeline) noexcept {
                             sustained_[n] = false;
                             NoteEvent off;
                             off.type = NoteEvent::NoteOff;
+                            off.offset = offset;
                             off.note = static_cast<int16_t>(n);
                             off.channel = e.channel;
                             liveEvents_[liveCount_++] = off;
