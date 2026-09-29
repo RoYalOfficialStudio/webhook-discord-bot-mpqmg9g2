@@ -98,6 +98,10 @@ Alle Testdaten sind selbst erzeugt – keine fremden Samples, keine Urheberrecht
 --------------------------------------
 Aufnahme (oranger Take-Block)   Rechtsklick auf den Block > "Delete take"
                                 oder anklicken (weißer Rahmen) und Entf drücken
+AUFNAHME SCHNEIDEN        Rechtsklick auf den orangen Take an der Schnittstelle >
+                                "Split here (cut)". Oder: Take anklicken, Playhead (goldene
+                                Linie) an die Stelle, Strg+E. Danach sind es normale Clips:
+                                verschieben, löschen (Entf), nochmal schneiden. Strg+Z geht.
 Clip (Audio / MIDI / Pattern)   Rechtsklick > "Delete"  oder anklicken und Entf
 Mehrere Clips                   Strg+Klick auf mehrere Clips, dann Entf
 Ganze Spur                      Rechtsklick auf den SPURNAMEN links > "Delete track"

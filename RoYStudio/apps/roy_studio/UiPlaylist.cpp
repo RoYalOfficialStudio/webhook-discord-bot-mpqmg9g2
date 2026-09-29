@@ -425,6 +425,7 @@ void drawPlaylist(App& app) {
         ctxTake = laneTake->id;
         ImGui::OpenPopup("takeMenu");
     } else if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && hoverClip.empty() && !hoverCompTake.empty()) {
+        ctxBeat = snap(xToBeat(mouse.x), app.snapBeats);
         ctxTrack = hoverCompTrack; // right-click directly on the orange take block
         ctxTake = hoverCompTake;
         g_selTakeTrack = hoverCompTrack;
@@ -432,7 +433,22 @@ void drawPlaylist(App& app) {
         ImGui::OpenPopup("takeMenu");
     }
     if (ImGui::IsItemHovered() && hoverClip.empty() && !hoverCompTake.empty() && !ImGui::IsPopupOpen("takeMenu"))
-        ImGui::SetTooltip("recorded take - right-click: delete / flatten / rename, Del key: delete (Ctrl+Z undoes)");
+        ImGui::SetTooltip("recorded take - right-click: SPLIT HERE / delete / rename, Del key: delete (Ctrl+Z undoes)");
+    // CTRL+E: cut at the playhead - the selected recording (take) or the last clicked clip
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_E, false) &&
+        !ImGui::GetIO().WantTextInput) {
+        const double at = app.positionBeats();
+        std::string clipId = g_lastClip;
+        if (!g_selTake.empty() && p.findTrack(g_selTakeTrack) && app.run("FlattenComp", {{"trackId", g_selTakeTrack}})) {
+            clipId.clear();
+            for (auto& id : app.lastResult().value("clipIds", json::array()))
+                if (const AudioClip* c = p.findAudioClip(id.get<std::string>()); c && at > c->startBeat && at < c->startBeat + c->lengthBeats)
+                    clipId = c->id;
+            g_selTake.clear();
+        }
+        if (!clipId.empty() && !app.run("SplitClip", {{"clipId", clipId}, {"atBeat", at}}))
+            app.message(1, "move the playhead (gold line) onto the clip, then Ctrl+E");
+    }
     // DELETE / BACKSPACE: selected take, the Ctrl+click selection or the last clicked clip
     if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
         (ImGui::IsKeyPressed(ImGuiKey_Delete, false) || ImGui::IsKeyPressed(ImGuiKey_Backspace, false))) {
@@ -461,6 +477,23 @@ void drawPlaylist(App& app) {
             ImGui::CloseCurrentPopup();
         } else {
             ImGui::TextDisabled("%s", tk->name.c_str());
+            // cutting a recording: the take becomes normal clips (cut, move, fade, delete), then split
+            if (ImGui::MenuItem("Split here (cut)", "Ctrl+E", false, !tt->comp.empty())) {
+                const std::string trackId = ctxTrack;
+                const double at = ctxBeat;
+                if (app.run("FlattenComp", {{"trackId", trackId}}))
+                    for (auto& id : app.lastResult().value("clipIds", json::array()))
+                        if (const AudioClip* c = p.findAudioClip(id.get<std::string>()); c && at > c->startBeat && at < c->startBeat + c->lengthBeats) {
+                            app.run("SplitClip", {{"clipId", c->id}, {"atBeat", at}});
+                            break;
+                        }
+                g_selTake.clear();
+            }
+            if (ImGui::MenuItem("Make normal clip (cut / move / fade)", nullptr, false, !tt->comp.empty())) {
+                app.run("FlattenComp", {{"trackId", ctxTrack}});
+                g_selTake.clear();
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem("Use whole take")) app.run("CompWholeTake", {{"trackId", ctxTrack}, {"takeId", ctxTake}});
             static char tname[96];
             if (ImGui::IsWindowAppearing()) std::snprintf(tname, sizeof(tname), "%s", tk->name.c_str());
