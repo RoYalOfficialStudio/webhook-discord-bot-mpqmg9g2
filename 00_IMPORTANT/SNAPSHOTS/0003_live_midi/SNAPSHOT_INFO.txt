@@ -1,0 +1,9 @@
+SNAPSHOT 0003 - RoY Studio 0.2.0 BETA hardening: MIDI learn, MIDI hot-plug, sample-accurate live MIDI
+created:   2026-09-29T03:03:05Z
+branch:    claude/bold-franklin-fybkj5 (pushed to origin)
+commit:    c6db12fe3eb51f10a14785f9430f7a09fa58b28c
+tree sha256 (git archive --format=tar c6db12fe3eb51f10a14785f9430f7a09fa58b28c | sha256sum):
+           3cca389ea382d007fffaabe6973be938e9005e1bb4aafb62e9808838f1c94ecf
+restore:   git checkout c6db12fe3eb51f10a14785f9430f7a09fa58b28c      (or: git archive c6db12fe3eb51f10a14785f9430f7a09fa58b28c | tar -x -C <folder>)
+verified:  Linux 209/209, Wine 205/205, ASan/UBSan + TSan on the MIDI suites, GUI self-test Linux + Wine 18/18,
+           CLI self-test (Wine)
