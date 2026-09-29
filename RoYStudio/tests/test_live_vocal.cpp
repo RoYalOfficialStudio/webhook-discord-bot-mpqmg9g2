@@ -9,6 +9,7 @@
 #include "mixer/ChannelPreset.h"
 
 #include <cmath>
+#include <format>
 #include <numbers>
 
 using namespace roy;
@@ -188,4 +189,39 @@ TEST_CASE("livevocal", "factory vocal chains are valid, use only built-in effect
         CHECK(L.ctx->result["skipped"].empty());
         CHECK(L.p.findChannel(L.channel)->gainDb == 0.0f); // factory chains leave the fader alone
     }
+}
+
+TEST_CASE("livevocal", "shipped vocal chains (UserData presets of the portable build) load and sound sane live") {
+#ifdef ROY_SHIPPED_PRESETS_DIR
+    const fs::path dir = ROY_SHIPPED_PRESETS_DIR;
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) return; // test kit copied to another machine
+    const auto list = presets::listChannelPresets(dir);
+    REQUIRE(!list.empty());
+    for (auto& pf : list) {
+        Live L;
+        std::string err;
+        auto pr = presets::loadChannelPreset(pf.file, &err);
+        REQUIRE_MSG_OK(pr.has_value(), err);
+        REQUIRE(L.run("ApplyChannelPreset", {{"channelId", L.channel}, {"preset", *pr}}));
+        CHECK_MSG(L.ctx->result["skipped"].empty(), pf.name);
+        CHECK(L.p.findChannel(L.channel)->inserts.size() == (*pr)["inserts"].size());
+        REQUIRE(L.run("SetupLiveVocal", {{"trackId", L.track}})); // LIVE keeps the chain, no second tune
+        CHECK(L.p.findChannel(L.channel)->inserts.size() == (*pr)["inserts"].size());
+        // a loud "voice" (200 Hz + harmonics, sharp) through the whole chain while monitoring
+        std::vector<float> mic(static_cast<size_t>(SR * 2.0));
+        for (size_t i = 0; i < mic.size(); ++i) {
+            const double t = static_cast<double>(i) / SR, f = midiToHz(55.4);
+            mic[i] = static_cast<float>(0.5 * std::sin(2 * std::numbers::pi * f * t) + 0.25 * std::sin(4 * std::numbers::pi * f * t) +
+                                        0.12 * std::sin(6 * std::numbers::pi * f * t));
+        }
+        const auto y = L.monitor(mic);
+        bool finite = true;
+        for (float v : y) finite &= std::isfinite(v);
+        CHECK_MSG(finite, pf.name);
+        const float pk = peak(y, 4800);
+        std::printf("    %s: live peak %.3f\n", pf.name.c_str(), pk);
+        CHECK_MSG(pk > 0.05f && pk < 0.95f, std::format("{}: peak {:.3f}", pf.name, pk)); // audible, never clipping (limiter)
+    }
+#endif
 }

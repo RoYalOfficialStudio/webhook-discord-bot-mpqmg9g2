@@ -23,6 +23,9 @@ mkdir -p "$STAGE"/{Plugins,Projects,Samples,licenses,TestKit/AutomatedTests}
 # program
 cp "$BW"/{RoYStudio.exe,RoYPluginHost.exe,roy_cli.exe,roy_mp3lame.dll} "$STAGE/"
 cp "$P"/{START_ROY_STUDIO.bat,README_TEST.txt,RoYStudio.portable,LICENSE_DECISION_PENDING.txt} "$STAGE/"
+# ready-made vocal chains (MIXER > PRESETS > Load preset > Your presets)
+mkdir -p "$STAGE/UserData/Presets/Channel"
+cp "$P"/Presets/Channel/*.roychain "$STAGE/UserData/Presets/Channel/"
 # licences of all third-party components
 cp "$ROOT/third_party/THIRD_PARTY_NOTICES.md" "$STAGE/licenses/"
 for lic in clap/LICENSE imgui/LICENSE.txt lame/COPYING lame/LICENSE miniaudio/LICENSE nlohmann/LICENSE.MIT vst3sdk/LICENSE.txt; do

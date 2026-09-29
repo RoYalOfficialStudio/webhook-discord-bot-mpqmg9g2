@@ -163,6 +163,9 @@ Abmischen                 MIXER: auf dem Vocal-Kanal "+ effect" (EQ, Compressor,
                           Reverb ...), oder PRESETS > Load preset > "RoY Rap Vocal -
                           Autotune hard" / "Natural tune" / "Clean" als fertiger Start.
                           Alles hört man sofort live, während LIVE an ist.
+Fertige Vocal-Kette       "Travis Style - Aggressive Rage Vocal" liegt schon in
+                          UserData\Presets\Channel\ -> MIXER > PRESETS > Load preset >
+                          Your presets. (Harter Autotune, Grit, Delay, Hall, Limiter.)
 Abgemischte Vocal für     MIXER > PRESETS (am Vocal-Kanal) > Namen eingeben > "Save preset".
   den nächsten Song       Im nächsten Song: Vocal-Spur > MIXER > PRESETS > Load preset >
   speichern               "Your presets" > dein Preset. Autotune stellt sich automatisch
