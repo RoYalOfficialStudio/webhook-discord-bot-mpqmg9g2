@@ -9,6 +9,7 @@
 #include "audio/DeviceManager.h"
 #include "audio/ProjectRuntime.h"
 #include "commands/Commands.h"
+#include "mixer/ChannelPreset.h"
 #include "plugins/Sandbox.h"
 #include "plugins/Scanner.h"
 #include "project/Session.h"
@@ -143,6 +144,12 @@ public:
     bool auditionNote(const std::string& trackId, int note, float velocity = 0.9f, double seconds = 0.8);
     bool auditionActive() const { return !auditionTrack_.empty(); }
     bool previewOnEdit = true; // 808 LAB / PIANO ROLL: play the sound after a change
+    // LIVE VOCAL: monitoring + RoY VocalTune in the song key on this track (one undo step)
+    bool liveVocal(const std::string& trackId);
+    // ---- channel presets ("vocal chains"), stored in <user data>/Presets/Channel ----
+    bool saveChannelPreset(const std::string& channelId, const std::string& name, bool overwrite);
+    bool applyChannelPreset(const std::string& channelId, const json& preset);
+    const std::vector<presets::PresetFile>& channelPresets(bool refresh = false);
     bool pluginScanRunning() const { return scanning_; }
     const AudioDeviceConfig& audioConfig() const { return audioCfg_; }
 
@@ -204,6 +211,8 @@ private:
     std::vector<RecordedMidi> midiTake_;
     void updateLiveMidiTarget();
     void finishMidiRecording();
+    std::vector<presets::PresetFile> presetList_;
+    bool presetListValid_ = false;
     std::string auditionTrack_;
     int auditionKey_ = -1;
     double auditionOff_ = 0, auditionRelease_ = 0;

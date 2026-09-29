@@ -157,6 +157,31 @@ void drawPlaylist(App& app) {
     if (ImGui::Button("+ Beat")) app.run("AddTrack", {{"type", "beat"}, {"name", "Drums"}, {"role", "drums"}});
     ImGui::SameLine();
     if (ImGui::Button("+ 808")) app.run("AddTrack", {{"type", "midi"}, {"name", "808"}, {"instrument", "roy.808"}, {"role", "808"}});
+    // pattern strip: drag a beat straight into a track
+    if (!p.patterns.empty()) {
+        ImGui::SameLine(0, 16 * dpi);
+        ImGui::TextDisabled("BEATS:");
+        size_t shown = 0;
+        for (auto& pat : p.patterns) {
+            const float w = ImGui::CalcTextSize(pat.name.c_str()).x + ImGui::GetStyle().FramePadding.x * 2 + 8 * dpi;
+            if (ImGui::GetContentRegionAvail().x < w + 90 * dpi && shown > 0) break;
+            ImGui::SameLine();
+            ImGui::PushID(pat.id.c_str());
+            ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(col::rgb(0x1F5C3A)));
+            if (ImGui::Button(pat.name.c_str())) app.selPattern = pat.id;
+            ImGui::PopStyleColor();
+            patternDragSource(pat.id, pat.name);
+            if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+                ImGui::SetTooltip("drag '%s' into a track (a beat track is created if you drop it elsewhere)", pat.name.c_str());
+            ImGui::PopID();
+            ++shown;
+        }
+        if (shown < p.patterns.size()) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton(std::format("+{} more", p.patterns.size() - shown).c_str())) app.area = Area::Beats;
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("all patterns are in BEATS > PATTERNS (drag them from there too)");
+        }
+    }
 
     ImGui::BeginChild("timeline", ImVec2(0, 0), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -459,6 +484,22 @@ void drawPlaylist(App& app) {
     }
     // drag & drop from the browser: audio files onto audio tracks
     if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ROY_PATTERN")) { // BEATS / CHANNELS / strip -> track
+            const std::string patId(static_cast<const char*>(pl->Data), static_cast<size_t>(pl->DataSize));
+            std::string trackId = laneTrack && laneTrack->type == TrackType::Beat ? laneTrack->id : "";
+            if (trackId.empty())
+                for (auto& t : p.tracks)
+                    if (t.type == TrackType::Beat && trackId.empty()) trackId = t.id;
+            const double at = std::max(0.0, snap(xToBeat(mouse.x), std::max(app.snapBeats, 1.0)));
+            if (trackId.empty()) { // no beat track yet: create one
+                if (app.run("AddTrack", {{"type", "beat"}, {"name", "Drums"}, {"role", "drums"}})) trackId = app.lastResult().value("id", "");
+            }
+            if (!trackId.empty() && app.run("AddPatternClip", {{"trackId", trackId}, {"patternId", patId}, {"startBeat", at}})) {
+                app.selPattern = patId;
+                if (laneTrack && laneTrack->type != TrackType::Beat)
+                    app.message(0, "patterns play on beat tracks - placed on '" + (p.findTrack(trackId) ? p.findTrack(trackId)->name : std::string("Drums")) + "'");
+            }
+        }
         if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ROY_FILE")) {
             const std::string path(static_cast<const char*>(pl->Data), static_cast<size_t>(pl->DataSize));
             if (laneTrack && laneTrack->type == TrackType::Midi) { // Browser -> Sampler (MIDI track)
@@ -526,7 +567,8 @@ void drawPlaylist(App& app) {
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("trackMenu"); // right-click on the track name
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("right-click: rename / delete track");
             ImGui::SetCursorScreenPos(ImVec2(hx + headerW - 56, y + 5));
-            ImGui::TextDisabled("%s", typeTag(t.type));
+            if (t.type == TrackType::Audio) liveVocalButton(app, t.id, ImVec2(48 * dpi, 0)); // the free spot of the header
+            else ImGui::TextDisabled("%s", typeTag(t.type));
             ImGui::SetCursorScreenPos(ImVec2(hx + 10, y + rowH - ImGui::GetFrameHeight() - 5));
             const ImVec2 bs(24 * dpi, 0);
             if (ch && toggleButton("M", ch->mute, col::Orange, bs)) app.run("MuteChannel", {{"channelId", ch->id}, {"mute", !ch->mute}});
@@ -535,8 +577,10 @@ void drawPlaylist(App& app) {
             if (t.type == TrackType::Audio) {
                 ImGui::SameLine();
                 if (toggleButton("R", t.armed, col::Red, bs)) app.run("ArmTrack", {{"trackId", t.id}, {"armed", !t.armed}});
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("R = record on this track when you press REC");
                 ImGui::SameLine();
                 if (toggleButton("IN", t.monitor, col::Green, ImVec2(30 * dpi, 0))) app.run("MonitorTrack", {{"trackId", t.id}, {"monitor", !t.monitor}});
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("IN = hear the microphone through this channel (with its effects). LIVE also adds autotune");
                 if (!t.takes.empty()) {
                     ImGui::SameLine();
                     const bool open = g_expanded.count(t.id) > 0;

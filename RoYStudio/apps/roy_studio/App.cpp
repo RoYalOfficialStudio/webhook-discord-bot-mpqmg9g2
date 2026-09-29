@@ -360,6 +360,56 @@ bool App::auditionNote(const std::string& trackId, int note, float velocity, dou
     return true;
 }
 
+bool App::liveVocal(const std::string& trackId) {
+    if (!run("SetupLiveVocal", {{"trackId", trackId}})) {
+        message(1, "LIVE VOCAL: " + lastError_);
+        return false;
+    }
+    const Track* t = project_->findTrack(trackId);
+    message(1, std::format("LIVE VOCAL on '{}': you hear yourself with autotune in {} - USE HEADPHONES (speakers cause feedback). "
+                           "The recording stays dry; playback uses the same chain. Right-click LIVE for speed / presets.",
+                           t ? t->name : std::string("track"), project_->key.name()));
+    return true;
+}
+
+bool App::saveChannelPreset(const std::string& channelId, const std::string& name, bool overwrite) {
+    const MixerChannel* ch = project_ ? project_->findChannel(channelId) : nullptr;
+    if (!ch) return false;
+    if (runtime_) runtime_->captureProcessorStates(*project_); // current plugin / effect settings
+    ch = project_->findChannel(channelId);
+    std::string err;
+    fs::path file;
+    if (!presets::saveChannelPreset(presets::channelPresetDirectory(), presets::makeChannelPreset(*ch, name), overwrite, &file, &err)) {
+        message(2, "preset not saved: " + err);
+        return false;
+    }
+    presetListValid_ = false;
+    message(0, std::format("preset '{}' saved ({} effects) - load it in any song: MIXER > PRESETS > Load preset (or right-click LIVE)",
+                           name, ch->inserts.size()));
+    log::info("presets", "saved channel preset {}", file.filename().string());
+    return true;
+}
+
+bool App::applyChannelPreset(const std::string& channelId, const json& preset) {
+    if (!run("ApplyChannelPreset", {{"channelId", channelId}, {"preset", preset}})) {
+        message(2, "preset not loaded: " + lastError_);
+        return false;
+    }
+    std::string skipped;
+    for (auto& s : lastResult_.value("skipped", json::array())) skipped += (skipped.empty() ? "" : ", ") + s.get<std::string>();
+    message(skipped.empty() ? 0 : 1, std::format("preset '{}' loaded{} (Ctrl+Z undoes)", preset.value("name", std::string("?")),
+                                                 skipped.empty() ? std::string() : " - not available here: " + skipped));
+    return true;
+}
+
+const std::vector<presets::PresetFile>& App::channelPresets(bool refresh) {
+    if (refresh || !presetListValid_) {
+        presetList_ = presets::listChannelPresets(presets::channelPresetDirectory());
+        presetListValid_ = true;
+    }
+    return presetList_;
+}
+
 void App::pollAudition() {
     if (auditionTrack_.empty() || !midiIn_) return;
     const double now = nowSeconds();
@@ -990,6 +1040,22 @@ bool App::selfTest(const fs::path& folder) {
             pump(1.0);
             step("808 preview ends by itself", !auditionActive());
         }
+    }
+    // LIVE VOCAL (monitor + autotune) and a vocal chain preset, both one undo step
+    {
+        const size_t u0 = undo_->undoCount();
+        bool tuneOk = liveVocal(vocal);
+        if (const Track* vt = project_->findTrack(vocal); vt && tuneOk) {
+            const MixerChannel* vch = project_->findChannel(vt->channelId);
+            tuneOk = vt->monitor && vch && std::any_of(vch->inserts.begin(), vch->inserts.end(), [](auto& s) { return s.typeId == "roy.vocaltune"; });
+        }
+        step("LIVE VOCAL (monitor + autotune in song key)", tuneOk);
+        const Track* vt = project_->findTrack(vocal);
+        const json f = presets::factoryChannelPresets().front();
+        const bool applied = vt && applyChannelPreset(vt->channelId, f);
+        step("vocal chain preset loads", applied && project_->findChannel(vt->channelId)->inserts.size() == f["inserts"].size());
+        while (undo_->undoCount() > u0) undo_->undo();
+        run("ArmTrack", {{"trackId", vocal}, {"armed", false}});
     }
     // vocal lab
     std::string clip;

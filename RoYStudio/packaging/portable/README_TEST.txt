@@ -125,13 +125,44 @@ PIANO ROLL                      "Preview" an: Klick auf eine Note, neue Note ode
 Vorschau-Töne werden nie aufgenommen und ändern nichts am Projekt.
 
 
-9. CRASH RECOVERY TESTEN
+9. BEAT IN DIE SPUR ZIEHEN, STIMME LIVE MIT AUTOTUNE, VOCAL-KETTE SPEICHERN
+---------------------------------------------------------------------------
+Beat in die Spur ziehen   PLAYLIST: oben rechts stehen die Patterns als grüne Knöpfe
+                          ("BEATS: Trap Beat ..."). Knopf mit der Maus festhalten und auf die
+                          Drums-Spur an die gewünschte Stelle ziehen. Geht auch aus
+                          BEATS > PATTERNS und CHANNELS ("Place in Playlist" ziehen).
+                          Auf einer anderen Spur abgelegt -> landet auf der Beat-Spur.
+Stimme live hören         KOPFHÖRER AUFSETZEN (sonst Rückkopplung / Pfeifen)!
+  mit Autotune            Auf der Vocal-Spur links oben den grünen Knopf LIVE drücken.
+                          -> du hörst dich sofort über den Kanal, mit Autotune in der
+                          Tonart des Songs (oben neben dem Tempo, z. B. "A Minor").
+                          LIVE schaltet auch R (Aufnahme) ein: REC drücken und rappen/singen.
+                          Die Aufnahme selbst bleibt unbearbeitet (Original geht nie
+                          verloren); beim Abspielen läuft sie durch denselben Kanal, klingt
+                          also genauso wie beim Aufnehmen.
+                          Rechtsklick auf LIVE: retune speed (0-10 ms = harter Autotune-
+                          Effekt, 40-100 ms = natürlich), strength, autotune an/aus.
+Abmischen                 MIXER: auf dem Vocal-Kanal "+ effect" (EQ, Compressor, De-Esser,
+                          Reverb ...), oder PRESETS > Load preset > "RoY Rap Vocal -
+                          Autotune hard" / "Natural tune" / "Clean" als fertiger Start.
+                          Alles hört man sofort live, während LIVE an ist.
+Abgemischte Vocal für     MIXER > PRESETS (am Vocal-Kanal) > Namen eingeben > "Save preset".
+  den nächsten Song       Im nächsten Song: Vocal-Spur > MIXER > PRESETS > Load preset >
+  speichern               "Your presets" > dein Preset. Autotune stellt sich automatisch
+                          auf die Tonart des NEUEN Songs. Strg+Z macht das Laden rückgängig.
+                          Presets liegen in UserData\Presets\Channel\ (*.roychain) –
+                          beim Umzug in einen neuen RoY-Ordner einfach mitkopieren.
+                          Gleicher Name nochmal speichern fragt nach; die alte Version
+                          bleibt in Presets\Channel\Backups\ erhalten.
+
+
+10. CRASH RECOVERY TESTEN
 ------------------------
 Projekt ändern, mindestens 60 Sekunden warten (Autosave), RoYStudio.exe im Task-Manager
 beenden, RoY neu starten, Projekt öffnen -> "RECOVER PROJECT" muss angeboten werden.
 
 
-10. WENN ETWAS NICHT FUNKTIONIERT
+11. WENN ETWAS NICHT FUNKTIONIERT
 ---------------------------------
 Help > CREATE DIAGNOSTIC PACKAGE  (oder TestKit\CREATE_DIAGNOSTIC_PACKAGE.bat)
 -> UserData\Diagnostics\RoYStudio_Diagnostics_<Zeit>.zip
@@ -140,7 +171,7 @@ Ergebnisse der Music Session. NICHT enthalten: Benutzername (ersetzt), Projekte,
 Passwörter, Tokens, persönliche Dateien. Es wird NICHTS automatisch hochgeladen.
 
 
-11. BITTE ZURÜCKSCHICKEN
+12. BITTE ZURÜCKSCHICKEN
 ------------------------
 1. TestKit\TEST_RESULTS.md (ausgefüllt)
 2. UserData\Diagnostics\RoYStudio_Diagnostics_<Zeit>.zip

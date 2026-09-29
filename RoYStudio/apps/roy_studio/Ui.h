@@ -60,5 +60,12 @@ bool midiMappedTag(App& app, const std::string& channelId, const std::string& sl
 // Project tempo: drag left/right, double-click to type, mouse wheel +-1 (Shift +-0.1), optional -/+ buttons.
 // Every change is one undoable "Set Tempo". Returns true when the tempo was changed.
 bool tempoField(App& app, const char* id, float width, bool stepButtons);
+// Makes the last item a drag source for a pattern (payload "ROY_PATTERN" = pattern id);
+// dropped on a PLAYLIST lane it becomes a pattern clip.
+void patternDragSource(const std::string& patternId, const std::string& name);
+// Menu entries (inside an open popup): load a RoY / your channel preset, save this channel as preset.
+void channelPresetMenu(App& app, const std::string& channelId, const std::string& suggestedName);
+// LIVE VOCAL button of an audio track (monitor + autotune); right-click: speed, strength, presets.
+void liveVocalButton(App& app, const std::string& trackId, const ImVec2& size);
 
 } // namespace roy::gui

@@ -32,6 +32,115 @@ bool midiMappedTag(App& app, const std::string& channelId, const std::string& sl
     return true;
 }
 
+void channelPresetMenu(App& app, const std::string& channelId, const std::string& suggestedName) {
+    const float dpi = ImGui::GetFontSize() / 15.0f;
+    ImGui::TextDisabled("VOCAL CHAIN / CHANNEL PRESET");
+    if (ImGui::BeginMenu("Load preset")) {
+        ImGui::TextDisabled("replaces this channel's effects (Ctrl+Z undoes); VocalTune follows THIS song's key");
+        ImGui::Separator();
+        ImGui::TextDisabled("RoY starting points");
+        for (auto& f : presets::factoryChannelPresets())
+            if (ImGui::MenuItem(f.value("name", std::string("?")).c_str())) app.applyChannelPreset(channelId, f);
+        ImGui::Separator();
+        ImGui::TextDisabled("Your presets");
+        const auto& list = app.channelPresets(ImGui::IsWindowAppearing());
+        if (list.empty()) ImGui::TextDisabled("  (none saved yet)");
+        for (auto& pf : list)
+            if (ImGui::MenuItem(pf.name.c_str())) {
+                std::string err;
+                if (auto pr = presets::loadChannelPreset(pf.file, &err)) app.applyChannelPreset(channelId, *pr);
+                else app.message(2, "preset not loaded: " + err);
+            }
+        ImGui::EndMenu();
+    }
+    static char pname[64];
+    static std::string lastChannel, confirmName;
+    if (ImGui::IsWindowAppearing() || lastChannel != channelId) {
+        std::snprintf(pname, sizeof(pname), "%s", suggestedName.c_str());
+        lastChannel = channelId;
+        confirmName.clear();
+    }
+    ImGui::SetNextItemWidth(170 * dpi);
+    ImGui::InputText("##presetname", pname, sizeof(pname));
+    ImGui::SameLine();
+    const std::string name(pname);
+    if (ImGui::Button("Save preset") && !name.empty()) {
+        bool exists = false;
+        for (auto& pf : app.channelPresets(true)) exists |= presets::presetFileStem(pf.name) == presets::presetFileStem(name);
+        if (exists) confirmName = name;
+        else if (app.saveChannelPreset(channelId, name, false)) ImGui::CloseCurrentPopup();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("saves effects + settings + fader/pan for the next song");
+    if (!confirmName.empty() && confirmName == name) {
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "'%s' exists.", name.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Replace (old version is kept in Backups)")) {
+            if (app.saveChannelPreset(channelId, name, true)) ImGui::CloseCurrentPopup();
+            confirmName.clear();
+        }
+    }
+    if (ImGui::MenuItem("Open presets folder")) app.openFolder(presets::channelPresetDirectory());
+}
+
+void liveVocalButton(App& app, const std::string& trackId, const ImVec2& size) {
+    Project& p = app.project();
+    const Track* t = p.findTrack(trackId);
+    if (!t) return;
+    const MixerChannel* ch = p.findChannel(t->channelId);
+    const PluginSlot* tune = nullptr;
+    if (ch)
+        for (auto& s : ch->inserts)
+            if (s.typeId == "roy.vocaltune" && !tune) tune = &s;
+    const bool live = t->monitor && tune && !tune->bypass;
+    if (toggleButton("LIVE", live, col::Green, size)) {
+        if (live) app.run("MonitorTrack", {{"trackId", trackId}, {"monitor", false}});
+        else app.liveVocal(trackId);
+    }
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", live ? "LIVE VOCAL is on: you hear yourself with autotune. Click = off.  Right-click: speed, strength, presets"
+                                     : "LIVE VOCAL: hear your voice in real time with autotune (song key) while recording.\n"
+                                       "Use headphones!  Right-click: speed, strength, save/load vocal chain");
+    ImGui::PushID(trackId.c_str());
+    if (ImGui::BeginPopupContextItem("liveMenu")) {
+        const float dpi = ImGui::GetFontSize() / 15.0f;
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "LIVE VOCAL - %s", t->name.c_str());
+        bool mon = t->monitor;
+        if (ImGui::Checkbox("hear my input (monitor)", &mon)) app.run("MonitorTrack", {{"trackId", trackId}, {"monitor", mon}});
+        if (!tune) {
+            if (ImGui::Button("Add autotune (RoY VocalTune)")) app.liveVocal(trackId);
+        } else {
+            const std::string slotId = tune->id;
+            bool on = !tune->bypass;
+            if (ImGui::Checkbox("autotune on", &on)) app.run("BypassInsert", {{"slotId", slotId}, {"bypass", !on}});
+            ImGui::SameLine();
+            ImGui::TextDisabled("key %s (song key)", p.key.name().c_str());
+            if (auto proc = app.runtime().processorForSlot(slotId)) {
+                auto slider = [&](const char* id, const char* label, float lo, float hi, const char* fmt, const char* tip) {
+                    for (int i = 0; i < proc->numParams(); ++i)
+                        if (proc->paramInfo(i).id == id) {
+                            float v = proc->getParam(i);
+                            ImGui::SetNextItemWidth(200 * dpi);
+                            if (ImGui::SliderFloat(label, &v, lo, hi, fmt)) proc->setParam(i, v); // audible while dragging
+                            if (ImGui::IsItemDeactivatedAfterEdit()) app.run("SetParam", {{"slotId", slotId}, {"paramId", id}, {"value", proc->getParam(i)}});
+                            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+                        }
+                };
+                slider("speed", "retune speed", 0, 200, "%.0f ms", "0-10 ms = hard autotune effect (rap/trap), 40-100 ms = natural correction");
+                slider("strength", "strength", 0, 1, "%.2f", "1 = fully in tune, lower = keep some of your own pitch");
+            }
+        }
+        ImGui::Separator();
+        if (ch) channelPresetMenu(app, ch->id, t->name + " chain");
+        ImGui::Separator();
+        if (ImGui::MenuItem("Mix it in the MIXER (EQ, compressor, reverb ...)")) {
+            app.selChannel = t->channelId;
+            app.area = Area::Mixer;
+        }
+        ImGui::EndPopup();
+    }
+    ImGui::PopID();
+}
+
 namespace {
 // Generic parameter editor for any processor (built-in or sandboxed plugin):
 // search, favourites (stored as UI data in the slot), last touched parameter -> automation.
@@ -170,6 +279,14 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
     const ImVec2 p0 = ImGui::GetCursorScreenPos();
     dl->AddRectFilled(ImVec2(p0.x - 8, p0.y - 8), ImVec2(p0.x + width, p0.y - 4), clipColor(master ? 0xD4AF37 : ch.color));
     if (ImGui::Selectable(ch.name.c_str(), sel)) app.selChannel = ch.id;
+    if (ImGui::BeginPopupContextItem("chPresetMenu")) {
+        channelPresetMenu(app, ch.id, ch.name + " chain");
+        ImGui::EndPopup();
+    }
+    if (!master) { // PRESETS: save this mix for the next song / load a saved one
+        if (ImGui::Button("PRESETS", ImVec2(-1, 0))) ImGui::OpenPopup("chPresetMenu");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("save this channel's effects + settings as a preset, or load one (e.g. your vocal chain)");
+    }
     // inserts
     ImGui::TextDisabled("INSERTS");
     for (auto& s : ch.inserts) {

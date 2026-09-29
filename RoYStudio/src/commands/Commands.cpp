@@ -5,6 +5,8 @@
 #include "midi/MidiFile.h"
 #include "midi/MidiLearn.h"
 #include "midi/MidiOps.h"
+#include "midi/Scale.h"
+#include "mixer/ChannelPreset.h"
 #include "record/Takes.h"
 #include "audio/ProjectRuntime.h"
 #include "core/Files.h"
@@ -514,6 +516,86 @@ void registerCoreCommands(CommandRegistry& r) {
                PluginSlot* s = ctx.project.findSlot(argStr(a, "slotId"));
                if (!s) return fail(ctx, "effect not found");
                s->bypass = argBool(a, "bypass", !s->bypass);
+               return true;
+           }});
+    // LIVE VOCAL: hear yourself in real time through this channel (monitoring) with RoY VocalTune
+    // in the song key. Recording stays dry (the original take is never tuned into the file); the
+    // take plays back through the same chain, so it sounds like while recording.
+    r.add({"SetupLiveVocal", "Live Vocal (Monitor + Autotune)", "Track", "", true, true, [](CommandContext& ctx, const json& a) {
+               Track* t = ctx.project.findTrack(argStr(a, "trackId"));
+               if (!t) return fail(ctx, "track not found");
+               if (t->type != TrackType::Audio) return fail(ctx, "LIVE VOCAL needs an audio / vocal track");
+               MixerChannel* ch = ctx.project.findChannel(t->channelId);
+               if (!ch) return fail(ctx, "channel not found");
+               const json key = {{"keyRoot", ctx.project.key.root}, {"keyScale", static_cast<int>(ctx.project.key.scale)}};
+               PluginSlot* tune = nullptr;
+               for (auto& s : ch->inserts)
+                   if (s.typeId == "roy.vocaltune" && !tune) tune = &s;
+               if (!tune) {
+                   PluginSlot s;
+                   s.id = files::newId();
+                   s.typeId = "roy.vocaltune";
+                   s.name = "RoY VocalTune";
+                   s.state = {{"params", key}};
+                   s.state["params"]["speed"] = argNum(a, "speed", 20.0);
+                   ch->inserts.insert(ch->inserts.begin(), s); // first: pitch detection sees the dry voice
+                   tune = &ch->inserts.front();
+                   ctx.result["added"] = true;
+               } else {
+                   tune->bypass = false;
+                   if (!tune->state.is_object()) tune->state = json::object();
+                   for (auto& [k, v] : key.items()) {
+                       tune->state["params"][k] = v;
+                       if (ctx.runtime)
+                           if (auto proc = ctx.runtime->processorForSlot(tune->id)) proc->setParam(k, v.get<float>());
+                   }
+                   ctx.result["added"] = false;
+               }
+               ctx.result["tuneSlotId"] = tune->id;
+               t->monitor = true;
+               t->armed = argBool(a, "arm", true);
+               return true;
+           }});
+    // Replaces a channel's effect chain (and optionally fader / pan / width) with a saved preset.
+    r.add({"ApplyChannelPreset", "Load Channel Preset", "Mixer", "", true, true, [](CommandContext& ctx, const json& a) {
+               auto* ch = channelArg(ctx, a);
+               if (!ch) return fail(ctx, "channel not found");
+               const json preset = a.value("preset", json());
+               std::string err;
+               if (!presets::validChannelPreset(preset, &err)) return fail(ctx, err);
+               std::vector<PluginSlot> inserts;
+               json skipped = json::array();
+               for (auto& i : preset["inserts"]) {
+                   const std::string type = i["typeId"].get<std::string>();
+                   if (!ProcessorFactory::instance().has(type)) {
+                       skipped.push_back(i.value("name", type));
+                       continue;
+                   }
+                   PluginSlot s;
+                   s.id = files::newId();
+                   s.typeId = type;
+                   s.name = i.value("name", type);
+                   s.bypass = i.value("bypass", false);
+                   s.state = i.contains("state") && i["state"].is_object() ? i["state"] : json::object();
+                   if (type == "roy.vocaltune" && argBool(a, "matchKey", true)) { // tune to THIS song's key
+                       s.state["params"]["keyRoot"] = ctx.project.key.root;
+                       s.state["params"]["keyScale"] = static_cast<int>(ctx.project.key.scale);
+                   }
+                   inserts.push_back(std::move(s));
+               }
+               if (inserts.empty() && !preset["inserts"].empty()) return fail(ctx, "none of the preset's effects is available here");
+               for (auto& old : ch->inserts) { // the replaced effects take their automation / MIDI mappings with them
+                   std::erase_if(ctx.project.automation, [&](auto& l) { return l.slotId == old.id; });
+                   std::erase_if(ctx.project.midiMappings, [&](auto& m) { return m.slotId == old.id; });
+               }
+               ch->inserts = std::move(inserts);
+               if (argBool(a, "levels", true)) {
+                   if (preset.contains("gainDb")) ch->gainDb = std::clamp(preset["gainDb"].get<float>(), -120.0f, 12.0f);
+                   if (preset.contains("pan")) ch->pan = std::clamp(preset["pan"].get<float>(), -1.0f, 1.0f);
+                   if (preset.contains("width")) ch->width = std::clamp(preset["width"].get<float>(), 0.0f, 2.0f);
+               }
+               ctx.result["applied"] = ch->inserts.size();
+               ctx.result["skipped"] = skipped;
                return true;
            }});
     r.add({"SetParam", "Set Parameter", "Mixer", "", true, false, [](CommandContext& ctx, const json& a) {

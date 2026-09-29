@@ -66,6 +66,15 @@ std::string patternMenu(App& app, const Pattern& pat) {
 }
 } // namespace
 
+void patternDragSource(const std::string& patternId, const std::string& name) {
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None)) {
+        ImGui::SetDragDropPayload("ROY_PATTERN", patternId.data(), patternId.size());
+        ImGui::Text("Pattern: %s", name.c_str());
+        ImGui::TextDisabled("drop it on a track in the PLAYLIST");
+        ImGui::EndDragDropSource();
+    }
+}
+
 // ---------------------------------------------------------------- PIANO ROLL
 void drawPianoRoll(App& app) {
     Project& p = app.project();
@@ -301,7 +310,11 @@ void drawChannels(App& app) {
     std::string beatTrack;
     for (auto& t : p.tracks)
         if (t.type == TrackType::Beat && (beatTrack.empty() || t.id == app.selTrack)) beatTrack = t.id;
-    if (ImGui::Button("Place in Playlist")) {
+    const bool place = ImGui::Button("Place in Playlist");
+    patternDragSource(pat->id, pat->name);
+    if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+        ImGui::SetTooltip("click: add after the last clip  |  drag: drop exactly where you want in a PLAYLIST track");
+    if (place) {
         if (beatTrack.empty()) {
             app.run("AddTrack", {{"type", "beat"}, {"name", "Drums"}, {"role", "drums"}});
             beatTrack = app.lastResult().value("id", "");
@@ -410,7 +423,9 @@ void drawBeats(App& app) {
                               ImGuiSelectableFlags_AllowOverlap, ImVec2(ImGui::GetContentRegionAvail().x - xW - 4 * dpi, 0)))
             app.selPattern = pat.id;
         if (ImGui::IsItemFocused()) listFocused = true;
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("click: select  |  right-click: rename / duplicate / delete  |  Del: delete");
+        patternDragSource(pat.id, pat.name);
+        if (ImGui::IsItemHovered() && !ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+            ImGui::SetTooltip("click: select  |  drag into a PLAYLIST track  |  right-click: rename / duplicate / delete  |  Del: delete");
         if (const std::string d = patternMenu(app, pat); !d.empty()) toDelete = d;
         ImGui::SameLine();
         ImGui::PushStyleColor(ImGuiCol_Button, ImGui::ColorConvertU32ToFloat4(col::rgb(0x3A1C1C)));
