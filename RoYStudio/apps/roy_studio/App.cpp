@@ -71,17 +71,34 @@ bool App::init(const AppOptions& o) {
     }
     waveforms_.setCacheDirectory(user / "WaveformCache");
 
-    audioCfg_.backend = o.audioBackend;
+    settingsFile_ = user / "settings.json";
+    if (o.interactive) {
+        std::string note;
+        settings_ = support::loadSettings(settingsFile_, &note);
+        if (!note.empty()) message(1, note);
+        audioCfg_ = settings_.audio;
+        midiUserOff_ = settings_.midiInputsOff;
+    }
+    if (o.audioBackend != "auto" || !o.interactive) audioCfg_.backend = o.audioBackend; // command line wins (not saved)
     engine_.prepare(audioCfg_.sampleRate, audioCfg_.bufferSize);
     engine_.setWorkerThreads(AudioEngine::defaultWorkerThreads()); // multi-core mixing
     runtime_ = std::make_unique<ProjectRuntime>(engine_);
     previewer_ = std::make_unique<browser::Previewer>(engine_);
     if (!restartAudio(audioCfg_)) message(1, "audio device unavailable: " + audioStatus_ + " - running without audio output");
+    auto hasDevice = [](const std::vector<AudioDeviceInfo>& list, const std::string& name) {
+        return name.empty() || std::any_of(list.begin(), list.end(), [&](auto& d) { return d.name == name; });
+    };
+    if (device_.isRunning() && !hasDevice(device_.outputDevices(), audioCfg_.outputDevice))
+        message(1, "saved output device '" + audioCfg_.outputDevice + "' not found - using the system default (Audio menu to choose)");
+    if (device_.isRunning() && !hasDevice(device_.inputDevices(), audioCfg_.inputDevice))
+        message(1, "saved input device '" + audioCfg_.inputDevice + "' not found - using the system default (Audio menu to choose)");
+    showFirstRun = o.forceFirstRun || (o.interactive && !settings_.firstRunDone);
     engine_.setInputListener(&recorder_);
     recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
     // live MIDI: open every connected input (keyboards just work)
     midiIn_ = std::make_unique<midi::MidiInputManager>(engine_);
     for (auto& d : midiIn_->devices()) {
+        if (std::find(midiUserOff_.begin(), midiUserOff_.end(), d.id) != midiUserOff_.end()) continue; // switched off by the user
         std::string err;
         if (!midiIn_->open(d.id, &err) && midiFailReported_.insert(d.id).second) message(1, "MIDI input " + d.name + ": " + err);
     }
@@ -364,14 +381,59 @@ std::string App::createDiagnosticsReport() {
     return out.string();
 }
 
+void App::saveSettingsNow() {
+    if (!opt_.interactive) return;
+    settings_.midiInputsOff = midiUserOff_;
+    std::string err;
+    if (!support::saveSettings(settingsFile_, settings_, &err)) message(1, "settings not saved: " + err);
+}
+
+bool App::changeAudio(const AudioDeviceConfig& cfg) {
+    const bool ok = restartAudio(cfg);
+    const std::string keepBackend = settings_.audio.backend;
+    settings_.audio = cfg;
+    if (opt_.audioBackend != "auto") settings_.audio.backend = keepBackend; // a command-line backend is not remembered
+    saveSettingsNow();
+    if (!ok) message(2, "audio device could not start: " + audioStatus_);
+    return ok;
+}
+
+void App::finishFirstRun() {
+    showFirstRun = false;
+    settings_.firstRunDone = true;
+    saveSettingsNow();
+}
+
+void App::playTestTone() {
+    // 1 s 440 Hz at -12 dBFS with short fades, generated once into the user folder
+    const fs::path f = files::userDataDirectory() / "test_tone_440Hz.wav";
+    if (!fs::exists(f)) {
+        const double sr = 48000.0;
+        std::vector<float> v(static_cast<size_t>(sr));
+        for (size_t i = 0; i < v.size(); ++i) {
+            const double t = static_cast<double>(i) / sr;
+            const double fade = std::min({1.0, t / 0.02, (1.0 - t) / 0.02});
+            v[i] = static_cast<float>(0.25 * fade * std::sin(6.283185307179586 * 440.0 * t));
+        }
+        std::string err;
+        if (!writeWavFile(f, {v, v}, sr, SampleFormat::Pcm24, false, &err)) {
+            message(2, "test tone: " + err);
+            return;
+        }
+    }
+    previewFile(f);
+}
+
 void App::setMidiInputEnabled(const std::string& id, bool on) {
     if (!midiIn_) return;
     std::erase(midiUserOff_, id);
     if (!on) {
         midiUserOff_.push_back(id);
         midiIn_->close(id);
+        saveSettingsNow();
         return;
     }
+    saveSettingsNow();
     std::string err;
     midiFailReported_.erase(id);
     if (!midiIn_->open(id, &err)) message(2, err);

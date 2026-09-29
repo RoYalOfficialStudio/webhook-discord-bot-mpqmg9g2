@@ -12,6 +12,7 @@
 #include "plugins/Sandbox.h"
 #include "plugins/Scanner.h"
 #include "project/Session.h"
+#include "support/AppSettings.h"
 #include "record/Recorder.h"
 
 #include <deque>
@@ -34,6 +35,8 @@ struct AppOptions {
     std::string audioBackend = "auto"; // "null" for headless runs
     bool demo = false;                 // build a demo project on start
     fs::path demoFolder;
+    bool interactive = true;           // false for self-test / screenshots / benchmarks: settings.json is neither read nor written
+    bool forceFirstRun = false;        // --first-run: show the setup check even if it was done
 };
 
 struct UiLog {
@@ -104,6 +107,13 @@ public:
     bool audioRunning() const { return device_.isRunning(); }
     std::string audioStatus() const { return audioStatus_; }
     bool restartAudio(const AudioDeviceConfig& cfg);
+    // User-chosen audio change (menu / setup check): restart the device and remember it.
+    bool changeAudio(const AudioDeviceConfig& cfg);
+    // Setup check (first start, Help menu): device choice, test tone, input meter, MIDI, plugin scan.
+    bool showFirstRun = false;
+    void finishFirstRun();
+    void playTestTone();
+    bool pluginScanRunning() const { return scanning_; }
     const AudioDeviceConfig& audioConfig() const { return audioCfg_; }
 
     // ---- browser preview ---------------------------------------------------------
@@ -171,6 +181,9 @@ private:
     std::string consumedSig_;
     void processMidiControls();
     void pollMidiDevices();
+    support::AppSettings settings_;
+    fs::path settingsFile_;
+    void saveSettingsNow();
     std::vector<std::string> midiUserOff_;
     std::set<std::string> midiFailReported_;
     double nextMidiRescan_ = 0;

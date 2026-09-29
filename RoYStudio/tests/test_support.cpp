@@ -9,6 +9,7 @@
 #include "core/Files.h"
 #include "core/Process.h"
 #include "plugins/Scanner.h"
+#include "support/AppSettings.h"
 #include "support/Diagnostics.h"
 
 #include <algorithm>
@@ -147,4 +148,72 @@ TEST_CASE("support", "sanitize: home folder in both slash styles and the user na
     CHECK(s.find(alt) == std::string::npos);
     CHECK(s.find("~/x") != std::string::npos);
     CHECK(support::sanitize("RoY Studio roy_studio.log") == "RoY Studio roy_studio.log"); // plain words untouched
+}
+
+TEST_CASE("support", "app settings: roundtrip, tolerant loading, damaged file kept + defaults, unknown keys preserved") {
+    const fs::path dir = tempDir("settings");
+    const fs::path file = dir / "settings.json";
+    // no file -> defaults, no note
+    std::string note;
+    auto s = support::loadSettings(file, &note);
+    CHECK(note.empty());
+    CHECK(!s.firstRunDone);
+    CHECK(s.audio.bufferSize == 256);
+    // roundtrip
+    s.audio.backend = "wasapi";
+    s.audio.outputDevice = "Speakers (USB Audio)";
+    s.audio.inputDevice = "Mic (USB Audio)";
+    s.audio.sampleRate = 44100.0;
+    s.audio.bufferSize = 128;
+    s.audio.enableInput = false;
+    s.midiInputsOff = {"winmm:Pad Controller"};
+    s.firstRunDone = true;
+    s.unknown["futureFeature"] = {{"x", 1}};
+    REQUIRE(support::saveSettings(file, s));
+    auto back = support::loadSettings(file, &note);
+    CHECK(note.empty());
+    CHECK(back.audio.backend == "wasapi");
+    CHECK(back.audio.outputDevice == "Speakers (USB Audio)");
+    CHECK(back.audio.inputDevice == "Mic (USB Audio)");
+    CHECK(back.audio.sampleRate == 44100.0);
+    CHECK(back.audio.bufferSize == 128);
+    CHECK(!back.audio.enableInput);
+    REQUIRE(back.midiInputsOff.size() == 1);
+    CHECK(back.midiInputsOff[0] == "winmm:Pad Controller");
+    CHECK(back.firstRunDone);
+    CHECK(back.unknown["futureFeature"]["x"] == 1); // newer versions' keys survive
+    // tolerant: invalid values fall back to defaults field by field
+    const auto t = support::settingsFromJson(json::parse(R"({"audio":{"backend":"evil","bufferSize":0,"sampleRate":"x","outputDevice":5},
+                                                             "midi":{"inputsOff":[1,"ok"]},"firstRunDone":"yes"})"));
+    CHECK(t.audio.backend == "auto");
+    CHECK(t.audio.bufferSize == 256);
+    CHECK(t.audio.sampleRate == 48000.0);
+    CHECK(t.audio.outputDevice.empty());
+    REQUIRE(t.midiInputsOff.size() == 1);
+    CHECK(!t.firstRunDone);
+    // damaged file: defaults + note, the damaged file is kept as a copy (never silently lost)
+    { std::ofstream(file, std::ios::trunc) << "{\"audio\": {\"bufferSize\": 12"; }
+    auto d = support::loadSettings(file, &note);
+    CHECK(!note.empty());
+    CHECK(d.audio.bufferSize == 256);
+    bool kept = false;
+    for (auto& e : fs::directory_iterator(dir)) kept |= e.path().filename().string().find("settings.json.corrupt") == 0;
+    CHECK(kept);
+}
+
+TEST_CASE("support", "engine input peak meter: max of the device input, reset on read") {
+    AudioEngine e;
+    e.prepare(48000.0, 256);
+    std::vector<float> in0(256, 0.0f), in1(256, 0.0f), o0(256), o1(256);
+    in0[10] = -0.5f;
+    in1[20] = 0.25f;
+    const float* ins[2] = {in0.data(), in1.data()};
+    float* outs[2] = {o0.data(), o1.data()};
+    e.process(ins, 2, outs, 2, 256);
+    CHECK_NEAR(e.inputPeak(0, false), 0.5f, 1e-6);
+    CHECK_NEAR(e.inputPeak(0), 0.5f, 1e-6);
+    CHECK(e.inputPeak(0) == 0.0f); // reset by the read
+    CHECK_NEAR(e.inputPeak(1), 0.25f, 1e-6);
+    e.process(nullptr, 0, outs, 2, 256); // no inputs: stays 0
+    CHECK(e.inputPeak(0) == 0.0f);
 }

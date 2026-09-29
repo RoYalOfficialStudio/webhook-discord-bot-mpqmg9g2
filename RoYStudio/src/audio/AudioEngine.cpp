@@ -247,12 +247,23 @@ void AudioEngine::resetStats() {
     nonFinite_.store(0);
 }
 
+float AudioEngine::inputPeak(int channel, bool reset) {
+    if (channel < 0 || channel > 1) return 0.0f;
+    return reset ? inputPeak_[channel].exchange(0.0f, std::memory_order_relaxed) : inputPeak_[channel].load(std::memory_order_relaxed);
+}
+
 void AudioEngine::process(const float* const* inputs, int numInputs, float* const* outputs, int numOutputs,
                           int numFrames) noexcept {
     ScopedNoDenormals noDenormals;
     inProcess_.store(true, std::memory_order_release);
     const auto t0 = std::chrono::steady_clock::now();
 
+    for (int c = 0; c < std::min(numInputs, 2); ++c) { // input level for the device check (no alloc, no lock)
+        if (!inputs || !inputs[c]) continue;
+        float m = 0.0f;
+        for (int i = 0; i < numFrames; ++i) m = std::max(m, std::fabs(inputs[c][i]));
+        if (m > inputPeak_[c].load(std::memory_order_relaxed)) inputPeak_[c].store(m, std::memory_order_relaxed);
+    }
     prevCbStartNs_ = cbStartNs_;
     cbStartNs_ = clock_();
     cbFrames_ = numFrames;

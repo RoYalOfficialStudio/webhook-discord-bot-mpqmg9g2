@@ -100,6 +100,8 @@ public:
     // Renders `numFrames` frames. `inputs`/`outputs` are non-interleaved.
     void process(const float* const* inputs, int numInputs, float* const* outputs, int numOutputs, int numFrames) noexcept;
 
+    // Raw device input level (max |sample| of input 1/2 since the last read) for input checks.
+    float inputPeak(int channel, bool reset = true);
     EngineStats stats() const;
     void resetStats();
 
@@ -174,6 +176,7 @@ private:
     std::atomic<bool> deviceRunning_{false};
     std::atomic<uint64_t> blocksProcessed_{0};
     std::atomic<bool> inProcess_{false};
+    std::atomic<float> inputPeak_[2] = {0.0f, 0.0f};
     // live MIDI
     void collectLiveMidi(bool rolling, int64_t timeline, int outOffset, int frames) noexcept;
     ClockFn clock_ = &AudioEngine::steadyNowNs;

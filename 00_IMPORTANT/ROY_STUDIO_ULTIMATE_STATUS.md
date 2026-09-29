@@ -15,8 +15,8 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 ## Verification run of this report
 | Check | Result |
 |---|---|
-| Linux full suite | PASS – 212 tests, 0 failed, 101 666 checks (after the crash-report + diagnostics block) |
-| Windows full suite under Wine 9.0 | PASS – 208 tests, 0 failed, 101 620 checks (SIGSTOP + FIFO tests are POSIX-only) |
+| Linux full suite | PASS – 214 tests, 0 failed, 101 695 checks (after the settings / device selection / setup check block) |
+| Windows full suite under Wine 9.0 | PASS – 210 tests, 0 failed, 101 649 checks (SIGSTOP + FIFO tests are POSIX-only) |
 | Windows GUI self-test (roy_studio.exe --audio null --selftest, Wine) | PASS – 19/19 steps (new: MIDI learn, diagnostics report) |
 | Windows + Linux CLI self-test (roy_cli selftest) | PASS |
 | ASan/UBSan full suite | PASS – 190 tests; only findings are the deliberate crash test plugins. One test expectation failed first (scanner error text when ASan turns the crash into exit code 1) → message fixed, plugin suite re-run under ASan: 8/8 PASS |
@@ -60,7 +60,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | CORE | PASS | logging, files (atomic writes, TEST-ONLY disk-fault injection), processes, command system |
 | PROJECT | PASS | versioned JSON, migration, forward-compatible keys; corrupt-file fuzzing (truncated / bit flips / wrong types) never crashes |
 | AUDIO ENGINE | PASS | multi-core mixing (bit-identical to single thread), PDC, automation |
-| AUDIO DEVICES | PARTIAL | device-loss detection (stop notification + stall watchdog) and auto-reconnect with default-device fallback PASS on the null backend; real WASAPI/ALSA devices UNTESTED |
+| AUDIO DEVICES | PARTIAL | output/input device selection in the Audio menu + setup check (test tone, input meter), remembered in settings.json with default-device fallback + message; device-loss detection (stop notification + stall watchdog) and auto-reconnect with default-device fallback PASS on the null backend; real WASAPI/ALSA devices UNTESTED |
 | PLAYLIST | PASS | clips, waveforms, drag, split, sections, markers, Ctrl+click multi-select → MoveClips (one undo) |
 | RECORDING | PARTIAL | takes, loop, punch, comp, never-lose, disk-full handling PASS headless; **take lanes + comping in the playlist** (lanes open after the 2nd take, swipe-comp by dragging over a take, double-click = whole take, rename / delete take / clear / flatten comp – all undoable commands, comp audibly verified); real inputs UNTESTED |
 | MIDI | PARTIAL | editing, SMF import/export PASS; LIVE INPUT PASS (parser, MIDI thru with stopped transport, sustain pedal, target follows the selected track, recording → clip in one undo, panic, overflow-safe); **sample-accurate timing** (arrival time stamps, constant one-callback latency instead of block jitter, verified with a deterministic clock); **hot-plug** (inputs appear/disappear automatically, stable WinMM ids by device name, all-notes-off on unplug, switched-off inputs stay off); **MIDI LEARN** (CC → volume / pan / width / sends / any effect or instrument parameter, saved in the project, undoable, mapped CCs no longer reach the instrument, mapping list in the Audio menu, removed with its target) – WinMM / ALSA raw-MIDI backends verified only without real devices (Linux via FIFO, Wine enumeration) → real keyboards/controllers UNTESTED |
@@ -89,6 +89,7 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | UNDO/REDO | PASS | consecutive steps share their state (history memory halved), 512 MB byte budget besides the 500-step limit (oldest steps dropped, newest always kept) |
 | LONG SESSION (SOAK) | PASS | `roy_soak`: 2 simulated hours (120 takes, 24 sandboxed plugin loads, 12 exports) – found and fixed an unbounded runtime audio cache (+118 MB/h → flat), fds/threads flat, 0 failed operations; see BENCHMARKS/SOAK_2026-09-29.md |
 | CRASH REPORTS (RoY itself) | PASS | fatal errors of roy_studio / roy_cli (invalid memory access, abort, std::terminate) → text report (error, address, module / backtrace, version) + Windows minidump (system dbghelp.dll) in `CrashReports\`; next start shows "closed unexpectedly" once; verified with real crashes in a child process on Linux and Wine; real Windows UNTESTED |
+| APP SETTINGS | PASS | `%APPDATA%\RoYStudio\settings.json`: audio device/buffer/rate, switched-off MIDI inputs, setup-check state; atomic write, damaged file kept as .corrupt + defaults, unknown keys preserved; automated runs never read/write it |
 | PACKAGING | PASS | ZIP test kit + 64-bit NSIS installer (start menu, optional "Test kit" component, upgrade = uninstall first, uninstaller keeps settings/logs/projects) verified by silent install → self-test → uninstall under Wine; found + fixed: LAME DLL missing from component installs; not code-signed (owner decision) |
 | DIAGNOSTICS | PASS | Help > Create diagnostics report / `roy_cli diagnostics`: system (incl. Wine detection), audio + MIDI devices, engine overloads, plugin scan failures with reasons, quarantine, crash reports, log tail – home folder / user name anonymised, nothing sent anywhere |
 | FAULT INJECTION | PASS | plugin crash, plugin hang, missing audio file, corrupt project, invalid plugin state, device loss, callback stall, export failure (disk full, folder is a file), disk full while saving and recording |
@@ -112,13 +113,15 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 * (2026-09-29) Live MIDI keeps the played timing: one audio buffer of constant latency instead of 0..1
   buffer of jitter (at 256 samples: 5.3 ms constant instead of 0–5.3 ms varying).
 * (2026-09-29) Windows MIDI input ids are now "winmm:<device name>" (were "winmm:<index>").
+* (2026-09-29) First start shows a "Setup check" (audio output + test tone, input meter, MIDI, plugin scan); audio device,
+  buffer and sample rate are now remembered between starts (before: always system default, 256, 48 kHz).
 * (2026-09-29) RoY Studio / roy_cli install a crash handler: a fatal error now leaves a report (+ minidump on
   Windows) in CrashReports\ and the next start says so once. New Help menu (diagnostics report).
 * (2026-09-29) Right-click on a mixer fader / pan now opens a menu (Reset / MIDI Learn) instead of
   resetting directly; same for plugin parameters (Default value / MIDI Learn).
 
 ## Next blocks (BETA HARDENING → RELEASE CANDIDATE)
-1. Windows-native validation package: ZIP test kit, installer, crash reports, diagnostics report done; next: first-run audio/MIDI check wizard. Owner decisions pending: RoY Studio licence text, code-signing certificate.
+1. Windows-native validation package: ZIP test kit, installer, crash reports, diagnostics report, first-start setup check, remembered audio settings done. Owner decisions pending: RoY Studio licence text, code-signing certificate.
 2. ~~Live MIDI: timestamps, MIDI learn, hot-plug~~ done 2026-09-29; next: validation with real keyboards/controllers (TEST_PLAN 5.3–5.3g), NRPN/14-bit CC and relative encoders for MIDI learn.
 3. Real-recording vocal material in the regression suite (needs user-provided takes).
 4. Third-party plugin compatibility: VST3 SDK plugins 53/55 and CLAP example plugins 20/20 done; next: the user's own plugins via `roy_cli plugin-compat` on Windows (TEST_PLAN 6.0).

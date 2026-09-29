@@ -42,6 +42,8 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 ## 3. Audio devices (WASAPI; ASIO if available)
 | # | Step | Expected |
 |---|---|---|
+| 3.0 | First start (or Audio > Setup check): choose output device, "Play test tone"; choose input, speak | beep audible on the chosen device; input bars move, "TOO LOUD" near clipping; MIDI key shows up; "Finish" → not shown again on the next start |
+| 3.0b | Audio menu > Output / Input: pick your interface, restart RoY | RoY starts on the same interface, buffer and rate (remembered in `%APPDATA%\RoYStudio\settings.json`); unplug it and start RoY → message "saved output device ... not found - using the system default" |
 | 3.1 | Audio menu: 44.1 / 48 / 96 kHz | status bar shows the actual rate, playback correct pitch |
 | 3.2 | Buffer 64 / 128 / 256 / 512 / 1024 | stable playback; note the smallest buffer without xruns (status bar "xruns") |
 | 3.3 | Unplug the USB interface during playback | no crash; message "AUDIO DEVICE LOST"; transport stops; a running recording is stopped and its take kept |
