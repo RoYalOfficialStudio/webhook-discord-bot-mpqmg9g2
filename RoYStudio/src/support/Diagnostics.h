@@ -30,5 +30,9 @@ std::string sanitize(const std::string& text);
 std::string buildReport(const DiagnosticsInput& in);
 // Writes <userData>/Diagnostics/RoY_Diagnostics_<UTC time>.md (or `file` if given) atomically.
 std::filesystem::path writeReport(const DiagnosticsInput& in, const std::filesystem::path& file = {}, std::string* error = nullptr);
+// DIAGNOSTIC PACKAGE: RoYStudio_Diagnostics_<time>.zip with the report, the system check, the log,
+// crash reports (text only - no minidumps), plugin scan result and settings, all anonymised.
+std::filesystem::path writePackage(const DiagnosticsInput& in, const std::string& systemCheckMarkdown,
+                                   const std::filesystem::path& file = {}, std::string* error = nullptr);
 
 } // namespace roy::support

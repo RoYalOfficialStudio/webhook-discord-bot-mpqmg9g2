@@ -93,6 +93,23 @@ std::vector<AudioDeviceInfo> DeviceManager::outputDevices() const {
     return v;
 }
 
+std::vector<double> DeviceManager::nativeSampleRates(const std::string& deviceName, bool input) const {
+    std::vector<double> out;
+    if (!impl_->contextOk) return out;
+    const auto& list = input ? impl_->capture : impl_->playback;
+    const ma_device_id* id = nullptr;
+    for (auto& d : list)
+        if (deviceName.empty() ? d.isDefault != 0 : deviceName == d.name) id = &d.id;
+    ma_device_info info{};
+    if (ma_context_get_device_info(&impl_->context, input ? ma_device_type_capture : ma_device_type_playback, id, &info) != MA_SUCCESS) return out;
+    for (ma_uint32 i = 0; i < info.nativeDataFormatCount; ++i) {
+        const double sr = info.nativeDataFormats[i].sampleRate;
+        if (sr > 0 && std::find(out.begin(), out.end(), sr) == out.end()) out.push_back(sr);
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
 std::vector<AudioDeviceInfo> DeviceManager::inputDevices() const {
     std::vector<AudioDeviceInfo> v;
     for (size_t i = 0; i < impl_->capture.size(); ++i)
@@ -142,7 +159,10 @@ bool DeviceManager::open(const AudioDeviceConfig& cfg, AudioEngine& engine, std:
         return nullptr;
     };
 
-    ma_device_config dc = ma_device_config_init(cfg.enableInput ? ma_device_type_duplex : ma_device_type_playback);
+    openNote_.clear();
+    exclusiveActive_ = false;
+    auto tryInit = [&](bool withInput, bool exclusive) -> ma_result {
+    ma_device_config dc = ma_device_config_init(withInput ? ma_device_type_duplex : ma_device_type_playback);
     dc.sampleRate = static_cast<ma_uint32>(cfg.sampleRate);
     dc.periodSizeInFrames = static_cast<ma_uint32>(cfg.bufferSize);
     dc.periods = 2;
@@ -158,8 +178,27 @@ bool DeviceManager::open(const AudioDeviceConfig& cfg, AudioEngine& engine, std:
     dc.dataCallback = [](ma_device* d, void* o, const void* i, ma_uint32 n) { DeviceManager::dataCallback(d, o, i, n); };
     dc.notificationCallback = [](const ma_device_notification* n) { DeviceManager::notificationCallback(n); };
     dc.pUserData = this;
+    dc.playback.shareMode = exclusive ? ma_share_mode_exclusive : ma_share_mode_shared;
+    dc.capture.shareMode = exclusive ? ma_share_mode_exclusive : ma_share_mode_shared;
+    return ma_device_init(&impl_->context, &dc, &impl_->device);
+    };
 
-    const ma_result r = ma_device_init(&impl_->context, &dc, &impl_->device);
+    bool withInput = cfg.enableInput;
+    bool exclusive = cfg.exclusive;
+    ma_result r = tryInit(withInput, exclusive);
+    if (r != MA_SUCCESS && exclusive) { // exclusive refused (format not supported / device in use)
+        log::warn("device", "exclusive mode failed ({}), using shared mode", ma_result_description(r));
+        openNote_ = std::string("exclusive mode not possible (") + ma_result_description(r) + ") - using shared mode";
+        exclusive = false;
+        r = tryInit(withInput, false);
+    }
+    if (r != MA_SUCCESS && withInput) { // no/blocked input: keep playback working
+        log::warn("device", "duplex open failed ({}), opening playback only", ma_result_description(r));
+        openNote_ += std::string(openNote_.empty() ? "" : "; ") + "audio input could not be opened (" + ma_result_description(r) +
+                     ") - playback only. Check the microphone / Windows privacy settings";
+        withInput = false;
+        r = tryInit(false, exclusive);
+    }
     if (r != MA_SUCCESS) {
         if (error) *error = std::string("device init failed: ") + ma_result_description(r);
         log::error("device", "device init failed: {}", ma_result_description(r));
@@ -173,7 +212,8 @@ bool DeviceManager::open(const AudioDeviceConfig& cfg, AudioEngine& engine, std:
     actualBuffer_ = static_cast<int>(impl_->device.playback.internalPeriodSizeInFrames);
     if (actualBuffer_ <= 0) actualBuffer_ = cfg.bufferSize;
     outChannels_ = static_cast<int>(impl_->device.playback.channels);
-    inChannels_ = cfg.enableInput ? static_cast<int>(impl_->device.capture.channels) : 0;
+    inChannels_ = withInput ? static_cast<int>(impl_->device.capture.channels) : 0;
+    exclusiveActive_ = exclusive;
 
     const int maxBlock = std::max(cfg.bufferSize, actualBuffer_);
     engine_ = &engine;

@@ -26,7 +26,13 @@ std::string nowCompact(); // 20260928_153200
 std::string newId();      // 128-bit random hex id
 // Per-user settings folder: %APPDATA%\\RoYStudio (Windows), ~/.config/RoYStudio (Linux),
 // ~/Library/Application Support/RoYStudio (macOS). Created on demand. ROY_USER_DIR overrides it.
+// PORTABLE MODE: a file "RoYStudio.portable" next to the executable keeps everything inside that
+// folder (<exe dir>/UserData, projects in <exe dir>/Projects) - nothing in %APPDATA%, no registry.
 fs::path userDataDirectory();
+bool portableMode();
+// Default folder for new projects: portable -> <exe dir>/Projects, otherwise
+// Documents/RoY Studio Projects (Windows: %USERPROFILE%\\Documents). Created on demand.
+fs::path defaultProjectsDirectory();
 
 // Atomically renames `from` over `to` (replacing it).
 bool replaceFile(const fs::path& from, const fs::path& to, std::string* error = nullptr);

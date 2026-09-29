@@ -17,6 +17,8 @@
 #include "project/ProjectIO.h"
 #include "project/Session.h"
 #include "support/Diagnostics.h"
+#include "support/SystemCheck.h"
+#include "support/TestSignals.h"
 #include "midi/Scale.h"
 
 #include <cstdio>
@@ -52,6 +54,10 @@ int usage(int code) {
         "  roy_cli scan-plugins [--db file] [--force] [--retry] [--timeout ms] [paths...]\n"
         "  roy_cli mp3-check                                  is the LAME MP3 encoder available?\n"
         "  roy_cli diagnostics [report.md]                    system/audio/MIDI/plugins/crash reports/log summary for bug reports\n"
+        "  roy_cli diagnostic-package [file.zip]              RoYStudio_Diagnostics_<time>.zip (anonymised, never uploaded)\n"
+        "  roy_cli system-check                               PASS/WARNING/FAIL check of this machine (audio, MIDI, plugin host, MP3, disk)\n"
+        "  roy_cli make-testkit <folder>                      self-generated test material: tones, synthetic vocal, drum samples,\n"
+        "                                                     MIDI files and the 'RoY Test Beat' project\n"
         "  roy_cli selftest <folder>                          headless workflow check (new/tracks/beat/export/save/reopen/recovery)\n"
         "  roy_cli plugins <INSTALLED|AVAILABLE|FAILED|BLACKLISTED|FAVORITES|RECENT|INSTRUMENTS|EFFECTS|DUPLICATES> [--db file]\n",
         ROY_VERSION_STRING);
@@ -128,6 +134,142 @@ int main(int argc, char** argv) {
         crash::crashForTesting(a[2]);
     }
     crash::install((files::userDataDirectory() / "CrashReports").string(), "roy_cli");
+    if (cmd == "system-check") {
+        support::SystemCheckInput in;
+        DeviceManager dm;
+        AudioEngine engine;
+        if (dm.initialise("auto", &err) && dm.open(AudioDeviceConfig{}, engine, &err) && dm.start(&err)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            in.audioRunning = dm.isRunning();
+            in.audioBackend = dm.backendName();
+            in.sampleRate = dm.actualSampleRate();
+            in.bufferSize = dm.actualBufferSize();
+            in.inputChannels = dm.actualInputChannels();
+            in.overloads = engine.stats().overloads;
+        }
+        in.outputDevices = static_cast<int>(dm.outputDevices().size());
+        midi::MidiInputManager mi(engine);
+        in.midiInputs = static_cast<int>(mi.devices().size());
+        in.pluginHost = plugins::hostExecutable();
+        in.projectsDir = files::defaultProjectsDirectory();
+        const auto items = support::runSystemCheck(in);
+        dm.stop();
+        dm.close();
+        for (auto& i : items) std::printf("%-28s %-8s %s\n", i.name.c_str(), i.status.c_str(), i.detail.c_str());
+        std::printf("OVERALL: %s\n", support::overall(items).c_str());
+        return support::overall(items) == "FAIL" ? 1 : 0;
+    }
+    if (cmd == "make-testkit" && a.size() == 2) {
+        const fs::path kit = a[1];
+        for (auto& f : support::writeTestSignals(kit, &err)) std::printf("  %s\n", f.c_str());
+        if (!err.empty()) {
+            std::fprintf(stderr, "test signals: %s\n", err.c_str());
+            return 1;
+        }
+        // the RoY Test Beat project (all content generated here)
+        std::error_code ec;
+        fs::remove_all(kit / "Projects" / "RoY Test Beat", ec); // regenerated every time (test kit folder only)
+        Project np = makeNewProject("RoY Test Beat", 48000.0, 140.0);
+        if (auto k = parseKey("A Minor")) np.key = *k;
+        ProjectSession created;
+        if (!created.create(kit / "Projects", np, &err)) {
+            std::fprintf(stderr, "project: %s\n", err.c_str());
+            return 1;
+        }
+        const fs::path projFile = created.file();
+        created.close();
+        {
+            Opened o;
+            if (!o.open(projFile, err)) {
+                std::fprintf(stderr, "project: %s\n", err.c_str());
+                return 1;
+            }
+            auto run = [&](const std::string& id, const json& args) {
+                if (!o.registry.execute(*o.ctx, id, args)) std::fprintf(stderr, "  %s failed: %s\n", id.c_str(), o.ctx->error.c_str());
+                return o.ctx->result;
+            };
+            auto bus = [&](const std::string& n) {
+                for (auto& c : o.project.channels)
+                    if (c.name == n) return c.id;
+                return std::string();
+            };
+            const std::string drums = run("AddTrack", {{"type", "beat"}, {"name", "Drums"}, {"role", "drums"}, {"output", bus("DRUMS")}}).value("id", "");
+            const std::string pat = run("AddPattern", {{"name", "Test Beat"}, {"steps", 16}}).value("id", "");
+            run("SetRowPattern", {{"patternId", pat}, {"voice", "kick"}, {"text", "X.....x...x....."}});
+            run("SetRowPattern", {{"patternId", pat}, {"voice", "snare"}, {"text", "....X.......X..."}});
+            run("SetRowPattern", {{"patternId", pat}, {"voice", "clap"}, {"text", "....x.......x..."}});
+            run("SetRowPattern", {{"patternId", pat}, {"voice", "closed_hat"}, {"text", "XxxxXxxxXxxxXxXx"}});
+            run("SetRowPattern", {{"patternId", pat}, {"voice", "open_hat"}, {"text", "..............x."}});
+            run("AddPatternClip", {{"trackId", drums}, {"patternId", pat}, {"startBeat", 0.0}, {"lengthBeats", 32.0}});
+            const std::string bass = run("AddTrack", {{"type", "midi"}, {"name", "808"}, {"instrument", "roy.808"}, {"role", "808"}, {"output", bus("DRUMS")}}).value("id", "");
+            const std::string bassClip = run("AddMidiClip", {{"trackId", bass}, {"startBeat", 0.0}, {"lengthBeats", 16.0}, {"name", "808 Line"}}).value("id", "");
+            const double bn[][3] = {{33, 0.0, 1.5}, {33, 2.5, 1.0}, {36, 4.0, 1.5}, {31, 8.0, 2.0}, {29, 12.0, 3.0}};
+            for (auto& n : bn) run("AddNote", {{"clipId", bassClip}, {"pitch", n[0]}, {"startBeat", n[1]}, {"lengthBeats", n[2]}, {"slide", n[1] == 4.0}});
+            run("DuplicateClip", {{"clipId", bassClip}, {"startBeat", 16.0}});
+            const std::string keys = run("AddTrack", {{"type", "midi"}, {"name", "Keys"}, {"output", bus("MUSIC")}, {"role", "music"}}).value("id", "");
+            const std::string keysClip = run("AddMidiClip", {{"trackId", keys}, {"startBeat", 0.0}, {"lengthBeats", 16.0}, {"name", "Chords"}}).value("id", "");
+            const int chords[4][3] = {{57, 60, 64}, {53, 57, 60}, {55, 59, 62}, {52, 55, 59}};
+            for (int c = 0; c < 4; ++c)
+                for (int n : chords[c]) run("AddNote", {{"clipId", keysClip}, {"pitch", n}, {"startBeat", c * 4.0}, {"lengthBeats", 3.75}, {"velocity", 90}});
+            run("DuplicateClip", {{"clipId", keysClip}, {"startBeat", 16.0}});
+            const std::string vocal = run("AddTrack", {{"type", "audio"}, {"name", "Test Vocal"}, {"role", "vocal"}, {"output", bus("VOCALS")}}).value("id", "");
+            run("ImportAudio", {{"path", (kit / "Audio" / "Synthetic_Vocal_A_minor_with_off_key_notes.wav").string()}, {"trackId", vocal}, {"startBeat", 8.0}, {"copy", true}});
+            // levels with headroom (mixdown peaks well below 0 dBFS)
+            const std::pair<std::string, double> levels[] = {{drums, -9.0}, {bass, -10.0}, {keys, -14.0}, {vocal, -8.0}};
+            for (auto& [t, db] : levels) run("SetChannelGain", {{"trackId", t}, {"gainDb", db}});
+            run("AddSection", {{"name", "Intro"}, {"type", "intro"}, {"startBeat", 0.0}, {"endBeat", 8.0}});
+            run("AddSection", {{"name", "Hook"}, {"type", "hook"}, {"startBeat", 8.0}, {"endBeat", 32.0}});
+            fs::create_directories(kit / "MIDI", ec);
+            fs::remove(kit / "MIDI" / "Test_808_Line.mid", ec);
+            fs::remove(kit / "MIDI" / "Test_Chords_A_minor.mid", ec);
+            run("ExportMidi", {{"clipId", bassClip}, {"path", (kit / "MIDI" / "Test_808_Line.mid").string()}});
+            run("ExportMidi", {{"clipId", keysClip}, {"path", (kit / "MIDI" / "Test_Chords_A_minor.mid").string()}});
+            if (!o.save(err)) {
+                std::fprintf(stderr, "save: %s\n", err.c_str());
+                return 1;
+            }
+        }
+        std::printf("  %s\n  MIDI/Test_808_Line.mid\n  MIDI/Test_Chords_A_minor.mid\ntest kit written to %s\n",
+                    fs::relative(projFile, kit, ec).generic_string().c_str(), kit.string().c_str());
+        return 0;
+    }
+    if (cmd == "diagnostic-package") { // zip with report, system check, log, crash reports - never sent anywhere
+        support::DiagnosticsInput in;
+        in.program = "RoY Studio (roy_cli)";
+        in.userDataDir = files::userDataDirectory();
+        support::SystemCheckInput sc;
+        DeviceManager dm;
+        AudioEngine engine;
+        if (dm.initialise("auto", &err)) {
+            in.audioLines.push_back("backend: " + dm.backendName());
+            for (auto& d : dm.outputDevices()) in.audioLines.push_back("output: " + d.name + (d.isDefault ? " (default)" : ""));
+            for (auto& d : dm.inputDevices()) in.audioLines.push_back("input: " + d.name + (d.isDefault ? " (default)" : ""));
+            if (dm.open(AudioDeviceConfig{}, engine, &err) && dm.start(&err)) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                sc.audioRunning = true;
+                sc.audioBackend = dm.backendName();
+                sc.sampleRate = dm.actualSampleRate();
+                sc.bufferSize = dm.actualBufferSize();
+                sc.inputChannels = dm.actualInputChannels();
+            }
+            sc.outputDevices = static_cast<int>(dm.outputDevices().size());
+        }
+        midi::MidiInputManager mi(engine);
+        for (auto& d : mi.devices()) in.midiLines.push_back(d.name);
+        sc.midiInputs = static_cast<int>(mi.devices().size());
+        sc.pluginHost = plugins::hostExecutable();
+        sc.projectsDir = files::defaultProjectsDirectory();
+        const std::string check = support::systemCheckMarkdown(support::runSystemCheck(sc));
+        dm.stop();
+        dm.close();
+        const fs::path out = support::writePackage(in, check, a.size() > 1 ? fs::path(a[1]) : fs::path(), &err);
+        if (out.empty()) {
+            std::fprintf(stderr, "diagnostic package not written: %s\n", err.c_str());
+            return 1;
+        }
+        std::printf("diagnostic package: %s\n", out.string().c_str());
+        return 0;
+    }
     if (cmd == "diagnostics") {
         support::DiagnosticsInput in;
         in.program = "RoY Studio (roy_cli)";

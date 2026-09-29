@@ -24,6 +24,7 @@ from unknown sources. Hashes below were computed after download.
 | Wine (wine64) | 9.0 | Ubuntu 24.04 package (apt) | LGPL | Runs the Windows test suite and GUI self-test on Linux (test only) |
 | GLFW (libglfw3-dev) | 3.3.10 | Ubuntu 24.04 package (apt) | zlib/libpng | Linux GUI window/input (development + CI screenshots); not used on Windows |
 | Xvfb | system | Ubuntu 24.04 package | MIT/X11 | Headless display for GUI screenshots |
+| zip | 3.0 | Ubuntu 24.04 package `zip` (apt) | Info-ZIP licence (BSD-style) | Packs the portable test ZIP (build time only, not shipped; `python3 -m zipfile` as fallback) | apt-verified package | `apt-get install zip` |
 | NSIS (makensis) | 3.09-4ubuntu1 | Ubuntu 24.04 package `nsis` (apt, official archive) | zlib/libpng (installer stub; its LZMA code is CPL with the NSIS installer exception, bzip2 BSD-style) | Builds the Windows installer `RoYStudio-<version>-win64.exe` (64-bit stub via `packaging/makensis-amd64.sh`); the stub is part of the shipped installer | package verified by apt (signed Ubuntu archive) | `apt-get install nsis` |
 
 ## Not used / pending decisions
@@ -31,6 +32,12 @@ from unknown sources. Hashes below were computed after download.
 - **RoY Studio licence** (owner decision): the repository root `LICENSE` belongs to the original repository
   template, not to RoY Studio. The installer shows `packaging/INSTALLER_NOTICE.txt` ("BETA test build,
   licence not yet published") until the owner decides.
-- **Code signing certificate** (owner decision, costs money): without it Windows SmartScreen warns on the
-  installer and the programs. Not bought, not bypassed.
+- **Code signing certificate** (owner decision, costs money): NOT used for alpha/beta tests - the test packages
+  are labelled "UNSIGNED DEVELOPMENT/TEST BUILD"; README_TEST.txt explains the SmartScreen warning and how to
+  verify the files with SHA256SUMS.txt. Windows security is never switched off by RoY.
+- **ASIO**: not included. The free Steinberg ASIO SDK is licensed GPLv3 (or a proprietary licence) - using it
+  would decide RoY's licence, which is the owner's decision. WASAPI shared/exclusive needs no extra driver.
+- **Runtime dependencies of the Windows build**: none besides Windows system DLLs (static mingw runtime;
+  d3d11, d3dcompiler_47, dwmapi, gdi32, kernel32, msvcrt, ole32, shell32, user32, winmm) and our own
+  roy_mp3lame.dll - no Visual C++ redistributable needed (checked with objdump).
 - **Stem separation models** (e.g. Demucs, MIT code / model weights with their own terms): not added.

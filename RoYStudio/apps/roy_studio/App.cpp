@@ -3,6 +3,7 @@
 
 #include "core/CrashHandler.h"
 #include "core/Files.h"
+#include "core/Process.h"
 #include "core/Log.h"
 #include "support/Diagnostics.h"
 #include "io/AudioFile.h"
@@ -93,6 +94,8 @@ bool App::init(const AppOptions& o) {
     if (device_.isRunning() && !hasDevice(device_.inputDevices(), audioCfg_.inputDevice))
         message(1, "saved input device '" + audioCfg_.inputDevice + "' not found - using the system default (Audio menu to choose)");
     showFirstRun = o.forceFirstRun || (o.interactive && !settings_.firstRunDone);
+    setupStep = o.setupStep;
+    showMusicSession = o.openMusicSession;
     engine_.setInputListener(&recorder_);
     recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
     // live MIDI: open every connected input (keyboards just work)
@@ -116,8 +119,12 @@ bool App::restartAudio(const AudioDeviceConfig& cfg) {
         engine_.prepare(cfg.sampleRate, cfg.bufferSize);
         return false;
     }
-    audioStatus_ = std::format("{} | {:.0f} Hz | {} samples | {:.1f} ms", device_.backendName(), device_.actualSampleRate(),
-                               device_.actualBufferSize(), 1000.0 * device_.latencySamples() / device_.actualSampleRate());
+    audioStatus_ = std::format("{}{} | {:.0f} Hz | {} samples | {:.1f} ms{}", device_.backendName(),
+                               device_.backendName() == "WASAPI" ? (device_.exclusiveActive() ? " exclusive" : " shared") : "",
+                               device_.actualSampleRate(), device_.actualBufferSize(),
+                               1000.0 * device_.latencySamples() / device_.actualSampleRate(), device_.actualInputChannels() ? "" : " | no input");
+    if (!device_.openNote().empty()) message(1, "audio: " + device_.openNote());
+    overloadBase_ = engine_.stats().overloads;
     recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
     if (project_) runtime_->rebuild(*project_);
     return true;
@@ -305,8 +312,12 @@ bool App::redo() {
 // ------------------------------------------------------------------ transport
 void App::togglePlay() {
     auto& t = engine_.transport();
-    if (t.isPlaying()) stop();
-    else t.play();
+    if (t.isPlaying()) {
+        stop();
+    } else {
+        t.setCountInSamples(0); // count-in only before recordings
+        t.play();
+    }
 }
 
 void App::stop() {
@@ -349,6 +360,103 @@ std::string App::liveMidiTrackName() const {
 }
 
 std::string App::createDiagnosticsReport() {
+    support::DiagnosticsInput in = diagnosticsInput();
+    std::string err;
+    const fs::path out = support::writeReport(in, {}, &err);
+    if (out.empty()) {
+        message(2, "diagnostics report not written: " + err);
+        return {};
+    }
+    message(0, "diagnostics report written: " + out.string() + " - review it, then attach it to your bug report");
+    return out.string();
+}
+
+std::string App::createDiagnosticPackage(bool showFolder) {
+    std::string err;
+    const auto checks = runSystemCheck();
+    const fs::path out = support::writePackage(diagnosticsInput(), support::systemCheckMarkdown(checks), {}, &err);
+    if (out.empty()) {
+        message(2, "diagnostic package not written: " + err);
+        return {};
+    }
+    message(0, "diagnostic package: " + out.string() + " - send this file (nothing is uploaded automatically)");
+    if (showFolder) openFolder(out.parent_path());
+    return out.string();
+}
+
+std::vector<support::CheckItem> App::runSystemCheck() {
+    support::SystemCheckInput in;
+    in.audioRunning = device_.isRunning();
+    in.audioBackend = audioStatus_;
+    in.sampleRate = device_.isRunning() ? device_.actualSampleRate() : audioCfg_.sampleRate;
+    in.bufferSize = device_.isRunning() ? device_.actualBufferSize() : audioCfg_.bufferSize;
+    in.outputDevices = static_cast<int>(device_.outputDevices().size());
+    in.inputChannels = device_.isRunning() ? device_.actualInputChannels() : 0;
+    in.overloads = overloadsSinceAudioChange();
+    in.midiInputs = midiIn_ ? static_cast<int>(midiIn_->devices().size()) : 0;
+    in.pluginHost = plugins::hostExecutable();
+    in.projectsDir = files::defaultProjectsDirectory();
+    lastCheck_ = support::runSystemCheck(in);
+    log::info("app", "system check: {}", support::overall(lastCheck_));
+    return lastCheck_;
+}
+
+std::vector<double> App::offeredSampleRates(std::vector<double>* nativeOut) const {
+    const std::vector<double> native = device_.nativeSampleRates(audioCfg_.outputDevice, false);
+    if (nativeOut) *nativeOut = native;
+    std::vector<double> out;
+    for (double sr : {44100.0, 48000.0, 96000.0}) {
+        const bool isNative = std::find(native.begin(), native.end(), sr) != native.end();
+        if (!audioCfg_.exclusive || native.empty() || isNative) out.push_back(sr); // shared mode converts any rate
+    }
+    return out;
+}
+
+fs::path App::currentExportFolder() const {
+    if (!exportFolder.empty()) return exportFolder;
+    return session_.folder().empty() ? files::defaultProjectsDirectory() : session_.folder() / "Exports";
+}
+
+void App::openFolder(const fs::path& folder) {
+    std::error_code ec;
+    fs::create_directories(folder, ec);
+    if (!openInFileBrowser(folder.string())) message(1, "cannot open the folder: " + folder.string());
+}
+
+void App::testMicrophone() {
+    if (!device_.isRunning() || device_.actualInputChannels() == 0) {
+        message(2, "no audio input is open - choose an input device (Windows: Settings > Privacy > Microphone must allow desktop apps)");
+        return;
+    }
+    if (!engine_.startInputCapture(3.0)) return;
+    micState_ = 1;
+    micPeak_ = 0.0f;
+    micStart_ = nowSeconds();
+    message(0, "microphone test: speak now (3 seconds)...");
+}
+
+void App::pollMicTest() {
+    if (micState_ != 1) return;
+    std::vector<float> l, r;
+    if (engine_.takeInputCapture(l, r)) {
+        for (size_t i = 0; i < l.size(); ++i) micPeak_ = std::max({micPeak_, std::fabs(l[i]), std::fabs(r[i])});
+        const fs::path f = files::userDataDirectory() / "microphone_test.wav";
+        std::error_code ec;
+        fs::remove(f, ec); // only our own test file
+        std::string err;
+        if (writeWavFile(f, {l, r}, engine_.sampleRate(), SampleFormat::Pcm24, false, &err)) previewFile(f);
+        micState_ = 2;
+        const float db = 20.0f * std::log10(std::max(1e-6f, micPeak_));
+        message(micPeak_ < 0.001f ? 2 : 0, micPeak_ < 0.001f ? "microphone test: NO SIGNAL - check the input device, cable, gain and Windows microphone privacy"
+                                                             : std::format("microphone test: peak {:.0f} dBFS - playing it back now", db));
+    } else if (nowSeconds() - micStart_ > 8.0) {
+        engine_.cancelInputCapture();
+        micState_ = 0;
+        message(2, "microphone test: no audio arrived from the device (is the audio device running?)");
+    }
+}
+
+support::DiagnosticsInput App::diagnosticsInput() {
     support::DiagnosticsInput in;
     in.userDataDir = files::userDataDirectory();
     in.audioLines.push_back("backend: " + (device_.isRunning() ? device_.backendName() : std::string("not running")) + " | status: " + audioStatus_);
@@ -371,14 +479,8 @@ std::string App::createDiagnosticsReport() {
                                               project_->channels.size(), plugins, project_->assets.size(), runtime_->safeMode() ? "on" : "off"));
         in.sessionLines.push_back(std::format("plugin crashes this session: {}", crashes_.size()));
     }
-    std::string err;
-    const fs::path out = support::writeReport(in, {}, &err);
-    if (out.empty()) {
-        message(2, "diagnostics report not written: " + err);
-        return {};
-    }
-    message(0, "diagnostics report written: " + out.string() + " - review it, then attach it to your bug report");
-    return out.string();
+    in.sessionLines.push_back(std::string("portable mode: ") + (files::portableMode() ? "yes" : "no"));
+    return in;
 }
 
 void App::saveSettingsNow() {
@@ -542,8 +644,18 @@ void App::toggleRecord() {
         updateLiveMidiTarget();
         engine_.setLiveMidiRecording(true);
     }
+    // count-in (Project > metronome settings): clicks for N bars, then recording starts
+    const int bars = project_->settings.countInBars;
+    int64_t countIn = 0;
+    if (bars > 0) {
+        const double beat = positionBeats();
+        const double secPerBeat = project_->tempo.beatToSeconds(beat + 1.0) - project_->tempo.beatToSeconds(beat);
+        const int num = project_->tempo.signatureAtBar(0).numerator;
+        countIn = static_cast<int64_t>(std::llround(bars * num * secPerBeat * engine_.sampleRate()));
+    }
+    engine_.transport().setCountInSamples(countIn);
     engine_.transport().play();
-    message(0, "recording...");
+    message(0, countIn > 0 ? std::format("count-in {} bar(s), then recording...", bars) : std::string("recording..."));
 }
 
 void App::seekBeat(double beat) {
@@ -571,9 +683,12 @@ void App::tick() {
     if (previewer_) previewer_->collect();
     pollAudioDevice();
     pollMidiDevices();
+    pollMicTest();
     if (!project_) return;
     updateLiveMidiTarget();
     processMidiControls();
+    engine_.metronome().setEnabled(project_->settings.metronome); // CLICK button / project setting
+    engine_.metronome().setGainDb(project_->settings.metronomeGainDb);
     if (midiRecording_) engine_.drainRecordedMidi(midiTake_); // keep the engine queue short
     if (recorder_.diskErrors() != diskErrorsSeen_) {
         diskErrorsSeen_ = recorder_.diskErrors();
@@ -804,6 +919,25 @@ bool App::selfTest(const fs::path& folder) {
     toggleRecord();
     pump(0.3);
     step("record take (realtime)", project_->findTrack(vocal)->takes.size() == takesBefore + 1);
+    // metronome (CLICK) and count-in reach the engine
+    {
+        run("SetMetronome", {{"enabled", true}, {"countInBars", 1}});
+        const uint64_t clicks0 = engine_.metronome().clicksTriggered();
+        seekBeat(0);
+        togglePlay();
+        pump(0.7);
+        stop();
+        const uint64_t clicks1 = engine_.metronome().clicksTriggered();
+        step("metronome audible (CLICK)", clicks1 > clicks0, std::format("{} clicks", clicks1 - clicks0));
+        seekBeat(40);
+        toggleRecord();
+        pump(0.15);
+        const bool countingIn = engine_.transport().isCountingIn();
+        toggleRecord();
+        pump(0.3);
+        step("count-in before recording", countingIn);
+        run("SetMetronome", {{"enabled", false}, {"countInBars", 0}});
+    }
     run("ArmTrack", {{"trackId", vocal}, {"armed", false}});
     // vocal lab
     std::string clip;

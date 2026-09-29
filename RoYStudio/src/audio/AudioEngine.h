@@ -102,6 +102,12 @@ public:
 
     // Raw device input level (max |sample| of input 1/2 since the last read) for input checks.
     float inputPeak(int channel, bool reset = true);
+    // MICROPHONE TEST: captures `seconds` of device input 1/2 (buffer allocated here, on the
+    // message thread; the audio thread only copies). takeInputCapture() returns it once complete.
+    bool startInputCapture(double seconds);
+    bool inputCaptureRunning() const { return capturing_.load(std::memory_order_acquire); }
+    bool takeInputCapture(std::vector<float>& left, std::vector<float>& right);
+    void cancelInputCapture() { capturing_.store(false, std::memory_order_release); }
     EngineStats stats() const;
     void resetStats();
 
@@ -177,6 +183,10 @@ private:
     std::atomic<uint64_t> blocksProcessed_{0};
     std::atomic<bool> inProcess_{false};
     std::atomic<float> inputPeak_[2] = {0.0f, 0.0f};
+    std::vector<float> capL_, capR_;
+    std::atomic<int> capPos_{0};
+    int capLen_ = 0;
+    std::atomic<bool> capturing_{false};
     // live MIDI
     void collectLiveMidi(bool rolling, int64_t timeline, int outOffset, int frames) noexcept;
     ClockFn clock_ = &AudioEngine::steadyNowNs;

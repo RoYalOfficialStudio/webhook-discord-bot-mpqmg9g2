@@ -1,11 +1,11 @@
-RoY Studio - BETA TEST BUILD
+RoY Studio - BETA TEST BUILD - UNSIGNED DEVELOPMENT/TEST BUILD
 
-This is a BETA build for testing. It is not a finished product. Keep backups of important
+This is a BETA build for testing (not code-signed - Windows SmartScreen may warn). It is not a finished product. Keep backups of important
 projects. RoY Studio never deletes your projects or recordings; uninstalling removes only the
 program files. Your settings, logs, crash reports and plugin list stay in
 %APPDATA%\RoYStudio\ and your projects stay where you saved them.
 
-Licence terms of RoY Studio itself: not yet published by the owner (pending decision).
+Licence terms of RoY Studio itself: LICENSE DECISION PENDING (not yet decided by the owner).
 Until then this build may only be used for testing by the people it was given to.
 
 Third-party components (full licence texts in the "licenses" folder after installation,

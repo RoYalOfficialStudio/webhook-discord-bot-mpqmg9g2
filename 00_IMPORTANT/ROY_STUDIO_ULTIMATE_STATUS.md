@@ -15,9 +15,10 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 ## Verification run of this report
 | Check | Result |
 |---|---|
-| Linux full suite | PASS – 214 tests, 0 failed, 101 695 checks (after the settings / device selection / setup check block) |
+| Linux full suite | PASS – 218 tests, 0 failed, 101 753 checks (after the portable Windows test build block) |
 | Windows full suite under Wine 9.0 | PASS – 210 tests, 0 failed, 101 649 checks (SIGSTOP + FIFO tests are POSIX-only) |
-| Windows GUI self-test (roy_studio.exe --audio null --selftest, Wine) | PASS – 19/19 steps (new: MIDI learn, diagnostics report) |
+| Windows GUI self-test (RoYStudio.exe --audio null --selftest, Wine) | PASS – 21/21 steps (new: metronome audible, count-in) – also run from the unpacked PORTABLE zip and from the installed program |
+| PORTABLE package under Wine (unzipped like a user) | PASS – FIRST REAL MUSIC SESSION automated 41/43 PASS + 2 SKIPPED (microphone level, opening Explorer need a person), TestKit\\RUN_AUTOMATED_TESTS.bat 214/214, system check + diagnostic package from the package, nothing written to %APPDATA% or %TEMP% |
 | Windows + Linux CLI self-test (roy_cli selftest) | PASS |
 | ASan/UBSan full suite | PASS – 190 tests; only findings are the deliberate crash test plugins. One test expectation failed first (scanner error text when ASan turns the crash into exit code 1) → message fixed, plugin suite re-run under ASan: 8/8 PASS |
 | TSan (parallel, mixer, faults, automation) | PASS – 0 warnings |
@@ -53,6 +54,17 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 | Real audio hardware | UNTESTED HARDWARE VALIDATION | allowed by the gate |
 
 **Gate result: all required items PASS → BETA.** Version raised to 0.2.0.
+
+## WINDOWS TEST BUILD (free, 2026-09-29)
+| Item | Status | Notes |
+|---|---|---|
+| Portable ZIP `RoYStudio-0.2.0-PORTABLE-win64.zip` | PASS (Wine) | double-click START_ROY_STUDIO.bat; RoYStudio.exe, RoYPluginHost.exe, roy_cli.exe, roy_mp3lame.dll; Plugins\ (safe RoY TEST VST3 + CLAP), Samples\, Projects\, TestKit\, README_TEST.txt, SHA256SUMS.txt; only Windows system DLLs needed; portable marker keeps everything in the folder |
+| Installer `RoYStudio-0.2.0-win64.exe` | PASS (Wine) | NSIS 64-bit, unsigned; now also installs Plugins\ |
+| First start: WELCOME + STEP 1–5 + SYSTEM CHECK | PASS | output list + PLAY TEST TONE, WASAPI shared (default) / exclusive option, input list + LIVE INPUT LEVEL + TEST MICROPHONE (3 s record + playback), buffer 64–1024 with dropout warning, native sample rates, MIDI with SKIP, PASS/WARNING/FAIL system check |
+| FIRST REAL MUSIC SESSION | PASS (automated) | 43 guided steps A beat … F plugins, DO IT / done by hand, results file for the diagnostic package |
+| HELP > CREATE DIAGNOSTIC PACKAGE | PASS | RoYStudio_Diagnostics_<time>.zip (report, system check, log, crash reports text-only, plugin scan, settings, session results); user name / home / computer name replaced; no minidumps, no projects |
+| Real Windows PC | **BLOCKED – owner** | run the portable ZIP (README_TEST.txt), return TEST_RESULTS.md + diagnostic package |
+| ASIO | not in this build | WASAPI shared/exclusive needs no driver; the free ASIO SDK is GPLv3 (would force a licence decision) |
 
 ## RELEASE CANDIDATE gate (evaluated 2026-09-29) – NOT PASSED, blocked by owner-only items
 | RC item | Status | What is needed |
@@ -127,6 +139,13 @@ still to be validated (see TEST_REPORTS/WINDOWS_NATIVE_TEST_PLAN.md).
 * (2026-09-29) Live MIDI keeps the played timing: one audio buffer of constant latency instead of 0..1
   buffer of jitter (at 256 samples: 5.3 ms constant instead of 0–5.3 ms varying).
 * (2026-09-29) Windows MIDI input ids are now "winmm:<device name>" (were "winmm:<index>").
+* (2026-09-29) Windows program files are now named RoYStudio.exe and RoYPluginHost.exe.
+* (2026-09-29) FIX: the CLICK button / metronome setting never reached the engine (no click in the app) and the
+  count-in setting was never applied - both now work (self-test steps added).
+* (2026-09-29) If the audio input cannot be opened (no microphone, Windows privacy setting) RoY now opens playback
+  only instead of having no sound at all; exclusive mode falls back to shared.
+* (2026-09-29) Right-click menus: plugin parameters and faders; new Help menu entries (music session, system check,
+  diagnostic package, user data folder).
 * (2026-09-29) First start shows a "Setup check" (audio output + test tone, input meter, MIDI, plugin scan); audio device,
   buffer and sample rate are now remembered between starts (before: always system default, 256, 48 kHz).
 * (2026-09-29) RoY Studio / roy_cli install a crash handler: a fatal error now leaves a report (+ minidump on

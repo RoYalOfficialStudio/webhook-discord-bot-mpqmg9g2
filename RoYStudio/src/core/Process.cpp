@@ -8,6 +8,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <shellapi.h>
 #else
 #include <csignal>
 #include <fcntl.h>
@@ -349,6 +350,22 @@ void ChildProcess::kill() {
     reason_ = "killed";
 }
 #endif
+
+bool openInFileBrowser(const std::string& folder) {
+#ifdef _WIN32
+    const int len = MultiByteToWideChar(CP_UTF8, 0, folder.c_str(), -1, nullptr, 0);
+    std::wstring w(static_cast<size_t>(len > 0 ? len : 1), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, folder.c_str(), -1, w.data(), len);
+    return reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"explore", w.c_str(), nullptr, nullptr, SW_SHOWNORMAL)) > 32;
+#else
+    const pid_t pid = ::fork();
+    if (pid == 0) {
+        ::execlp("xdg-open", "xdg-open", folder.c_str(), static_cast<char*>(nullptr));
+        ::_exit(127);
+    }
+    return pid > 0;
+#endif
+}
 
 // ============================================================================ common
 bool ChildProcess::readExact(void* dst, size_t size, int timeoutMs) {

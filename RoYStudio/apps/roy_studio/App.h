@@ -13,6 +13,8 @@
 #include "plugins/Scanner.h"
 #include "project/Session.h"
 #include "support/AppSettings.h"
+#include "support/Diagnostics.h"
+#include "support/SystemCheck.h"
 #include "record/Recorder.h"
 
 #include <deque>
@@ -37,6 +39,8 @@ struct AppOptions {
     fs::path demoFolder;
     bool interactive = true;           // false for self-test / screenshots / benchmarks: settings.json is neither read nor written
     bool forceFirstRun = false;        // --first-run: show the setup check even if it was done
+    int setupStep = 0;                 // --setup-step N (screenshots of the wizard pages)
+    bool openMusicSession = false;     // --music-session: open the FIRST REAL MUSIC SESSION window
 };
 
 struct UiLog {
@@ -111,6 +115,27 @@ public:
     bool changeAudio(const AudioDeviceConfig& cfg);
     // Setup check (first start, Help menu): device choice, test tone, input meter, MIDI, plugin scan.
     bool showFirstRun = false;
+    int setupStep = 0;
+    // Microphone test: 3 s from the input, then played back. 0 idle, 1 recording, 2 played back
+    void testMicrophone();
+    int micTestState() const { return micState_; }
+    float micTestPeak() const { return micPeak_; }
+    // callbacks over budget since the last audio change (dropout warning for small buffers)
+    uint64_t overloadsSinceAudioChange() const { return engine_.stats().overloads - overloadBase_; }
+    // sample rates to offer: 44.1 / 48 / 96 kHz; exclusive mode only the device's native ones
+    std::vector<double> offeredSampleRates(std::vector<double>* native = nullptr) const;
+    // SYSTEM CHECK
+    bool showSystemCheck = false;
+    std::vector<support::CheckItem> runSystemCheck();
+    const std::vector<support::CheckItem>& lastSystemCheck() const { return lastCheck_; }
+    // DIAGNOSTIC PACKAGE (zip) - returns the path ("" on error) and shows the folder
+    std::string createDiagnosticPackage(bool showFolder = true);
+    // FIRST REAL MUSIC SESSION guide
+    bool showMusicSession = false;
+    // export destination ("" = <project>/Exports)
+    std::string exportFolder;
+    fs::path currentExportFolder() const;
+    void openFolder(const fs::path& folder);
     void finishFirstRun();
     void playTestTone();
     bool pluginScanRunning() const { return scanning_; }
@@ -184,6 +209,13 @@ private:
     support::AppSettings settings_;
     fs::path settingsFile_;
     void saveSettingsNow();
+    int micState_ = 0;
+    float micPeak_ = 0.0f;
+    double micStart_ = 0.0;
+    uint64_t overloadBase_ = 0;
+    std::vector<support::CheckItem> lastCheck_;
+    support::DiagnosticsInput diagnosticsInput();
+    void pollMicTest();
     std::vector<std::string> midiUserOff_;
     std::set<std::string> midiFailReported_;
     double nextMidiRescan_ = 0;

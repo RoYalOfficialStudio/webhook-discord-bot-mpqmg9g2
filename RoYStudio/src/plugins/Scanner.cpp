@@ -259,6 +259,22 @@ json parseLenientJson(const std::string& text) {
 
 std::vector<fs::path> defaultPluginPaths() {
     std::vector<fs::path> out;
+    // plugins shipped with / copied next to RoY (portable package: RoY TEST VST3 + CLAP)
+    if (std::error_code ec; fs::is_directory(fs::path(executableDirectory()) / "Plugins", ec)) out.push_back(fs::path(executableDirectory()) / "Plugins");
+    // ROY_PLUGIN_PATH: extra folders (';' on Windows, ':' elsewhere)
+    if (const char* extra = std::getenv("ROY_PLUGIN_PATH"); extra && *extra) {
+#ifdef _WIN32
+        const char sep = ';';
+#else
+        const char sep = ':';
+#endif
+        std::string all = extra;
+        for (size_t p = 0; p <= all.size();) {
+            const size_t q = std::min(all.find(sep, p), all.size());
+            if (q > p) out.push_back(all.substr(p, q - p));
+            p = q + 1;
+        }
+    }
     auto env = [](const char* n) -> std::string {
         const char* v = std::getenv(n);
         return v ? v : "";

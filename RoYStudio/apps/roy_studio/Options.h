@@ -13,6 +13,7 @@ struct LaunchOptions {
     std::string openFile;      // project file to open
     std::string selfTestDir;   // --selftest <dir>: run App::selfTest and exit
     int benchUiTracks = 0;     // --benchui <tracks>: measure frame times per area with a large project
+    std::string sessionTestDir; // --session-test <folder>: automated FIRST REAL MUSIC SESSION
     std::string benchUiOut;    // --benchui-out <file.md>
     int width = 1600, height = 900;
 };
@@ -29,13 +30,16 @@ inline LaunchOptions parseLaunch(int argc, char** argv) {
         else if (a == "--benchui" && i + 1 < argc) o.benchUiTracks = std::atoi(argv[++i]);
         else if (a == "--benchui-out" && i + 1 < argc) o.benchUiOut = argv[++i];
         else if (a == "--first-run") o.app.forceFirstRun = true;
+        else if (a == "--setup-step" && i + 1 < argc) o.app.forceFirstRun = true, o.app.setupStep = std::atoi(argv[++i]);
+        else if (a == "--music-session") o.app.openMusicSession = true;
+        else if (a == "--session-test" && i + 1 < argc) o.sessionTestDir = argv[++i];
         else if (a == "--size" && i + 2 < argc) {
             o.width = std::atoi(argv[++i]);
             o.height = std::atoi(argv[++i]);
         } else if (!a.empty() && a[0] != '-') o.openFile = a;
     }
     // automated runs never touch the user's settings.json
-    if (!o.screenshotDir.empty() || !o.selfTestDir.empty() || o.benchUiTracks > 0) o.app.interactive = false;
+    if (!o.screenshotDir.empty() || !o.selfTestDir.empty() || !o.sessionTestDir.empty() || o.benchUiTracks > 0) o.app.interactive = false;
     return o;
 }
 

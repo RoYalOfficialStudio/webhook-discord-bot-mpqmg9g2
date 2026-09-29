@@ -1,0 +1,12 @@
+RoY Studio - LICENSE DECISION PENDING
+
+The licence of RoY Studio itself has not been decided by the owner yet.
+Until then this UNSIGNED DEVELOPMENT/TEST BUILD may only be used for testing by the people it
+was given to. It is not a release.
+
+(The LICENSE file in the source repository belongs to the original repository template and is
+NOT the licence of RoY Studio.)
+
+Third-party components and their licences: see licenses\THIRD_PARTY_NOTICES.md and the
+licence texts in the licenses\ folder (miniaudio, nlohmann/json, CLAP, Dear ImGui,
+Steinberg VST3 SDK, LAME). VST is a registered trademark of Steinberg Media Technologies GmbH.

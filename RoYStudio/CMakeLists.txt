@@ -90,6 +90,9 @@ elseif(WIN32)
 endif()
 add_executable(roy_plugin_host apps/roy_plugin_host/main.cpp)
 target_link_libraries(roy_plugin_host PRIVATE roy_pluginhost)
+if(WIN32)
+  set_target_properties(roy_plugin_host PROPERTIES OUTPUT_NAME RoYPluginHost) # RoYPluginHost.exe
+endif()
 add_dependencies(roy_soak roy_plugin_host)
 
 if(ROY_BUILD_GUI)
@@ -134,6 +137,18 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/plugins_test/vst3/roy_vst3_test.cpp)
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test_plugins/RoYTest.vst3/Contents/${ROY_VST3_ARCHDIR}
     CXX_VISIBILITY_PRESET hidden)
   list(APPEND ROY_TEST_PLUGINS roy_vst3_test)
+  # Same module WITHOUT the deliberate crash/hang classes, for the Plugins/ folder of the
+  # portable test package (what a tester sees in the plugin browser).
+  add_library(roy_vst3_test_safe MODULE plugins_test/vst3/roy_vst3_test.cpp ${ROY_VST3_MAIN})
+  target_link_libraries(roy_vst3_test_safe PRIVATE roy_vst3_plugin)
+  target_compile_definitions(roy_vst3_test_safe PRIVATE ROY_VST3_SAFE_ONLY=1)
+  if(NOT MSVC)
+    target_compile_options(roy_vst3_test_safe PRIVATE -w)
+  endif()
+  set_target_properties(roy_vst3_test_safe PROPERTIES PREFIX "" OUTPUT_NAME RoYTestPlugins SUFFIX ${ROY_VST3_SUFFIX}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/portable_plugins/RoYTestPlugins.vst3/Contents/${ROY_VST3_ARCHDIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/portable_plugins/RoYTestPlugins.vst3/Contents/${ROY_VST3_ARCHDIR}
+    CXX_VISIBILITY_PRESET hidden)
 endif()
 
 # ---------------------------------------------------------------- tests
@@ -178,6 +193,11 @@ if(ROY_BUILD_TESTS)
           FILES_MATCHING PATTERN "*.clap" PATTERN "*.vst3" PATTERN "*.so" PATTERN "*.dll" PATTERN "*.json")
 endif()
 install(FILES packaging/INSTALLER_NOTICE.txt DESTINATION . COMPONENT app)
+# safe RoY TEST plugins (no crash/hang classes) next to RoY: found automatically in <exe dir>/Plugins
+if(TARGET roy_vst3_test_safe)
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/portable_plugins/RoYTestPlugins.vst3 DESTINATION Plugins COMPONENT app)
+  install(FILES $<TARGET_FILE:roy_test_gain> DESTINATION Plugins COMPONENT app)
+endif()
 set(CPACK_PACKAGE_NAME RoYStudio)
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_VENDOR "RoY Studio")
@@ -197,13 +217,13 @@ if(WIN32 AND ROY_MAKENSIS)
   set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/packaging/INSTALLER_NOTICE.txt")
   set(CPACK_NSIS_DISPLAY_NAME "RoY Studio ${PROJECT_VERSION} BETA")
   set(CPACK_NSIS_PACKAGE_NAME "RoY Studio ${PROJECT_VERSION} BETA")
-  set(CPACK_NSIS_INSTALLED_ICON_NAME "roy_studio.exe")
+  set(CPACK_NSIS_INSTALLED_ICON_NAME "RoYStudio.exe")
   set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
   set(CPACK_NSIS_MODIFY_PATH OFF)
-  set(CPACK_NSIS_MUI_FINISHPAGE_RUN "roy_studio.exe")
+  set(CPACK_NSIS_MUI_FINISHPAGE_RUN "RoYStudio.exe")
   set(CPACK_NSIS_MANIFEST_DPI_AWARE ON)
-  set(CPACK_PACKAGE_EXECUTABLES "roy_studio" "RoY Studio")
-  set(CPACK_CREATE_DESKTOP_LINKS "roy_studio")
+  set(CPACK_PACKAGE_EXECUTABLES "RoYStudio" "RoY Studio")
+  set(CPACK_CREATE_DESKTOP_LINKS "RoYStudio")
   set(CPACK_NSIS_MENU_LINKS "INSTALLER_NOTICE.txt" "RoY Studio - notes and licences" "README_TESTKIT.txt" "RoY Studio - test kit readme")
   set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
   if(CMAKE_HOST_UNIX) # 64-bit installer stub (RoY is x64-only); the wrapper adds "Target amd64-unicode"

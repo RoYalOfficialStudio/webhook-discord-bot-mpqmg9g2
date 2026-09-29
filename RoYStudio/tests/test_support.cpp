@@ -8,13 +8,17 @@
 #include "core/CrashHandler.h"
 #include "core/Files.h"
 #include "core/Process.h"
+#include "core/Zip.h"
 #include "plugins/Scanner.h"
 #include "support/AppSettings.h"
 #include "support/Diagnostics.h"
+#include "support/SystemCheck.h"
+#include "support/TestSignals.h"
 
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
+#include <map>
 
 using namespace roy;
 using namespace roytest;
@@ -216,4 +220,107 @@ TEST_CASE("support", "engine input peak meter: max of the device input, reset on
     CHECK_NEAR(e.inputPeak(1), 0.25f, 1e-6);
     e.process(nullptr, 0, outs, 2, 256); // no inputs: stays 0
     CHECK(e.inputPeak(0) == 0.0f);
+}
+
+TEST_CASE("support", "zip writer: stored entries, CRC-32, UTF-8 names, read back exactly") {
+    const fs::path dir = tempDir("zip");
+    zip::Writer z;
+    std::string big(300000, '\0');
+    for (size_t i = 0; i < big.size(); ++i) big[i] = static_cast<char>(i * 31 + 7);
+    z.add("report.md", "# hello\n");
+    z.add("logs/roy_studio.log", big);
+    z.add("ümlaut/größe.txt", "UTF-8 name");
+    REQUIRE(z.save(dir / "t.zip"));
+    std::vector<std::pair<std::string, std::string>> back;
+    REQUIRE(zip::readStored(dir / "t.zip", back));
+    REQUIRE(back.size() == 3);
+    CHECK(back[0].first == "report.md");
+    CHECK(back[1].second == big);
+    CHECK(back[2].first == "ümlaut/größe.txt");
+    CHECK(zip::crc32("123456789", 9) == 0xCBF43926u); // standard CRC-32 check value
+    // a damaged byte is detected by the CRC
+    std::string bytes = z.bytes();
+    bytes[40] ^= 0x55;
+    { std::ofstream(dir / "bad.zip", std::ios::binary) << bytes; }
+    back.clear();
+    CHECK(!zip::readStored(dir / "bad.zip", back));
+}
+
+TEST_CASE("support", "system check: every item has a verdict, write test leaves no file, failures are reported") {
+    const fs::path projects = tempDir("syscheck_projects");
+    support::SystemCheckInput in;
+    in.audioRunning = true;
+    in.audioBackend = "WASAPI";
+    in.sampleRate = 48000;
+    in.bufferSize = 256;
+    in.outputDevices = 2;
+    in.inputChannels = 2;
+    in.midiInputs = 1;
+    in.pluginHost = ROY_PLUGIN_HOST_EXE;
+    in.projectsDir = projects;
+    auto items = support::runSystemCheck(in);
+    std::map<std::string, std::string> r;
+    for (auto& i : items) {
+        CHECK_MSG(i.status == "PASS" || i.status == "WARNING" || i.status == "FAIL", i.name);
+        r[i.name] = i.status;
+    }
+    CHECK(r["Audio output"] == "PASS");
+    CHECK(r["Audio input"] == "PASS");
+    CHECK(r["Buffer"] == "PASS");
+    CHECK(r["Plugin host"] == "PASS");
+    CHECK(r["Project folder write access"] == "PASS");
+    CHECK(fs::is_empty(projects)); // the write probe is removed again
+    // problems show up as WARNING / FAIL with a reason
+    in.audioRunning = false;
+    in.inputChannels = 0;
+    in.overloads = 12;
+    in.pluginHost = projects / "missing_host.exe";
+    items = support::runSystemCheck(in);
+    for (auto& i : items) r[i.name] = i.status;
+    CHECK(r["Audio output"] == "FAIL");
+    CHECK(r["Audio input"] == "WARNING");
+    CHECK(r["Buffer"] == "WARNING");
+    CHECK(r["Plugin host"] == "FAIL");
+    CHECK(support::overall(items) == "FAIL");
+    CHECK(support::systemCheckMarkdown(items).find("| Plugin host | **FAIL** |") != std::string::npos);
+}
+
+TEST_CASE("support", "test signals: files written, synthetic vocal is detected with its off-key / detuned notes") {
+    const fs::path dir = tempDir("testsignals");
+    std::string err;
+    const auto files = support::writeTestSignals(dir, &err);
+    CHECK(err.empty());
+    CHECK(files.size() == 9);
+    for (auto& f : files) CHECK_MSG(fs::file_size(dir / f) > 1000, f);
+    const auto v = support::syntheticVocal(48000.0, 8.0);
+    float peak = 0;
+    for (float x : v) peak = std::max(peak, std::fabs(x));
+    CHECK(peak > 0.1f);
+    CHECK(peak < 1.0f);
+    const auto kick = support::drumHit("kick", 48000.0);
+    CHECK(kick.size() == 24000);
+}
+
+TEST_CASE("support", "microphone test capture: exact input copied, completes once, cancel works") {
+    AudioEngine e;
+    e.prepare(48000.0, 256);
+    REQUIRE(e.startInputCapture(0.01)); // 480 frames
+    CHECK(!e.startInputCapture(0.01)); // already running
+    std::vector<float> in0(256), in1(256), o0(256), o1(256);
+    for (int i = 0; i < 256; ++i) in0[static_cast<size_t>(i)] = 0.001f * i, in1[static_cast<size_t>(i)] = -0.001f * i;
+    const float* ins[2] = {in0.data(), in1.data()};
+    float* outs[2] = {o0.data(), o1.data()};
+    std::vector<float> l, r;
+    e.process(ins, 2, outs, 2, 256);
+    CHECK(!e.takeInputCapture(l, r)); // not complete yet
+    e.process(ins, 2, outs, 2, 256);
+    CHECK(!e.inputCaptureRunning());
+    REQUIRE(e.takeInputCapture(l, r));
+    REQUIRE(l.size() == 480);
+    CHECK(l[300] == in0[300 - 256]);
+    CHECK(r[10] == in1[10]);
+    CHECK(!e.takeInputCapture(l, r)); // only once
+    REQUIRE(e.startInputCapture(1.0));
+    e.cancelInputCapture();
+    CHECK(!e.inputCaptureRunning());
 }

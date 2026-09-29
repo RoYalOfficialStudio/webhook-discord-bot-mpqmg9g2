@@ -1,0 +1,8 @@
+RoY Studio PORTABLE MODE marker.
+
+Because this file is next to RoYStudio.exe, RoY Studio keeps everything inside this folder:
+  UserData\   settings, logs, crash reports, plugin list, diagnostic packages
+  Projects\   your projects (default save location)
+Nothing is written to %APPDATA% or the registry. Deleting the whole folder removes RoY Studio
+completely - copy your projects out of Projects\ first if you want to keep them.
+Delete this file to use the normal per-user locations instead.

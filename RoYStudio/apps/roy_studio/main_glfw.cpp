@@ -1,4 +1,5 @@
 // RoY Studio - GLFW + OpenGL 3 entry point (Linux/macOS development and CI screenshots).
+#include "MusicSession.h"
 #include "Options.h"
 #include "PngWriter.h"
 #include "Ui.h"
@@ -21,7 +22,15 @@ using roy::TrackType;
 
 int main(int argc, char** argv) {
     LaunchOptions lo = parseLaunch(argc, argv);
-    if ((!lo.screenshotDir.empty() || !lo.selfTestDir.empty() || lo.benchUiTracks > 0) && lo.app.audioBackend == "auto") lo.app.audioBackend = "null";
+    if ((!lo.screenshotDir.empty() || !lo.selfTestDir.empty() || !lo.sessionTestDir.empty() || lo.benchUiTracks > 0) && lo.app.audioBackend == "auto")
+        lo.app.audioBackend = "null";
+    if (!lo.sessionTestDir.empty()) { // automated FIRST REAL MUSIC SESSION
+        App app;
+        app.init(lo.app);
+        const bool ok = roy::gui::runSessionSelfTest(app, lo.sessionTestDir);
+        app.shutdown();
+        return ok ? 0 : 1;
+    }
     if (!lo.selfTestDir.empty()) { // headless: no window needed
         App app;
         app.init(lo.app);

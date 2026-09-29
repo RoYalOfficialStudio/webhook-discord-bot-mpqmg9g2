@@ -1,4 +1,5 @@
 #include "core/Files.h"
+#include "core/Process.h"
 
 #include <cstdlib>
 
@@ -259,6 +260,31 @@ std::string newId() {
     return std::format("{:016x}{:016x}", rng(), rng());
 }
 
+bool portableMode() {
+    static const bool on = [] {
+        std::error_code ec;
+        return fs::exists(fs::path(executableDirectory()) / "RoYStudio.portable", ec);
+    }();
+    return on;
+}
+
+fs::path defaultProjectsDirectory() {
+    fs::path dir;
+    if (portableMode()) {
+        dir = fs::path(executableDirectory()) / "Projects";
+    } else {
+#ifdef _WIN32
+        const char* home = std::getenv("USERPROFILE");
+#else
+        const char* home = std::getenv("HOME");
+#endif
+        dir = home && *home ? fs::path(home) / "Documents" / "RoY Studio Projects" : userDataDirectory() / "Projects";
+    }
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    return dir;
+}
+
 fs::path userDataDirectory() {
     auto env = [](const char* n) -> std::string {
         const char* v = std::getenv(n);
@@ -266,6 +292,7 @@ fs::path userDataDirectory() {
     };
     fs::path dir;
     if (auto o = env("ROY_USER_DIR"); !o.empty()) dir = o;
+    else if (portableMode()) dir = fs::path(executableDirectory()) / "UserData";
 #ifdef _WIN32
     else if (auto ad = env("APPDATA"); !ad.empty()) dir = fs::path(ad) / "RoYStudio";
 #elif defined(__APPLE__)

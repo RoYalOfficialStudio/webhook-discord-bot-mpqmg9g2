@@ -28,7 +28,8 @@ json settingsToJson(const AppSettings& s) {
     json j = s.unknown.is_object() ? s.unknown : json::object();
     j["version"] = 1;
     j["audio"] = {{"backend", s.audio.backend},       {"outputDevice", s.audio.outputDevice}, {"inputDevice", s.audio.inputDevice},
-                  {"sampleRate", s.audio.sampleRate}, {"bufferSize", s.audio.bufferSize},     {"enableInput", s.audio.enableInput}};
+                  {"sampleRate", s.audio.sampleRate}, {"bufferSize", s.audio.bufferSize},     {"enableInput", s.audio.enableInput},
+                  {"exclusive", s.audio.exclusive}};
     j["midi"] = {{"inputsOff", s.midiInputsOff}};
     j["firstRunDone"] = s.firstRunDone;
     return j;
@@ -51,6 +52,7 @@ AppSettings settingsFromJson(const json& j) {
         const int bs = get<int>(a, "bufferSize", 256);
         if (bs >= 16 && bs <= 8192) s.audio.bufferSize = bs;
         s.audio.enableInput = get<bool>(a, "enableInput", true);
+        s.audio.exclusive = get<bool>(a, "exclusive", false);
     }
     const json m = j.value("midi", json::object());
     if (m.is_object() && m.contains("inputsOff") && m["inputsOff"].is_array())

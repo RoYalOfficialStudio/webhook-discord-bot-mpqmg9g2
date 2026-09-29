@@ -247,6 +247,24 @@ void AudioEngine::resetStats() {
     nonFinite_.store(0);
 }
 
+bool AudioEngine::startInputCapture(double seconds) {
+    if (capturing_.load(std::memory_order_acquire)) return false;
+    capLen_ = std::max(1, static_cast<int>(seconds * sampleRate_));
+    capL_.assign(static_cast<size_t>(capLen_), 0.0f);
+    capR_.assign(static_cast<size_t>(capLen_), 0.0f);
+    capPos_.store(0, std::memory_order_relaxed);
+    capturing_.store(true, std::memory_order_release);
+    return true;
+}
+
+bool AudioEngine::takeInputCapture(std::vector<float>& left, std::vector<float>& right) {
+    if (capturing_.load(std::memory_order_acquire) || capLen_ == 0 || capPos_.load(std::memory_order_relaxed) < capLen_) return false;
+    left = capL_;
+    right = capR_;
+    capLen_ = 0;
+    return true;
+}
+
 float AudioEngine::inputPeak(int channel, bool reset) {
     if (channel < 0 || channel > 1) return 0.0f;
     return reset ? inputPeak_[channel].exchange(0.0f, std::memory_order_relaxed) : inputPeak_[channel].load(std::memory_order_relaxed);
@@ -263,6 +281,17 @@ void AudioEngine::process(const float* const* inputs, int numInputs, float* cons
         float m = 0.0f;
         for (int i = 0; i < numFrames; ++i) m = std::max(m, std::fabs(inputs[c][i]));
         if (m > inputPeak_[c].load(std::memory_order_relaxed)) inputPeak_[c].store(m, std::memory_order_relaxed);
+    }
+    if (capturing_.load(std::memory_order_acquire)) { // microphone test capture
+        int pos = capPos_.load(std::memory_order_relaxed);
+        const int n = std::min(numFrames, capLen_ - pos);
+        for (int i = 0; i < n; ++i) {
+            capL_[static_cast<size_t>(pos + i)] = numInputs > 0 && inputs && inputs[0] ? inputs[0][i] : 0.0f;
+            capR_[static_cast<size_t>(pos + i)] = numInputs > 1 && inputs && inputs[1] ? inputs[1][i] : capL_[static_cast<size_t>(pos + i)];
+        }
+        pos += n;
+        capPos_.store(pos, std::memory_order_relaxed);
+        if (pos >= capLen_) capturing_.store(false, std::memory_order_release);
     }
     prevCbStartNs_ = cbStartNs_;
     cbStartNs_ = clock_();

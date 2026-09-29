@@ -14,6 +14,8 @@ bool isProcessAlive(int pid);
 std::string hostName();
 // Directory containing the running executable.
 std::string executableDirectory();
+// Shows a folder in the system file browser (Windows Explorer / xdg-open). Does not wait.
+bool openInFileBrowser(const std::string& folder);
 
 class ChildProcess {
 public:

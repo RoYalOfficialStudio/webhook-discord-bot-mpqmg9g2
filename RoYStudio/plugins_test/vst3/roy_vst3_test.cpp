@@ -363,8 +363,10 @@ DEF_CLASS2(INLINE_UID_FROM_FUID(roytest::kSynthProcUID), PClassInfo::kManyInstan
            Vst::kDistributable, "Instrument|Synth", "1.0.0", kVstVersionString, roytest::SynthProcessor::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(roytest::kSynthCtrlUID), PClassInfo::kManyInstances, kVstComponentControllerClass, "RoY VST3 Synth Controller",
            0, "", "1.0.0", kVstVersionString, roytest::SynthController::create)
+#ifndef ROY_VST3_SAFE_ONLY // the portable package ships the module without these two
 DEF_CLASS2(INLINE_UID_FROM_FUID(roytest::kCrashProcUID), PClassInfo::kManyInstances, kVstAudioEffectClass, "RoY VST3 Crash",
            Vst::kDistributable, "Fx", "0.1.0", kVstVersionString, roytest::CrashProcessor::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(roytest::kHangProcUID), PClassInfo::kManyInstances, kVstAudioEffectClass, "RoY VST3 Hang",
            Vst::kDistributable, "Fx", "0.1.0", kVstVersionString, roytest::HangProcessor::create)
+#endif
 END_FACTORY

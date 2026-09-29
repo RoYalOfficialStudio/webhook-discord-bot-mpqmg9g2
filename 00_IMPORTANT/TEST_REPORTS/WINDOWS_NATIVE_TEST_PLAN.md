@@ -5,6 +5,10 @@ environment (Linux + Wine + null audio backend) cannot test. Record every result
 PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TEST_REPORTS/`.
 
 ## 0. Preparation
+- **FIRST CHOICE (free, nothing to install): the PORTABLE ZIP** `RoYStudio-0.2.0-PORTABLE-win64.zip` –
+  unzip to e.g. `C:\RoYStudioTest`, double-click `START_ROY_STUDIO.bat`, follow `README_TEST.txt`
+  (setup wizard → Help > FIRST REAL MUSIC SESSION → `TestKit\TEST_RESULTS.md` → Help > CREATE DIAGNOSTIC PACKAGE).
+  Build it yourself only if needed: `packaging\BUILD_TEST_PACKAGE.bat` (WSL + free Ubuntu tools).
 - Easiest: the test kit ZIP (`cmake --build build-win --target package` → `RoYStudio-0.2.0-win64.zip`):
   programs + LAME DLL + licences + `roy_tests.exe` with `test_plugins\` (CLAP/VST3 test plugins, MOCK stem engine).
   Unzip anywhere; `README_TESTKIT.txt` lists the quick check. The tests find their resources next to `roy_tests.exe`.

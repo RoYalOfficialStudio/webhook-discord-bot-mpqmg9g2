@@ -27,6 +27,7 @@ struct AudioDeviceConfig {
     int outputChannels = 2;
     int inputChannels = 2;
     bool enableInput = true;
+    bool exclusive = false;       // WASAPI exclusive mode (lower latency, device used only by RoY); falls back to shared
 };
 
 class DeviceManager {
@@ -42,8 +43,16 @@ public:
     std::vector<AudioDeviceInfo> outputDevices() const;
     std::vector<AudioDeviceInfo> inputDevices() const;
 
+    // Sample rates the device reports as native (empty = unknown / any; shared mode converts).
+    std::vector<double> nativeSampleRates(const std::string& deviceName, bool input) const;
+
     // Opens the device and prepares the engine for its sample rate / buffer size.
+    // Robust for real machines: if the input cannot be opened (no microphone, Windows microphone
+    // privacy setting, device busy) it opens playback only; if exclusive mode is refused it uses
+    // shared mode. openNote() says what was changed ("" when opened exactly as requested).
     bool open(const AudioDeviceConfig& cfg, AudioEngine& engine, std::string* error = nullptr);
+    const std::string& openNote() const { return openNote_; }
+    bool exclusiveActive() const { return exclusiveActive_; }
     bool start(std::string* error = nullptr);
     void stop();
     void close();
@@ -86,6 +95,8 @@ private:
     void markLost(const char* reason);
     std::unique_ptr<Impl> impl_;
     AudioEngine* engine_ = nullptr;
+    std::string openNote_;
+    bool exclusiveActive_ = false;
     double actualRate_ = 0;
     int actualBuffer_ = 0;
     int inChannels_ = 0, outChannels_ = 0;

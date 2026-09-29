@@ -56,7 +56,11 @@ std::string hostExecutable() {
     std::lock_guard<std::mutex> lk(g_mutex);
     if (!g_hostExe.empty()) return g_hostExe;
 #ifdef _WIN32
-    return (std::filesystem::path(executableDirectory()) / "roy_plugin_host.exe").string();
+    // Windows packages name it RoYPluginHost.exe; developer builds may still have roy_plugin_host.exe
+    const auto dir = std::filesystem::path(executableDirectory());
+    std::error_code ec;
+    if (std::filesystem::exists(dir / "RoYPluginHost.exe", ec)) return (dir / "RoYPluginHost.exe").string();
+    return (dir / "roy_plugin_host.exe").string();
 #else
     return (std::filesystem::path(executableDirectory()) / "roy_plugin_host").string();
 #endif

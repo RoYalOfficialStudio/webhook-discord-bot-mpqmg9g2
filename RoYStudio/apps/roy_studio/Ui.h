@@ -43,6 +43,9 @@ void drawPlugins(App& app);
 void drawMaster(App& app);
 void drawProject(App& app);
 void drawPalette(App& app);
+void drawSetupWizard(App& app);   // first start / Audio > Setup check
+void drawSystemCheck(App& app);   // Help > System check
+void drawMusicSession(App& app);  // Help > FIRST REAL MUSIC SESSION
 
 // Shared widgets
 bool goldButton(const char* label, const ImVec2& size = ImVec2(0, 0));

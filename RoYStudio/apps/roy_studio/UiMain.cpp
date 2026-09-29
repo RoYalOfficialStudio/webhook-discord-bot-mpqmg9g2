@@ -53,121 +53,6 @@ void audioDeviceMenus(App& app) {
     ImGui::Separator();
 }
 
-// SETUP CHECK: shown on the first start (and from the Audio / Help menu). Everything here can be
-// changed later; "Finish" remembers that the check was done.
-void setupCheck(App& app) {
-    if (!app.showFirstRun) return;
-    if (!ImGui::IsPopupOpen("Setup check")) ImGui::OpenPopup("Setup check");
-    const float dpi = ImGui::GetFontSize() / 15.0f;
-    ImGui::SetNextWindowSize(ImVec2(620 * dpi, 0), ImGuiCond_Appearing);
-    if (!ImGui::BeginPopupModal("Setup check", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) return;
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "Welcome to RoY Studio - let's check your setup (1 minute)");
-    ImGui::TextDisabled("Everything can be changed later in the Audio menu.");
-    ImGui::Separator();
-
-    sectionTitle("1  AUDIO OUTPUT");
-    ImGui::TextWrapped("%s", app.audioStatus().c_str());
-    auto cfg = app.audioConfig();
-    ImGui::SetNextItemWidth(360 * dpi);
-    if (ImGui::BeginCombo("Output device", cfg.outputDevice.empty() ? "System default" : cfg.outputDevice.c_str())) {
-        if (ImGui::Selectable("System default", cfg.outputDevice.empty())) {
-            cfg.outputDevice.clear();
-            app.changeAudio(cfg);
-        }
-        for (auto& d : app.device().outputDevices())
-            if (ImGui::Selectable(d.name.c_str(), cfg.outputDevice == d.name)) {
-                cfg.outputDevice = d.name;
-                app.changeAudio(cfg);
-            }
-        ImGui::EndCombo();
-    }
-    int bi = 2;
-    const int buffers[] = {64, 128, 256, 512, 1024};
-    for (int i = 0; i < 5; ++i)
-        if (buffers[i] == cfg.bufferSize) bi = i;
-    ImGui::SetNextItemWidth(120 * dpi);
-    if (ImGui::Combo("Buffer", &bi, "64\0" "128\0" "256\0" "512\0" "1024\0")) {
-        cfg.bufferSize = buffers[bi];
-        app.changeAudio(cfg);
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("smaller = less latency for recording, larger = safer with many plugins");
-    if (goldButton("Play test tone")) app.playTestTone();
-    ImGui::SameLine();
-    ImGui::TextDisabled("you should hear a 1-second beep (440 Hz)");
-
-    sectionTitle("2  AUDIO INPUT (microphone / interface)");
-    ImGui::SetNextItemWidth(360 * dpi);
-    if (ImGui::BeginCombo("Input device", !cfg.enableInput ? "Off" : cfg.inputDevice.empty() ? "System default" : cfg.inputDevice.c_str())) {
-        if (ImGui::Selectable("Off (playback only)", !cfg.enableInput)) {
-            cfg.enableInput = false;
-            app.changeAudio(cfg);
-        }
-        if (ImGui::Selectable("System default", cfg.enableInput && cfg.inputDevice.empty())) {
-            cfg.enableInput = true;
-            cfg.inputDevice.clear();
-            app.changeAudio(cfg);
-        }
-        for (auto& d : app.device().inputDevices())
-            if (ImGui::Selectable(d.name.c_str(), cfg.enableInput && cfg.inputDevice == d.name)) {
-                cfg.enableInput = true;
-                cfg.inputDevice = d.name;
-                app.changeAudio(cfg);
-            }
-        ImGui::EndCombo();
-    }
-    static float shownL = 0, shownR = 0; // meter with a short fall-off
-    shownL = std::max(app.engine().inputPeak(0), shownL * 0.9f);
-    shownR = std::max(app.engine().inputPeak(1), shownR * 0.9f);
-    { // horizontal meter, -60..0 dBFS, one bar per input channel
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        const ImVec2 p0 = ImGui::GetCursorScreenPos();
-        const float w = 360 * dpi, h = 7 * dpi;
-        for (int c = 0; c < 2; ++c) {
-            const float v = c == 0 ? shownL : shownR;
-            const float x = std::clamp((20.0f * std::log10(std::max(1e-6f, v)) + 60.0f) / 60.0f, 0.0f, 1.0f);
-            const ImVec2 a(p0.x, p0.y + c * (h + 2)), b(p0.x + w, a.y + h);
-            dl->AddRectFilled(a, b, col::rgb(0x2A2A30));
-            dl->AddRectFilled(a, ImVec2(a.x + w * x, b.y), x > 59.0f / 60.0f ? col::Red : x > 48.0f / 60.0f ? col::Orange : col::Green);
-        }
-        for (int dbMark : {-48, -24, -12, -6}) {
-            const float x = p0.x + w * (dbMark + 60) / 60.0f;
-            dl->AddLine(ImVec2(x, p0.y), ImVec2(x, p0.y + 2 * h + 2), col::rgb(0x000000, 160));
-        }
-        ImGui::Dummy(ImVec2(w, 2 * h + 2));
-    }
-    ImGui::SameLine();
-    const float db = 20.0f * std::log10(std::max(1e-6f, std::max(shownL, shownR)));
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(db > -1.0f ? col::Red : db > -60.0f ? col::Green : col::IvoryDim), "%s",
-                       db > -1.0f ? "TOO LOUD - lower the input gain" : db > -60.0f ? std::format("{:.0f} dBFS", db).c_str() : "no signal");
-    ImGui::TextDisabled("Speak or play into your input: the bar must move. Aim for peaks around -12 dBFS.");
-
-    sectionTitle("3  MIDI KEYBOARD / CONTROLLER");
-    if (auto* mi = app.midiInput()) {
-        const auto devs = mi->devices();
-        if (devs.empty()) ImGui::TextDisabled("no MIDI input connected (connect one any time - it is detected automatically)");
-        for (auto& d : devs) ImGui::BulletText("%s %s", d.name.c_str(), mi->isOpen(d.id) ? "(open)" : "(off)");
-        ImGui::TextDisabled("press a key: %s", mi->lastMessageText().c_str());
-    }
-
-    sectionTitle("4  PLUGINS (VST3 / CLAP)");
-    ImGui::TextDisabled("Plugins are scanned in a separate process - a broken plugin cannot crash RoY.");
-    if (app.pluginScanRunning()) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "scanning...");
-    else if (ImGui::Button("Scan plugins now")) app.startPluginScan(false, false);
-
-    ImGui::Separator();
-    if (goldButton("Finish")) {
-        app.finishFirstRun();
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Later")) { // shown again on the next start
-        app.showFirstRun = false;
-        ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-}
-
 void shortcuts(App& app) {
     ImGuiIO& io = ImGui::GetIO();
     if (io.WantTextInput) return;
@@ -235,7 +120,10 @@ void menuBar(App& app) {
                 app.changeAudio(cfg);
             }
         ImGui::Separator();
-        if (ImGui::MenuItem("Setup check (audio / MIDI / plugins)...")) app.showFirstRun = true;
+        if (ImGui::MenuItem("Setup check (audio / MIDI / plugins)...")) {
+            app.setupStep = 0;
+            app.showFirstRun = true;
+        }
         ImGui::Separator();
         ImGui::TextDisabled("MIDI INPUTS");
         if (auto* mi = app.midiInput()) {
@@ -271,8 +159,19 @@ void menuBar(App& app) {
     }
     if (ImGui::BeginMenu("Help")) {
         ImGui::TextDisabled("RoY Studio %s", ROY_VERSION_STRING);
-        if (ImGui::MenuItem("Setup check (audio / MIDI / plugins)...")) app.showFirstRun = true;
-        if (ImGui::MenuItem("Create diagnostics report")) app.createDiagnosticsReport();
+        if (ImGui::MenuItem("FIRST REAL MUSIC SESSION (guided test)...")) app.showMusicSession = true;
+        if (ImGui::MenuItem("Setup check (audio / MIDI / plugins)...")) {
+            app.setupStep = 0;
+            app.showFirstRun = true;
+        }
+        if (ImGui::MenuItem("System check...")) {
+            app.runSystemCheck();
+            app.showSystemCheck = true;
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem("CREATE DIAGNOSTIC PACKAGE (zip)")) app.createDiagnosticPackage();
+        if (ImGui::MenuItem("Create diagnostics report (text only)")) app.createDiagnosticsReport();
+        if (ImGui::MenuItem("Open user data folder (logs, settings)")) app.openFolder(files::userDataDirectory());
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("System, audio + MIDI devices, plugin scan results, crash reports and the end of the log in one file\n"
                               "(home folder and user name replaced). Nothing is sent anywhere.");
@@ -286,7 +185,7 @@ void dialogs(App& app) {
     if (g_openNew) {
         ImGui::OpenPopup("New Project");
         g_openNew = false;
-        if (!g_newFolder[0]) std::snprintf(g_newFolder, sizeof(g_newFolder), "%s", (files::userDataDirectory() / "Projects").string().c_str());
+        if (!g_newFolder[0]) std::snprintf(g_newFolder, sizeof(g_newFolder), "%s", files::defaultProjectsDirectory().string().c_str());
     }
     if (g_openOpen) {
         ImGui::OpenPopup("Open Project");
@@ -383,7 +282,7 @@ void welcome(App& app) {
     ImGui::Spacing();
     if (goldButton("New Project", ImVec2(200, 0))) g_openNew = true;
     if (ImGui::Button("Open Project", ImVec2(200, 0))) g_openOpen = true;
-    if (ImGui::Button("Demo Project", ImVec2(200, 0))) app.buildDemo(files::userDataDirectory() / "Projects");
+    if (ImGui::Button("Demo Project", ImVec2(200, 0))) app.buildDemo(files::defaultProjectsDirectory());
     ImGui::EndGroup();
 }
 } // namespace
@@ -469,7 +368,9 @@ void drawStudio(App& app) {
     ImGui::PopStyleVar();
     menuBar(app);
     dialogs(app);
-    setupCheck(app);
+    drawSetupWizard(app);
+    drawSystemCheck(app);
+    drawMusicSession(app);
     drawTransport(app);
 
     const float statusH = ImGui::GetFrameHeight() + 6;

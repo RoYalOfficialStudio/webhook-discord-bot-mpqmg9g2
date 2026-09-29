@@ -1,5 +1,7 @@
 #include "support/Diagnostics.h"
 #include "core/Files.h"
+#include "core/Process.h"
+#include "core/Zip.h"
 #include "plugins/Scanner.h"
 
 #include <algorithm>
@@ -116,6 +118,8 @@ std::string sanitize(const std::string& text) {
         replaceAll(s, "\\" + user + "\\", "\\<user>\\");
         replaceAll(s, "/" + user + "/", "/<user>/");
     }
+    static const std::string computer = hostName();
+    if (computer.size() >= 3 && computer != "unknown" && computer != "localhost") replaceAll(s, computer, "<computer>");
     return s;
 }
 
@@ -212,6 +216,42 @@ fs::path writeReport(const DiagnosticsInput& in, const fs::path& file, std::stri
     std::error_code ec;
     if (out.has_parent_path()) fs::create_directories(out.parent_path(), ec);
     if (!files::atomicWrite(out, buildReport(in), error)) return {};
+    return out;
+}
+
+fs::path writePackage(const DiagnosticsInput& in, const std::string& systemCheckMd, const fs::path& file, std::string* error) {
+    zip::Writer z;
+    std::string report = buildReport(in);
+    if (!systemCheckMd.empty()) z.add("system_check.md", sanitize("# System check\n\n" + systemCheckMd));
+    z.add("diagnostics_report.md", report);
+    z.add("README.txt", "RoY Studio diagnostic package (" ROY_VERSION_STRING ").\n"
+                        "Contents: report, system check, log, crash reports (text only), plugin scan result, settings.\n"
+                        "Home folder, user name and computer name are replaced by ~ / <user> / <computer>.\n"
+                        "Not included: projects, audio, minidumps (.dmp can contain memory contents), passwords, tokens.\n");
+    auto addFile = [&](const fs::path& src, const std::string& name, size_t maxBytes) {
+        std::ifstream f(src, std::ios::binary);
+        if (!f) return;
+        std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        if (data.size() > maxBytes) data = "[... older part cut ...]\n" + data.substr(data.size() - maxBytes);
+        z.add(name, sanitize(data));
+    };
+    addFile(in.userDataDir / in.logFileName, "logs/" + in.logFileName, 4u << 20);
+    addFile(in.userDataDir / "plugins.json", "plugins/plugins.json", 8u << 20);
+    addFile(in.userDataDir / "settings.json", "settings/settings.json", 1u << 20);
+    addFile(in.userDataDir / "FirstRealMusicSession_results.md", "session/FirstRealMusicSession_results.md", 1u << 20);
+    std::error_code ec;
+    for (auto& e : fs::directory_iterator(in.userDataDir / "CrashReports", ec)) {
+        const std::string name = e.path().filename().string();
+        if (e.path().extension() == ".txt" || e.path().extension() == ".json") addFile(e.path(), "crash_reports/" + name, 256u << 10);
+    }
+    fs::path out = file;
+    if (out.empty()) {
+        std::string ts = files::nowIso8601();
+        std::replace(ts.begin(), ts.end(), ':', '-');
+        out = in.userDataDir / "Diagnostics" / ("RoYStudio_Diagnostics_" + ts + ".zip");
+    }
+    if (out.has_parent_path()) fs::create_directories(out.parent_path(), ec);
+    if (!z.save(out, error)) return {};
     return out;
 }
 

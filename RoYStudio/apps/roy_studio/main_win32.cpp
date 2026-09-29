@@ -1,4 +1,5 @@
 // RoY Studio - Windows entry point (Win32 + Direct3D 11), per-monitor DPI aware.
+#include "MusicSession.h"
 #include "Options.h"
 #include "Ui.h"
 
@@ -106,6 +107,15 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int) {
     std::vector<char*> argv;
     for (auto& a : args) argv.push_back(a.data());
     LaunchOptions lo = parseLaunch(static_cast<int>(argv.size()), argv.data());
+    if (!lo.sessionTestDir.empty()) { // automated FIRST REAL MUSIC SESSION
+        AttachConsole(ATTACH_PARENT_PROCESS);
+        std::freopen("CONOUT$", "w", stdout);
+        App app;
+        app.init(lo.app);
+        const bool ok = roy::gui::runSessionSelfTest(app, lo.sessionTestDir);
+        app.shutdown();
+        return ok ? 0 : 1;
+    }
     if (!lo.selfTestDir.empty()) {
         AttachConsole(ATTACH_PARENT_PROCESS);
         std::freopen("CONOUT$", "w", stdout);
