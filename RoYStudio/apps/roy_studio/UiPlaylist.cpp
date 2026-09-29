@@ -27,6 +27,22 @@ struct CompDrag {
 CompDrag g_comp; // swipe comping: drag over a take lane -> that range plays from this take
 std::string g_selTakeTrack, g_selTake; // take selected by clicking its comp block (Delete key / menu)
 std::string g_lastClip;                 // last clicked clip (Delete key)
+// Pressing on a recorded take and moving the mouse turns it into normal clips and drags the one
+// under the mouse (a take cannot be moved itself).
+struct TakePress {
+    std::string trackId;
+    double beat = 0;
+    float x = 0;
+    bool active = false;
+};
+TakePress g_takePress;
+// Dragging the left / right edge of an audio clip trims it.
+struct TrimDrag {
+    std::string clipId;
+    int side = 0; // -1 start, +1 end
+    bool active = false;
+};
+TrimDrag g_trim;
 
 // Takes in display order (one row each, oldest lane first).
 std::vector<const Take*> takeRows(const Track& t) {
@@ -325,6 +341,43 @@ void drawPlaylist(App& app) {
                 }
             }
     }
+    // clip EDGES: hovering the left/right 6 px of an audio clip trims it by dragging
+    int hoverEdge = 0;
+    if (!hoverClip.empty() && !g_drag.active && !g_trim.active)
+        if (const AudioClip* c = p.findAudioClip(hoverClip)) {
+            const float ax = beatToX(c->startBeat), bx = beatToX(c->startBeat + c->lengthBeats);
+            const float grip = std::min(6.0f * dpi, (bx - ax) * 0.25f);
+            if (mouse.x - ax < grip) hoverEdge = -1;
+            else if (bx - mouse.x < grip) hoverEdge = 1;
+        }
+    if (hoverEdge != 0 || g_trim.active) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    if (g_trim.active) {
+        const float x = beatToX(snap(xToBeat(mouse.x), app.snapBeats));
+        dl->AddLine(ImVec2(x, gridTop), ImVec2(x, gridBottom), col::Gold, 2.0f);
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            const double at = snap(xToBeat(mouse.x), app.snapBeats);
+            if (g_trim.side < 0) app.run("TrimClipStart", {{"clipId", g_trim.clipId}, {"startBeat", at}});
+            else app.run("TrimClipEnd", {{"clipId", g_trim.clipId}, {"endBeat", at}});
+            g_trim.active = false;
+        }
+    }
+    // a recorded take pressed and moved: make it normal clips and drag the part under the mouse
+    if (g_takePress.active) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            g_takePress.active = false;
+        } else if (std::fabs(mouse.x - g_takePress.x) > 4.0f) {
+            g_takePress.active = false;
+            if (app.run("FlattenComp", {{"trackId", g_takePress.trackId}}))
+                for (auto& id : app.lastResult().value("clipIds", json::array()))
+                    if (const AudioClip* c = p.findAudioClip(id.get<std::string>());
+                        c && g_takePress.beat >= c->startBeat && g_takePress.beat < c->startBeat + c->lengthBeats) {
+                        app.selClip = c->id;
+                        g_lastClip = c->id;
+                        g_drag = {c->id, g_takePress.trackId, g_takePress.beat - c->startBeat, c->startBeat, true};
+                    }
+            g_selTake.clear();
+        }
+    }
     // files dropped from the Windows Explorer onto an AUDIO track lane: placed right there
     // (anywhere else they go through the IMPORT BEAT window: new track, tempo, key)
     if (auto& drop = app.droppedFiles(); drop && drop->x >= win0.x + headerW && drop->x < win0.x + winSize.x && drop->y >= gridTop &&
@@ -355,6 +408,7 @@ void drawPlaylist(App& app) {
             app.selClip.clear();
             app.selMidiClip.clear();
             g_multi.clear();
+            g_takePress = {hoverCompTrack, xToBeat(mouse.x), mouse.x, true}; // moving it drags the recording
         } else {
             g_selTake.clear();
         }
@@ -380,7 +434,8 @@ void drawPlaylist(App& app) {
                             app.selPattern = pc.patternId;
                         }
             }
-            g_drag = {hoverClip, laneTrack ? laneTrack->id : "", xToBeat(mouse.x) - start, start, true};
+            if (hoverEdge != 0) g_trim = {hoverClip, hoverEdge, true}; // edge: trim instead of move
+            else g_drag = {hoverClip, laneTrack ? laneTrack->id : "", xToBeat(mouse.x) - start, start, true};
         }
         if (laneTrack) {
             app.selTrack = laneTrack->id;
@@ -433,7 +488,7 @@ void drawPlaylist(App& app) {
         ImGui::OpenPopup("takeMenu");
     }
     if (ImGui::IsItemHovered() && hoverClip.empty() && !hoverCompTake.empty() && !ImGui::IsPopupOpen("takeMenu"))
-        ImGui::SetTooltip("recorded take - right-click: SPLIT HERE / delete / rename, Del key: delete (Ctrl+Z undoes)");
+        ImGui::SetTooltip("recorded take - drag: move it | right-click: SPLIT HERE / delete / rename | Del: delete (Ctrl+Z undoes)");
     // CTRL+E: cut at the playhead - the selected recording (take) or the last clicked clip
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_E, false) &&
         !ImGui::GetIO().WantTextInput) {
@@ -525,6 +580,19 @@ void drawPlaylist(App& app) {
         if (auto* c = p.findAudioClip(ctxClip)) {
             if (ImGui::MenuItem(c->muted ? "Unmute" : "Mute")) app.run("MuteClip", {{"clipId", ctxClip}, {"muted", !c->muted}});
             if (ImGui::MenuItem("Normalize")) app.run("NormalizeClip", {{"clipId", ctxClip}});
+            // adjust: clip volume and fades (drag, release = one undo step)
+            float g = c->gainDb;
+            ImGui::SetNextItemWidth(180 * dpi);
+            ImGui::SliderFloat("volume", &g, -24.0f, 12.0f, "%+.1f dB");
+            if (editFinished(g)) app.run("SetClipGain", {{"clipId", ctxClip}, {"gainDb", g}});
+            float fi = static_cast<float>(c->fadeInBeats), fo = static_cast<float>(c->fadeOutBeats);
+            const float maxFade = static_cast<float>(std::max(0.25, c->lengthBeats * 0.5));
+            ImGui::SetNextItemWidth(180 * dpi);
+            ImGui::SliderFloat("fade in", &fi, 0.0f, maxFade, "%.2f beats");
+            if (editFinished(fi)) app.run("SetFades", {{"clipId", ctxClip}, {"fadeInBeats", fi}, {"fadeOutBeats", c->fadeOutBeats}});
+            ImGui::SetNextItemWidth(180 * dpi);
+            ImGui::SliderFloat("fade out", &fo, 0.0f, maxFade, "%.2f beats");
+            if (editFinished(fo)) app.run("SetFades", {{"clipId", ctxClip}, {"fadeInBeats", c->fadeInBeats}, {"fadeOutBeats", fo}});
             if (ImGui::MenuItem("Open in VOCALS")) {
                 app.selClip = ctxClip;
                 app.area = Area::Vocals;
