@@ -1,0 +1,11 @@
+SNAPSHOT 0004 - RoY Studio 0.2.0 BETA hardening: crash reports + diagnostics report
+created:   2026-09-29T03:25:05Z
+branch:    claude/bold-franklin-fybkj5 (pushed to origin)
+commit:    4a3e7c8f02e3ad6d9298686c5612905e15a7d2e1
+tree sha256 (git archive --format=tar 4a3e7c8f02e3ad6d9298686c5612905e15a7d2e1 | sha256sum):
+           81fb55c6c10a6b35dc23ca03a8c2a2bfe0c4c17d56f71800960c8d496b16690b
+restore:   git checkout 4a3e7c8f02e3ad6d9298686c5612905e15a7d2e1      (or: git archive 4a3e7c8f02e3ad6d9298686c5612905e15a7d2e1 | tar -x -C <folder>)
+test kit:  RoYStudio-0.2.0-win64.zip built from the code of this commit (not stored in git, rebuild with
+           cmake --build build-win --target package), sha256 6464357306b6f0ab2a92af53ca9b54513c19a2e58de0d0899f595abdc764e4e2
+verified:  Linux 212/212, Wine 208/208, unpacked test kit (Wine) 208/208, ASan/UBSan support suite (only the
+           deliberate crash-test write), GUI self-test Linux + Wine 19/19, CLI diagnostics on Wine
