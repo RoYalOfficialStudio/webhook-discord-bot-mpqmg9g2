@@ -159,6 +159,10 @@ void App::pollAudioDevice() {
 }
 
 void App::shutdown() {
+    if (exportThread_.joinable()) { // closing during an export: cancel and wait
+        exportCancel_.store(true);
+        exportThread_.join();
+    }
     if (scanFuture_.valid()) scanFuture_.wait();
     if (midiIn_) midiIn_->closeAll();
     if (recorder_.isRecording()) recorder_.stopRecording();
@@ -359,6 +363,54 @@ bool App::auditionNote(const std::string& trackId, int note, float velocity, dou
     auditionOff_ = nowSeconds() + std::clamp(seconds, 0.05, 10.0);
     auditionRelease_ = auditionOff_ + 0.5;
     return true;
+}
+
+bool App::startExport(const json& args) {
+    if (!project_ || exportThread_.joinable()) return false;
+    exportPausedDevice_ = device_.isRunning();
+    if (exportPausedDevice_) device_.stop(); // offline render uses the engine
+    exportProgress_.store(0.0);
+    exportCancel_.store(false);
+    exportDone_.store(false);
+    exportOk_ = false;
+    exportStart_ = std::chrono::steady_clock::now();
+    ctx_->progress = [this](double p) {
+        exportProgress_.store(p);
+        return !exportCancel_.load();
+    };
+    ctx_->result = json::object();
+    ctx_->error.clear();
+    // The UI thread draws only the progress window meanwhile and does not touch the project.
+    exportThread_ = std::thread([this, args] {
+        exportOk_ = registry_.execute(*ctx_, "Export", args);
+        exportDone_.store(true);
+    });
+    return true;
+}
+
+void App::pollExport() {
+    if (!exportThread_.joinable() || !exportDone_.load()) return;
+    exportThread_.join();
+    ctx_->progress = nullptr;
+    if (exportPausedDevice_) {
+        std::string err;
+        device_.start(&err);
+    }
+    lastResult_ = ctx_->result;
+    lastError_ = ctx_->error;
+    const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - exportStart_).count();
+    exportResult = {{"ok", exportOk_}, {"error", exportOk_ ? std::string() : lastError_}, {"cancelled", exportCancel_.load()},
+                    {"files", lastResult_.value("files", json::array())}, {"warnings", lastResult_.value("warnings", json::array())},
+                    {"seconds", secs}};
+    if (exportOk_) {
+        for (auto& f : lastResult_.value("files", json::array()))
+            message(0, std::format("exported {} ({:.1f} LUFS, {:.1f} dBTP)", fs::path(f.value("path", "")).filename().string(), f.value("lufs", 0.0),
+                                   f.value("truePeakDb", 0.0)));
+        for (auto& w : lastResult_.value("warnings", json::array())) message(1, w.get<std::string>());
+    } else {
+        message(exportCancel_.load() ? 1 : 2, exportCancel_.load() ? std::string("export cancelled") : "EXPORT FAILED: " + lastError_);
+    }
+    showExportResult = true;
 }
 
 void App::pickAndImportBeat() {
@@ -877,6 +929,10 @@ std::string App::positionText() const {
 // ------------------------------------------------------------------ periodic
 void App::tick() {
     log::flushAudioEvents();
+    if (exportThread_.joinable()) { // background export: nothing else touches engine / project meanwhile
+        pollExport();
+        if (exportThread_.joinable()) return;
+    }
     engine_.collectGarbage();
     if (previewer_) previewer_->collect();
     pollAudioDevice();

@@ -86,6 +86,7 @@ void registerMasterCommands(CommandRegistry& r) {
                } else {
                    o.mp3.title = ctx.project.name;
                }
+               o.progress = ctx.progress;
                auto res = exporting::exportProject(ctx.runtime->engine(), *ctx.runtime, ctx.project, o);
                if (!res.ok) return fail(ctx, res.error);
                json files = json::array();

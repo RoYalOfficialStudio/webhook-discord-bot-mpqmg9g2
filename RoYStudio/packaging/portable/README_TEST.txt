@@ -176,6 +176,12 @@ Abgemischte Vocal für     MIXER > PRESETS (am Vocal-Kanal) > Namen eingeben > "
                           bleibt in Presets\Channel\Backups\ erhalten.
 
 
+SONG EXPORTIEREN          Oben der gelbe Knopf EXPORT (neben CLICK) -> Seite MASTER:
+  (WAV / MP3)             Format WAV oder MP3 wählen -> EXPORT. Ein Fortschrittsbalken
+                          zeigt den Stand (ein 3-Minuten-Song mit vielen Effekten kann
+                          30-60 Sekunden dauern, "Cancel" bricht ab). Danach: Fenster
+                          EXPORT DONE -> OPEN EXPORT FOLDER öffnet den Ordner mit der Datei
+                          (<Projekt>\Exports\).
 KNACKEN / KNISTERN?        Unten in der Statusleiste zeigt RoY die Ursache:
                           rot  "TOO LOUD - lower the BEAT fader": der Mix ist über 0 dB
                                (roter CLIP im MIXER). Beat-Fader auf ca. -6 dB ziehen.

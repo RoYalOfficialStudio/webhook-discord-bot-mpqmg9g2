@@ -46,7 +46,9 @@ void drawPalette(App& app);
 void drawSetupWizard(App& app);   // first start / Audio > Setup check
 void drawSystemCheck(App& app);   // Help > System check
 void drawMusicSession(App& app);  // Help > FIRST REAL MUSIC SESSION
-void drawImportBeat(App& app);    // IMPORT BEAT window (MP3 / WAV beat -> own track, tempo, key)
+void drawImportBeat(App& app);
+void drawExportProgress(App& app); // background EXPORT running (only window drawn then)
+void drawExportResult(App& app);   // EXPORT DONE / FAILED with OPEN EXPORT FOLDER    // IMPORT BEAT window (MP3 / WAV beat -> own track, tempo, key)
 
 // Shared widgets
 bool goldButton(const char* label, const ImVec2& size = ImVec2(0, 0));

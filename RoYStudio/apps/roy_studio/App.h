@@ -19,6 +19,8 @@
 #include "support/SystemCheck.h"
 #include "record/Recorder.h"
 
+#include <atomic>
+#include <chrono>
 #include <deque>
 #include <filesystem>
 #include <future>
@@ -26,6 +28,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace roy::gui {
@@ -145,6 +148,13 @@ public:
     bool auditionNote(const std::string& trackId, int note, float velocity = 0.9f, double seconds = 0.8);
     bool auditionActive() const { return !auditionTrack_.empty(); }
     bool previewOnEdit = true; // 808 LAB / PIANO ROLL: play the sound after a change
+    // ---- EXPORT in the background (UI stays responsive, progress + cancel) ----
+    bool startExport(const json& args);
+    bool exportRunning() const { return exportThread_.joinable(); }
+    double exportProgress() const { return exportProgress_.load(); }
+    void cancelExport() { exportCancel_.store(true); }
+    bool showExportResult = false;
+    json exportResult = json::object(); // {"ok", "error", "files", "warnings", "seconds", "cancelled"}
     // ---- IMPORT BEAT (bought / downloaded MP3, WAV, FLAC ...) ----
     void pickAndImportBeat();                                     // native file dialog -> IMPORT BEAT window
     void beginImportBeat(const std::vector<fs::path>& files);      // first file in the window, the rest queued
@@ -230,6 +240,13 @@ private:
     std::vector<RecordedMidi> midiTake_;
     void updateLiveMidiTarget();
     void finishMidiRecording();
+    std::thread exportThread_;
+    std::atomic<bool> exportDone_{false}, exportCancel_{false};
+    std::atomic<double> exportProgress_{0.0};
+    bool exportOk_ = false;
+    bool exportPausedDevice_ = false;
+    std::chrono::steady_clock::time_point exportStart_;
+    void pollExport();
     std::future<beatimport::BeatFileInfo> importFuture_;
     std::optional<beatimport::BeatFileInfo> importInfo_;
     std::vector<fs::path> importQueue_;

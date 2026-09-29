@@ -633,14 +633,73 @@ void drawMaster(App& app) {
             args["metadata"] = {{"title", p.name}, {"artist", std::string(mArtist)}, {"album", std::string(mAlbum)}, {"track", std::string(mTrack)},
                                 {"year", std::string(mYear)}, {"genre", std::string(mGenre)}, {"comment", std::string(mComment)}};
         }
-        if (app.run("Export", args)) {
-            for (auto& f : app.lastResult()["files"])
-                app.message(0, std::format("exported {} ({:.1f} LUFS, {:.1f} dBTP)", f.value("path", ""), f.value("lufs", 0.0), f.value("truePeakDb", 0.0)));
-            for (auto& w : app.lastResult().value("warnings", json::array())) app.message(1, w.get<std::string>());
-        }
+        app.startExport(args); // runs in the background: progress window, cancel, result with OPEN FOLDER
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("OPEN EXPORT FOLDER")) {
+        std::error_code ec;
+        fs::create_directories(app.currentExportFolder(), ec);
+        app.openFolder(app.currentExportFolder());
     }
     ImGui::TextDisabled("Files go to <project>/Exports. Existing files are never overwritten.");
     ImGui::EndChild();
+}
+
+// EXPORT running in the background: the only thing drawn meanwhile (the project must not change).
+void drawExportProgress(App& app) {
+    const float dpi = ImGui::GetFontSize() / 15.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.4f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(460 * dpi, 0));
+    ImGui::Begin("EXPORTING", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize);
+    const double p = app.exportProgress();
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "Exporting your song ...");
+    ImGui::ProgressBar(static_cast<float>(p), ImVec2(-1, 0), std::format("{:.0f} %", p * 100).c_str());
+    ImGui::TextDisabled("Every effect is calculated in full quality - this can take a moment.");
+    if (ImGui::Button("Cancel")) app.cancelExport();
+    ImGui::End();
+}
+
+// Result after an export: where the file is, open the folder.
+void drawExportResult(App& app) {
+    if (!app.showExportResult) return;
+    const float dpi = ImGui::GetFontSize() / 15.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.4f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(620 * dpi, 0), ImGuiCond_Appearing);
+    bool open = true;
+    const json& r = app.exportResult;
+    const bool ok = r.value("ok", false);
+    if (ImGui::Begin(ok ? "EXPORT DONE" : "EXPORT", &open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ok) {
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Green), "Your song is exported (%.0f s):", r.value("seconds", 0.0));
+            for (auto& f : r.value("files", json::array())) {
+                const fs::path file = f.value("path", std::string());
+                ImGui::Bullet();
+                ImGui::TextUnformatted(file.filename().string().c_str());
+                ImGui::SameLine();
+                ImGui::TextDisabled("%.1f LUFS  %.1f dBTP", f.value("lufs", 0.0), f.value("truePeakDb", 0.0));
+            }
+            if (auto files = r.value("files", json::array()); !files.empty())
+                ImGui::TextDisabled("in %s", fs::path(files[0].value("path", std::string())).parent_path().string().c_str());
+            for (auto& w : r.value("warnings", json::array())) ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "%s", w.get<std::string>().c_str());
+            if (goldButton("OPEN EXPORT FOLDER", ImVec2(200 * dpi, 0))) {
+                if (auto files = r.value("files", json::array()); !files.empty())
+                    app.openFolder(fs::path(files[0].value("path", std::string())).parent_path());
+                else app.openFolder(app.currentExportFolder());
+            }
+            ImGui::SameLine();
+        } else if (r.value("cancelled", false)) {
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Orange), "Export cancelled - no file was written.");
+        } else {
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Red), "EXPORT FAILED");
+            ImGui::TextWrapped("%s", r.value("error", std::string()).c_str());
+            ImGui::TextDisabled("Please send Help > CREATE DIAGNOSTIC PACKAGE.");
+        }
+        if (ImGui::Button("Close")) open = false;
+    }
+    ImGui::End();
+    if (!open) app.showExportResult = false;
 }
 
 } // namespace roy::gui

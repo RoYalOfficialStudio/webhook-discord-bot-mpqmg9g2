@@ -386,6 +386,9 @@ void drawTransport(App& app) {
         const bool metro = p.settings.metronome;
         if (toggleButton("CLICK", metro, col::Gold, bs)) app.run("SetMetronome", {{"enabled", !metro}});
         ImGui::SameLine();
+        if (goldButton("EXPORT", ImVec2(bs.x * 1.3f, bs.y))) app.area = Area::Master; // WAV / MP3 / FLAC
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Export the song as WAV / MP3 / FLAC (MASTER page)");
+        ImGui::SameLine();
     }
     // position display
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::ColorConvertU32ToFloat4(col::Obsidian));
@@ -432,6 +435,10 @@ void drawTransport(App& app) {
 }
 
 void drawStudio(App& app) {
+    if (app.exportRunning()) { // the project must not change while it is being exported
+        drawExportProgress(app);
+        return;
+    }
     shortcuts(app);
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->WorkPos);
@@ -447,6 +454,7 @@ void drawStudio(App& app) {
     drawSystemCheck(app);
     drawMusicSession(app);
     drawImportBeat(app);
+    drawExportResult(app);
     drawTransport(app);
 
     const float statusH = ImGui::GetFrameHeight() + 6;

@@ -23,6 +23,7 @@ struct CommandContext {
     ProjectRuntime* runtime = nullptr;          // optional: audio-side operations (normalize, analysis)
     std::filesystem::path projectFolder;        // where new audio files (processed vocals, renders) are written
     std::function<void(bool structural)> changed; // notify: structural -> rebuild graph, else sync params
+    std::function<bool(double)> progress;        // long commands (Export): 0..1, return false to cancel
     json result = json::object();               // command output (e.g. created ids)
     std::string error;
 };
