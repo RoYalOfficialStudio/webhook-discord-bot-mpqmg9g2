@@ -1,0 +1,162 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "New Wave Clear Vocal",
+  "created": "2026-09-29T00:00:00Z",
+  "app": "0.2.0",
+  "description": "Modern new-school vocal, CLEAR: smooth-fast autotune (12 ms, 80 %), airy bright EQ, punchy parallel compression, soft warmth, strong de-esser, extra stereo width, a light shimmering flanger, 1/8 ping-pong delay, short bright reverb, limiter at -1 dB. No distortion.",
+  "inserts": [
+    {
+      "typeId": "roy.vocaltune",
+      "name": "Smooth Tune",
+      "bypass": false,
+      "state": {
+        "params": {
+          "speed": 12.0,
+          "strength": 0.8,
+          "threshold": 8.0,
+          "offKeyFilter": 1.0,
+          "allowChromatic": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Air EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 110.0,
+          "lowCutSlope": 24.0,
+          "band1Freq": 180.0,
+          "band1Gain": -2.0,
+          "band2Freq": 450.0,
+          "band2Gain": -3.0,
+          "band2Q": 1.2,
+          "band3Freq": 5000.0,
+          "band3Gain": 3.0,
+          "band3Q": 0.7,
+          "band4Freq": 13000.0,
+          "band4Gain": 7.0,
+          "highCut": 20000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Punch Comp",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -26.0,
+          "ratio": 6.0,
+          "attack": 6.0,
+          "release": 60.0,
+          "knee": 6.0,
+          "makeup": 13.0,
+          "mix": 0.75
+        }
+      }
+    },
+    {
+      "typeId": "roy.saturation",
+      "name": "Soft Warmth",
+      "bypass": false,
+      "state": {
+        "params": {
+          "drive": 4.0,
+          "mode": 2.0,
+          "tone": 17000.0,
+          "mix": 0.25,
+          "output": -1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 7200.0,
+          "threshold": -35.0,
+          "range": 12.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.stereo",
+      "name": "Width",
+      "bypass": false,
+      "state": {
+        "params": {
+          "width": 1.35,
+          "monoBass": 150.0,
+          "balance": 0.0,
+          "midGain": 0.0,
+          "sideGain": 1.5
+        }
+      }
+    },
+    {
+      "typeId": "roy.flanger",
+      "name": "Shimmer",
+      "bypass": false,
+      "state": {
+        "params": {
+          "rate": 0.15,
+          "depth": 1.0,
+          "delay": 1.5,
+          "feedback": 0.2,
+          "mix": 0.12,
+          "spread": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.delay",
+      "name": "1/8 Ping-Pong",
+      "bypass": false,
+      "state": {
+        "params": {
+          "syncBeats": 0.5,
+          "feedback": 0.3,
+          "mix": 0.1,
+          "pingPong": 1.0,
+          "lowCut": 450.0,
+          "highCut": 8000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Bright Room",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 1.3,
+          "preDelay": 20.0,
+          "size": 0.9,
+          "damping": 0.2,
+          "width": 1.0,
+          "mix": 0.13,
+          "lowCut": 450.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Safety Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 60.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 0.0
+        }
+      }
+    }
+  ]
+}
