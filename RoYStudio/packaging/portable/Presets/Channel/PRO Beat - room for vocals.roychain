@@ -1,0 +1,48 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "PRO Beat - room for vocals",
+  "created": "2026-09-30T00:00:00Z",
+  "app": "0.2.0",
+  "description": "For the BEAT channel (put it on the imported beat): removes sub rumble, cuts a gentle pocket at 2.5-4 kHz where the voice lives so the vocal sits on top without being turned up, light glue compression, no limiting. The fader stays where it is (about -6 dB).",
+  "inserts": [
+    {
+      "typeId": "roy.eq",
+      "name": "Vocal Pocket EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 25.0,
+          "lowCutSlope": 24.0,
+          "band1Freq": 80.0,
+          "band1Gain": 0.0,
+          "band2Freq": 350.0,
+          "band2Gain": -1.0,
+          "band2Q": 0.9,
+          "band3Freq": 3200.0,
+          "band3Gain": -2.5,
+          "band3Q": 0.7,
+          "band4Freq": 12000.0,
+          "band4Gain": 0.0,
+          "highCut": 20000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Glue Comp",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -14.0,
+          "ratio": 1.5,
+          "attack": 30.0,
+          "release": 150.0,
+          "knee": 10.0,
+          "makeup": 0.5,
+          "mix": 1.0
+        }
+      }
+    }
+  ]
+}

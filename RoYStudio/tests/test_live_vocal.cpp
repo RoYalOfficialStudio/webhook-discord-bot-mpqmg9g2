@@ -206,8 +206,11 @@ TEST_CASE("livevocal", "shipped vocal chains (UserData presets of the portable b
         REQUIRE(L.run("ApplyChannelPreset", {{"channelId", L.channel}, {"preset", *pr}}));
         CHECK_MSG(L.ctx->result["skipped"].empty(), pf.name);
         CHECK(L.p.findChannel(L.channel)->inserts.size() == (*pr)["inserts"].size());
-        REQUIRE(L.run("SetupLiveVocal", {{"trackId", L.track}})); // LIVE keeps the chain, no second tune
-        CHECK(L.p.findChannel(L.channel)->inserts.size() == (*pr)["inserts"].size());
+        // LIVE keeps the chain: no second tune; a chain without tune (e.g. the beat preset) gets exactly one
+        bool hasTune = false;
+        for (auto& i : (*pr)["inserts"]) hasTune |= i["typeId"] == "roy.vocaltune";
+        REQUIRE(L.run("SetupLiveVocal", {{"trackId", L.track}}));
+        CHECK(L.p.findChannel(L.channel)->inserts.size() == (*pr)["inserts"].size() + (hasTune ? 0 : 1));
         // a loud "voice" (200 Hz + harmonics, sharp) through the whole chain while monitoring
         std::vector<float> mic(static_cast<size_t>(SR * 2.0));
         for (size_t i = 0; i < mic.size(); ++i) {
