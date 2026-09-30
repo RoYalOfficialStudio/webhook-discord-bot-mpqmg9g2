@@ -214,6 +214,8 @@ void paramEditor(App& app, const std::string& slotId) {
                 if (!fav) nf.push_back(pi.id);
                 app.run("SetSlotUi", {{"slotId", slotId}, {"key", "favorites"}, {"value", nf}});
             }
+            if (slot && ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", fav ? "favourite (gold *): shown at the top - click to remove" : "click: make this a favourite (pinned to the top)");
             ImGui::SameLine();
             ImGui::SetNextItemWidth(240 * dpi);
             bool edited = false;
