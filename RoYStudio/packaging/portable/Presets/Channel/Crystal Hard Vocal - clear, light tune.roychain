@@ -4,7 +4,7 @@
   "name": "Crystal Hard Vocal - clear, light tune",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Very produced but CLEAR voice: light natural autotune (35 ms, 60 %), clean low end, lots of presence and air, heavy but clean compression, subtle warmth, strong de-esser, doubler width, 1/4 delay, bright plate-like reverb, limiter at -1 dB. No distortion.",
+  "description": "Very produced but CLEAR voice: light natural autotune (35 ms, 60 %), clean low end, lots of presence and air, heavy but clean compression, subtle warmth, strong de-esser, doubler width, 1/4 delay, bright plate-like reverb, limiter at -1 dB. No distortion. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -125,7 +125,7 @@
           "size": 1.1,
           "damping": 0.25,
           "width": 1.0,
-          "mix": 0.15,
+          "mix": 0.12,
           "lowCut": 400.0
         }
       }

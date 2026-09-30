@@ -4,7 +4,7 @@
   "name": "New Wave Clear Vocal",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Modern new-school vocal, CLEAR: smooth-fast autotune (12 ms, 80 %), airy bright EQ, punchy parallel compression, soft warmth, strong de-esser, extra stereo width, a light shimmering flanger, 1/8 ping-pong delay, short bright reverb, limiter at -1 dB. No distortion.",
+  "description": "Modern new-school vocal, CLEAR: smooth-fast autotune (12 ms, 80 %), airy bright EQ, punchy parallel compression, soft warmth, strong de-esser, extra stereo width, a light shimmering flanger, 1/8 ping-pong delay, short bright reverb, limiter at -1 dB. No distortion. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -33,7 +33,7 @@
           "band2Freq": 450.0,
           "band2Gain": -3.0,
           "band2Q": 1.2,
-          "band3Freq": 5000.0,
+          "band3Freq": 5000,
           "band3Gain": 3.0,
           "band3Q": 0.7,
           "band4Freq": 13000.0,
@@ -108,7 +108,7 @@
           "depth": 1.0,
           "delay": 1.5,
           "feedback": 0.2,
-          "mix": 0.12,
+          "mix": 0.1,
           "spread": 1.0
         }
       }
@@ -139,7 +139,7 @@
           "size": 0.9,
           "damping": 0.2,
           "width": 1.0,
-          "mix": 0.13,
+          "mix": 0.12,
           "lowCut": 450.0
         }
       }

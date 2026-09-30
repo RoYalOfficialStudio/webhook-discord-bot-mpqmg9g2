@@ -4,7 +4,7 @@
   "name": "US Street Raw Vocal",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Raw American street / drill vocal: dry and in your face, loud and gritty. Punchy autotune (15 ms, 70 %), mid-heavy EQ with bite, hard compression, tube grit + a little distortion, de-esser, short slapback delay, almost no reverb, limiter at -1 dB.",
+  "description": "Raw American street / drill vocal: dry and in your face, loud and gritty. Punchy autotune (15 ms, 70 %), mid-heavy EQ with bite, hard compression, tube grit + a little distortion, de-esser, short slapback delay, almost no reverb, limiter at -1 dB. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -26,14 +26,14 @@
       "bypass": false,
       "state": {
         "params": {
-          "lowCut": 130.0,
+          "lowCut": 130,
           "lowCutSlope": 24.0,
           "band1Freq": 250.0,
           "band1Gain": -1.0,
-          "band2Freq": 900.0,
-          "band2Gain": 2.0,
+          "band2Freq": 500,
+          "band2Gain": -2.0,
           "band2Q": 0.9,
-          "band3Freq": 2800.0,
+          "band3Freq": 2800,
           "band3Gain": 4.5,
           "band3Q": 0.9,
           "band4Freq": 10000.0,
@@ -67,7 +67,7 @@
           "drive": 12.0,
           "mode": 1.0,
           "tone": 11000.0,
-          "mix": 0.5,
+          "mix": 0.35,
           "output": -3.0
         }
       }
@@ -81,7 +81,7 @@
           "drive": 18.0,
           "mode": 1.0,
           "tone": 4500.0,
-          "mix": 0.1,
+          "mix": 0.08,
           "output": -12.0
         }
       }

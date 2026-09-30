@@ -4,7 +4,7 @@
   "name": "Dark Double Vocal - light tune",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Light autotune (40 ms, 45 %), DARK voice (warm low-mids, soft top end) and the voice sounds TWICE: a detuned double plus a quiet octave-down layer, spread wide by a chorus. Dark 1/4 delay, dark reverb, limiter at -1 dB.",
+  "description": "Light autotune (40 ms, 45 %), DARK voice (warm low-mids, soft top end) and the voice sounds TWICE: a detuned double plus a quiet octave-down layer, spread wide by a chorus. Dark 1/4 delay, dark reverb, limiter at -1 dB. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -29,16 +29,16 @@
           "lowCut": 90.0,
           "lowCutSlope": 24.0,
           "band1Freq": 160.0,
-          "band1Gain": 2.5,
+          "band1Gain": 1.5,
           "band2Freq": 400.0,
-          "band2Gain": 1.0,
+          "band2Gain": -2.0,
           "band2Q": 0.8,
           "band3Freq": 3000.0,
-          "band3Gain": -1.5,
+          "band3Gain": 3.0,
           "band3Q": 0.8,
           "band4Freq": 8000.0,
-          "band4Gain": -4.0,
-          "highCut": 11000.0
+          "band4Gain": 1.0,
+          "highCut": 15000.0
         }
       }
     },
@@ -67,7 +67,7 @@
           "drive": 7.0,
           "mode": 0.0,
           "tone": 9000.0,
-          "mix": 0.4,
+          "mix": 0.35,
           "output": -2.0
         }
       }
@@ -80,7 +80,7 @@
         "params": {
           "semitones": 0.0,
           "cents": -9.0,
-          "mix": 0.45,
+          "mix": 0.3,
           "window": 35.0
         }
       }
@@ -108,7 +108,7 @@
           "depth": 2.0,
           "delay": 24.0,
           "feedback": 0.0,
-          "mix": 0.3,
+          "mix": 0.2,
           "spread": 1.0
         }
       }
@@ -136,7 +136,7 @@
           "mix": 0.12,
           "pingPong": 1.0,
           "lowCut": 300.0,
-          "highCut": 3500.0
+          "highCut": 4000.0
         }
       }
     },
@@ -149,10 +149,10 @@
           "decay": 2.2,
           "preDelay": 35.0,
           "size": 1.3,
-          "damping": 0.75,
+          "damping": 0.6,
           "width": 1.0,
-          "mix": 0.15,
-          "lowCut": 300.0
+          "mix": 0.12,
+          "lowCut": 350.0
         }
       }
     },

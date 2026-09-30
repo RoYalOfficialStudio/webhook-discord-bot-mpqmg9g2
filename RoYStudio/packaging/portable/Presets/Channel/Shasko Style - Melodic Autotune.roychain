@@ -4,7 +4,7 @@
   "name": "Shasko Style - Melodic Autotune",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Melodic street / Balkan-trap vocal: strong, clearly audible autotune (2 ms, 100 %) for sung lines, warm and clear EQ, tight compression, soft tube warmth, de-esser, doubler, 1/4 ping-pong delay, lush reverb, limiter at -1 dB. No distortion.",
+  "description": "Melodic street / Balkan-trap vocal: strong, clearly audible autotune (2 ms, 100 %) for sung lines, warm and clear EQ, tight compression, soft tube warmth, de-esser, doubler, 1/4 ping-pong delay, lush reverb, limiter at -1 dB. No distortion. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -30,7 +30,7 @@
           "lowCutSlope": 24.0,
           "band1Freq": 220.0,
           "band1Gain": 1.0,
-          "band2Freq": 500.0,
+          "band2Freq": 500,
           "band2Gain": -2.5,
           "band2Q": 1.2,
           "band3Freq": 3000.0,
@@ -107,7 +107,7 @@
         "params": {
           "syncBeats": 1.0,
           "feedback": 0.35,
-          "mix": 0.14,
+          "mix": 0.12,
           "pingPong": 1.0,
           "lowCut": 400.0,
           "highCut": 6500.0
@@ -125,7 +125,7 @@
           "size": 1.4,
           "damping": 0.4,
           "width": 1.0,
-          "mix": 0.17,
+          "mix": 0.12,
           "lowCut": 400.0
         }
       }

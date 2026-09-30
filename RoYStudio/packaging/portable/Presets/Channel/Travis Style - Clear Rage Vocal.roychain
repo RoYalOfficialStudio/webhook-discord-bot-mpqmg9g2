@@ -4,7 +4,7 @@
   "name": "Travis Style - Clear Rage Vocal",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Travis-style hard tune and space, but clear: fast autotune (5 ms, 90 %), no distortion, clean bright EQ, strong clean compression, light warmth, wide chorus, dotted 1/8 ping-pong delay, big but softer reverb, limiter at -1 dB.",
+  "description": "Travis-style hard tune and space, but clear: fast autotune (5 ms, 90 %), no distortion, clean bright EQ, strong clean compression, light warmth, wide chorus, dotted 1/8 ping-pong delay, big but softer reverb, limiter at -1 dB. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -36,7 +36,8 @@
           "band3Q": 0.8,
           "band4Freq": 11000.0,
           "band4Gain": 5.0,
-          "highCut": 19000.0
+          "highCut": 19000.0,
+          "band1Gain": 0
         }
       }
     },
@@ -105,7 +106,7 @@
         "params": {
           "syncBeats": 0.75,
           "feedback": 0.33,
-          "mix": 0.15,
+          "mix": 0.12,
           "pingPong": 1.0,
           "lowCut": 350.0,
           "highCut": 6000.0
@@ -123,7 +124,7 @@
           "size": 1.3,
           "damping": 0.45,
           "width": 1.0,
-          "mix": 0.14,
+          "mix": 0.12,
           "lowCut": 350.0
         }
       }

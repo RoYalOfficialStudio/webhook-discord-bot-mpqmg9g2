@@ -4,7 +4,7 @@
   "name": "Bright Double Vocal - light tune",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Light autotune (40 ms, 45 %), BRIGHT voice (lean low end, lots of presence and air) and the voice sounds TWICE: a detuned double plus a quiet octave-up shimmer layer, spread wide by a chorus. Bright 1/4 delay, bright reverb, limiter at -1 dB.",
+  "description": "Light autotune (40 ms, 45 %), BRIGHT voice (lean low end, lots of presence and air) and the voice sounds TWICE: a detuned double plus a quiet octave-up shimmer layer, spread wide by a chorus. Bright 1/4 delay, bright reverb, limiter at -1 dB. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -80,7 +80,7 @@
         "params": {
           "semitones": 0.0,
           "cents": 9.0,
-          "mix": 0.45,
+          "mix": 0.3,
           "window": 35.0
         }
       }
@@ -108,7 +108,7 @@
           "depth": 2.0,
           "delay": 24.0,
           "feedback": 0.0,
-          "mix": 0.3,
+          "mix": 0.2,
           "spread": 1.0
         }
       }
@@ -151,7 +151,7 @@
           "size": 1.1,
           "damping": 0.2,
           "width": 1.0,
-          "mix": 0.14,
+          "mix": 0.12,
           "lowCut": 500.0
         }
       }

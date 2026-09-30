@@ -4,7 +4,7 @@
   "name": "Devil Voice - hard tune",
   "created": "2026-09-30T00:00:00Z",
   "app": "0.2.0",
-  "description": "Devilish: robotic hard autotune (0 ms, 100 %), a loud demon layer one octave DOWN plus a detuned double, dark EQ, grit and distortion, dark phaser swirl, long dark 1/4 delay and a huge dark reverb, limiter at -1 dB.",
+  "description": "Devilish: robotic hard autotune (0 ms, 100 %), a loud demon layer one octave DOWN plus a detuned double, dark EQ, grit and distortion, dark phaser swirl, long dark 1/4 delay and a huge dark reverb, limiter at -1 dB. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -28,7 +28,7 @@
         "params": {
           "semitones": -12.0,
           "cents": 0.0,
-          "mix": 0.42,
+          "mix": 0.22,
           "window": 45.0
         }
       }
@@ -52,19 +52,19 @@
       "bypass": false,
       "state": {
         "params": {
-          "lowCut": 70.0,
+          "lowCut": 80,
           "lowCutSlope": 24.0,
           "band1Freq": 140.0,
-          "band1Gain": 3.0,
+          "band1Gain": 1.5,
           "band2Freq": 350.0,
-          "band2Gain": 1.5,
+          "band2Gain": -2.0,
           "band2Q": 0.8,
-          "band3Freq": 2500.0,
-          "band3Gain": 1.0,
+          "band3Freq": 2800,
+          "band3Gain": 3.0,
           "band3Q": 0.9,
           "band4Freq": 7000.0,
-          "band4Gain": -5.0,
-          "highCut": 9500.0
+          "band4Gain": 1.0,
+          "highCut": 15000.0
         }
       }
     },
@@ -93,7 +93,7 @@
           "drive": 14.0,
           "mode": 1.0,
           "tone": 8000.0,
-          "mix": 0.55,
+          "mix": 0.35,
           "output": -4.0
         }
       }
@@ -107,7 +107,7 @@
           "drive": 24.0,
           "mode": 0.0,
           "tone": 3500.0,
-          "mix": 0.18,
+          "mix": 0.08,
           "output": -12.0
         }
       }
@@ -122,7 +122,7 @@
           "depth": 0.7,
           "stages": 6.0,
           "feedback": 0.5,
-          "mix": 0.2,
+          "mix": 0.12,
           "centre": 500.0
         }
       }
@@ -135,10 +135,10 @@
         "params": {
           "syncBeats": 1.0,
           "feedback": 0.42,
-          "mix": 0.16,
+          "mix": 0.12,
           "pingPong": 1.0,
           "lowCut": 200.0,
-          "highCut": 2500.0
+          "highCut": 4000.0
         }
       }
     },
@@ -148,13 +148,13 @@
       "bypass": false,
       "state": {
         "params": {
-          "decay": 4.5,
+          "decay": 3.0,
           "preDelay": 60.0,
           "size": 1.8,
-          "damping": 0.8,
+          "damping": 0.6,
           "width": 1.0,
-          "mix": 0.2,
-          "lowCut": 200.0
+          "mix": 0.12,
+          "lowCut": 350.0
         }
       }
     },

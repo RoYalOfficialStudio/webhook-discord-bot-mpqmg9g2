@@ -4,7 +4,7 @@
   "name": "UK Drill Dirty Vocal",
   "created": "2026-09-29T00:00:00Z",
   "app": "0.2.0",
-  "description": "Dirtier than US Street: UK drill / grime vocal. Barely any autotune (keeps the raw voice), narrow gritty mid-range EQ, very hard compression, heavy tube grit + more distortion, de-esser, dark 1/8 delay, almost dry, limiter at -1 dB.",
+  "description": "Dirtier than US Street: UK drill / grime vocal. Barely any autotune (keeps the raw voice), narrow gritty mid-range EQ, very hard compression, heavy tube grit + more distortion, de-esser, dark 1/8 delay, almost dry, limiter at -1 dB. CLEAR-VOICE version: words stay understandable (presence up, mud out, effects kept behind the voice).",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -26,19 +26,19 @@
       "bypass": false,
       "state": {
         "params": {
-          "lowCut": 170.0,
+          "lowCut": 130,
           "lowCutSlope": 24.0,
           "band1Freq": 300.0,
           "band1Gain": -2.0,
-          "band2Freq": 1400.0,
-          "band2Gain": 3.5,
+          "band2Freq": 500,
+          "band2Gain": -2.0,
           "band2Q": 0.8,
           "band3Freq": 3200.0,
           "band3Gain": 3.5,
           "band3Q": 1.0,
           "band4Freq": 9000.0,
-          "band4Gain": -1.5,
-          "highCut": 12500.0
+          "band4Gain": 1.0,
+          "highCut": 15000.0
         }
       }
     },
@@ -67,7 +67,7 @@
           "drive": 16.0,
           "mode": 1.0,
           "tone": 9000.0,
-          "mix": 0.65,
+          "mix": 0.35,
           "output": -5.0
         }
       }
@@ -81,7 +81,7 @@
           "drive": 26.0,
           "mode": 1.0,
           "tone": 4000.0,
-          "mix": 0.22,
+          "mix": 0.08,
           "output": -12.0
         }
       }
@@ -109,7 +109,7 @@
           "mix": 0.1,
           "pingPong": 1.0,
           "lowCut": 400.0,
-          "highCut": 3500.0
+          "highCut": 4000.0
         }
       }
     },
