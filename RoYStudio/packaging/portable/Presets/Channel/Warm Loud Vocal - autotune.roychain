@@ -1,0 +1,147 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "Warm Loud Vocal - autotune",
+  "created": "2026-10-01T00:00:00Z",
+  "app": "0.2.0",
+  "description": "For a voice that sounds too BRIGHT and too QUIET: medium autotune (20 ms, 75 %), more body and chest (150-250 Hz), softer highs, strong de-esser, a quiet octave-down layer for weight, warm tape saturation, strong compression and a loud limiter stage (+5 dB into -1 dB) so the voice sits loud and full on the beat. Still clear: presence stays.",
+  "inserts": [
+    {
+      "typeId": "roy.vocaltune",
+      "name": "Autotune",
+      "bypass": false,
+      "state": {
+        "params": {
+          "speed": 20.0,
+          "strength": 0.75,
+          "threshold": 8.0,
+          "offKeyFilter": 1.0,
+          "allowChromatic": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Warm EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 80.0,
+          "lowCutSlope": 24.0,
+          "band1Freq": 180.0,
+          "band1Gain": 3.5,
+          "band1Q": 0.7,
+          "band2Freq": 450.0,
+          "band2Gain": -1.5,
+          "band2Q": 1.2,
+          "band3Freq": 3000.0,
+          "band3Gain": 1.5,
+          "band3Q": 0.9,
+          "band4Freq": 8000.0,
+          "band4Gain": -3.0,
+          "highCut": 16000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "Strong De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 6000.0,
+          "threshold": -38.0,
+          "range": 14.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.pitch",
+      "name": "Body Layer (octave down)",
+      "bypass": false,
+      "state": {
+        "params": {
+          "semitones": -12.0,
+          "cents": 0.0,
+          "mix": 0.12,
+          "window": 45.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Loud Comp",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -28.0,
+          "ratio": 6.0,
+          "attack": 5.0,
+          "release": 90.0,
+          "knee": 6.0,
+          "makeup": 16.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.saturation",
+      "name": "Warm Tape",
+      "bypass": false,
+      "state": {
+        "params": {
+          "drive": 8.0,
+          "mode": 0.0,
+          "tone": 10000.0,
+          "mix": 0.35,
+          "output": -1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.delay",
+      "name": "Soft 1/4",
+      "bypass": false,
+      "state": {
+        "params": {
+          "syncBeats": 1.0,
+          "feedback": 0.25,
+          "mix": 0.08,
+          "pingPong": 1.0,
+          "lowCut": 350.0,
+          "highCut": 4500.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Warm Room",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 1.4,
+          "preDelay": 20.0,
+          "size": 0.9,
+          "damping": 0.6,
+          "width": 1.0,
+          "mix": 0.09,
+          "lowCut": 350.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Loudness Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 80.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 5.0
+        }
+      }
+    }
+  ]
+}
