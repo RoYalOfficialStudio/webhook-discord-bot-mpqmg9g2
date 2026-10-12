@@ -8,6 +8,8 @@
 #include "core/Math.h"
 #include "export/Mp3Encoder.h"
 #include "io/AudioFile.h"
+#include "record/Recorder.h"
+#include "record/Takes.h"
 
 #include <cmath>
 #include <format>
@@ -169,4 +171,60 @@ TEST_CASE("beatimport", "WAV beat without tempo/key keeps the song settings; ont
     CHECK(ui.suggestedBpm() == 140.0);
     REQUIRE(s.run("ImportBeat", {{"path", umlaut.string()}}));
     CHECK(fs::exists(s.dir / "Audio" / umlaut.filename()));
+}
+
+TEST_CASE("beatimport", "export after IMPORT BEAT: the exported WAV and MP3 contain the beat (not silence)") {
+    Song s("beat_export");
+    const fs::path src = tempDir("beat_export_src") / "Export Beat 140 BPM Am.mp3";
+    mp3::Options o;
+    std::string err;
+    REQUIRE_MSG_OK(mp3::encode(src, beat140(6.0), static_cast<int>(SR), o, &err), err);
+    REQUIRE(s.run("ImportBeat", {{"path", src.string()}, {"bpm", 140.0}, {"key", "A Minor"}, {"gainDb", -6.0}}));
+    REQUIRE(s.rt.rebuild(s.p));
+    for (const char* fmt : {"wav", "mp3"}) {
+        REQUIRE(s.run("Export", {{"format", fmt}, {"name", std::string("song_") + fmt}}));
+        const fs::path out = s.ctx->result["files"][0]["path"].get<std::string>();
+        AudioData d;
+        REQUIRE_MSG_OK(readAudioFile(out, d, &err), err);
+        CHECK_MSG(d.numFrames > static_cast<int64_t>(5.5 * d.sampleRate), std::format("{}: {} frames", fmt, d.numFrames));
+        CHECK_MSG(peak(d.channels[0]) > 0.05f, std::format("{}: peak {:.4f} (silent export!)", fmt, peak(d.channels[0])));
+    }
+}
+
+TEST_CASE("beatimport", "export contains the RECORDED vocal take (comp), also without any other clip") {
+    for (int withBeat = 0; withBeat < 2; ++withBeat) {
+        Song s(withBeat ? "take_export_beat" : "take_export_solo");
+        std::string err;
+        if (withBeat) {
+            const fs::path b = tempDir("take_export_src") / "quiet beat.wav";
+            auto quiet = beat140(4.0);
+            for (auto& c : quiet)
+                for (auto& v : c) v *= 0.02f; // nearly silent beat -> the vocal must dominate the export
+            REQUIRE(writeWavFile(b, quiet, SR, SampleFormat::Pcm24, true));
+            REQUIRE(s.run("ImportBeat", {{"path", b.string()}}));
+        }
+        // a "recording": 3 s of a loud 300 Hz tone written by the recorder into the project's Audio folder
+        Track& v = addTrack(s.p, TrackType::Audio, "Vocal");
+        const std::string vid = v.id;
+        std::vector<std::vector<float>> tone(1, std::vector<float>(static_cast<size_t>(48000 * 3)));
+        for (size_t i = 0; i < tone[0].size(); ++i) tone[0][i] = 0.5f * static_cast<float>(std::sin(kTwoPi * 300.0 * static_cast<double>(i) / 48000.0));
+        const fs::path takeFile = s.dir / "Audio" / "Vocal_take_001.wav";
+        REQUIRE(writeWavFile(takeFile, tone, 48000.0, SampleFormat::Float32, true));
+        FinishedTake ft;
+        ft.trackId = vid;
+        ft.path = takeFile;
+        ft.timelineStart = 48000; // starts after 1 s
+        ft.frames = static_cast<int64_t>(tone[0].size());
+        ft.channels = 1;
+        ft.sampleRate = 48000.0;
+        REQUIRE(!takes::addRecordedTake(s.p, ft, s.dir).empty());
+        REQUIRE(s.rt.rebuild(s.p));
+        REQUIRE(s.run("Export", {{"format", "wav"}, {"name", "with_vocal"}}));
+        const fs::path out = s.ctx->result["files"][0]["path"].get<std::string>();
+        AudioData d;
+        REQUIRE_MSG_OK(readAudioFile(out, d, &err), err);
+        CHECK_MSG(d.numFrames >= static_cast<int64_t>(3.9 * d.sampleRate), std::format("withBeat={} {} frames (take cut off?)", withBeat, d.numFrames));
+        const size_t a = static_cast<size_t>(1.5 * d.sampleRate), e = static_cast<size_t>(3.5 * d.sampleRate);
+        CHECK_MSG(peak(d.channels[0], a, e) > 0.2f, std::format("withBeat={} vocal peak {:.4f} (vocal missing in export!)", withBeat, peak(d.channels[0], a, e)));
+    }
 }
