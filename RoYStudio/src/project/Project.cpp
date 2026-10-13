@@ -85,6 +85,7 @@ double Project::endBeat() const {
         for (auto& c : t.audioClips) end = std::max(end, c.endBeat());
         for (auto& c : t.midiClips) end = std::max(end, c.endBeat());
         for (auto& c : t.patternClips) end = std::max(end, c.endBeat());
+        for (auto& seg : t.comp) end = std::max(end, seg.endBeat); // recorded vocal takes
     }
     for (auto& s : sections) end = std::max(end, s.endBeat);
     return end;
