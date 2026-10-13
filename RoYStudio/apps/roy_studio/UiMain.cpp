@@ -2,11 +2,15 @@
 
 #include "core/Files.h"
 #include "midi/MidiLearn.h"
+#include "PlatformDialogs.h"
+#include "project/Session.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <format>
+#include <system_error>
+#include <vector>
 
 namespace roy::gui {
 
@@ -18,6 +22,46 @@ float g_newBpm = 140.0f;
 bool g_openNew = false, g_openOpen = false;
 
 // Output / input device submenus (empty name = system default); a change is remembered.
+
+struct SongEntry {
+    fs::path file;
+    std::string name;
+    fs::file_time_type time;
+};
+
+// Every song lives in its own folder: <Songs>/<Name>/<Name>.roy (+ Audio/, Exports/, BACKUPS/ ...).
+std::vector<SongEntry> findSongs(const fs::path& songsDir) {
+    std::vector<SongEntry> out;
+    std::error_code ec;
+    for (auto& d : fs::directory_iterator(songsDir, ec)) {
+        if (!d.is_directory(ec)) continue;
+        for (auto& f : fs::directory_iterator(d.path(), ec)) {
+            if (!f.is_regular_file(ec) || f.path().extension() != ".roy") continue;
+            out.push_back({f.path(), d.path().filename().string(), fs::last_write_time(f.path(), ec)});
+            break;
+        }
+    }
+    std::sort(out.begin(), out.end(), [](auto& a, auto& b) { return a.time > b.time; });
+    return out;
+}
+
+// "Song 1", "Song 2" ... - the first name that has no folder yet, so each new song gets its own folder.
+std::string nextSongName(const fs::path& songsDir) {
+    std::error_code ec;
+    for (int i = 1; i < 10000; ++i) {
+        const std::string n = std::format("Song {}", i);
+        if (!fs::exists(songsDir / n, ec)) return n;
+    }
+    return "New Song";
+}
+
+void openPickedSong(App& app, const std::string& path) {
+    std::snprintf(g_openPath, sizeof(g_openPath), "%s", path.c_str());
+    const auto info = ProjectSession::inspect(g_openPath);
+    if (info.crashed && info.snapshotAvailable) g_openOpen = true; // let the user choose RECOVER / LAST STABLE
+    else app.openProject(g_openPath);
+}
+
 void audioDeviceMenus(App& app) {
     auto cfg = app.audioConfig();
     if (ImGui::BeginMenu(std::format("Output: {}", cfg.outputDevice.empty() ? "system default" : cfg.outputDevice).c_str())) {
@@ -189,6 +233,7 @@ void dialogs(App& app) {
         ImGui::OpenPopup("New Project");
         g_openNew = false;
         if (!g_newFolder[0]) std::snprintf(g_newFolder, sizeof(g_newFolder), "%s", files::defaultProjectsDirectory().string().c_str());
+        std::snprintf(g_newName, sizeof(g_newName), "%s", nextSongName(g_newFolder).c_str());
     }
     if (g_openOpen) {
         ImGui::OpenPopup("Open Project");
@@ -198,7 +243,8 @@ void dialogs(App& app) {
         ImGui::InputText("Name", g_newName, sizeof(g_newName));
         ImGui::InputText("Folder", g_newFolder, sizeof(g_newFolder));
         ImGui::SliderFloat("BPM", &g_newBpm, 50, 220, "%.0f");
-        ImGui::TextDisabled("A new folder with Audio/, Backups/, RECOVERY/ ... is created. Nothing is overwritten.");
+        ImGui::TextDisabled("Each song gets its OWN folder: %s", (fs::path(g_newFolder) / g_newName).string().c_str());
+        ImGui::TextDisabled("(inside: the song, Audio/ recordings, Exports/ WAV+MP3, BACKUPS/). Nothing is overwritten.");
         if (goldButton("Create")) {
             app.newProject(g_newFolder, g_newName, g_newBpm);
             ImGui::CloseCurrentPopup();
@@ -207,7 +253,48 @@ void dialogs(App& app) {
         if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
+    if (!app.pickedProjectFile.empty()) {
+        const std::string f = app.pickedProjectFile;
+        app.pickedProjectFile.clear();
+        openPickedSong(app, f);
+    }
     if (ImGui::BeginPopupModal("Open Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        static std::vector<SongEntry> songs;
+        const fs::path songsDir = files::defaultProjectsDirectory();
+        if (ImGui::IsWindowAppearing()) songs = findSongs(songsDir);
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "YOUR SONGS");
+        ImGui::SameLine();
+        ImGui::TextDisabled("(click = open, newest first)");
+        bool picked = false;
+        if (ImGui::BeginChild("##songs", ImVec2(520, 260), ImGuiChildFlags_Borders)) {
+            if (songs.empty()) ImGui::TextDisabled("no songs yet in %s", songsDir.string().c_str());
+            for (auto& sg : songs) {
+                if (ImGui::Selectable(sg.name.c_str(), false, ImGuiSelectableFlags_DontClosePopups)) {
+                    std::snprintf(g_openPath, sizeof(g_openPath), "%s", sg.file.string().c_str());
+                    const auto si = ProjectSession::inspect(g_openPath);
+                    if (!(si.crashed && si.snapshotAvailable)) {
+                        app.openProject(g_openPath);
+                        picked = true;
+                    }
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", sg.file.string().c_str());
+            }
+        }
+        ImGui::EndChild();
+        if (picked) {
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            return;
+        }
+        if (nativeDialogsAvailable()) {
+            if (goldButton("BROWSE... (Windows window in the songs folder)")) {
+                startDialog(DialogKind::ProjectFile, songsDir.string(), "RoY Studio - open song (.roy)", "openProject");
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+        }
+        if (ImGui::Button("Open songs folder")) app.openFolder(songsDir);
+        ImGui::Separator();
         ImGui::InputText(".roy file", g_openPath, sizeof(g_openPath));
         const auto info = ProjectSession::inspect(g_openPath);
         if (info.crashed && info.snapshotAvailable) {

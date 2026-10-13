@@ -448,6 +448,8 @@ void App::pollDialogs() {
         std::vector<fs::path> files;
         for (auto& p : paths) files.emplace_back(p);
         beginImportBeat(files);
+    } else if (tag == "openProject" && !paths.empty()) {
+        pickedProjectFile = paths.front();
     } else if (tag == "exportFolder" && !paths.empty()) {
         exportFolder = paths.front();
     }

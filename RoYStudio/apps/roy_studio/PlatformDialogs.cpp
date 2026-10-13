@@ -73,6 +73,10 @@ std::vector<std::string> runDialog(DialogKind kind, const std::string& startFold
     dlg->GetOptions(&opts);
     if (kind == DialogKind::Folder) {
         dlg->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+    } else if (kind == DialogKind::ProjectFile) {
+        dlg->SetOptions(opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST);
+        const COMDLG_FILTERSPEC types[] = {{L"RoY Studio song (*.roy)", L"*.roy"}};
+        dlg->SetFileTypes(1, types);
     } else {
         dlg->SetOptions(opts | FOS_FORCEFILESYSTEM | FOS_FILEMUSTEXIST | FOS_ALLOWMULTISELECT);
         const COMDLG_FILTERSPEC types[] = {{L"Audio (MP3, WAV, FLAC, OGG, AIFF)", L"*.mp3;*.wav;*.flac;*.ogg;*.aif;*.aiff"},

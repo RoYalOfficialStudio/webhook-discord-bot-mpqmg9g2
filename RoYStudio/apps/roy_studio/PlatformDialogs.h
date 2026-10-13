@@ -10,7 +10,7 @@
 
 namespace roy::gui {
 
-enum class DialogKind { Folder, AudioFiles };
+enum class DialogKind { Folder, AudioFiles, ProjectFile };
 
 // False on non-Windows builds (use the BROWSER or type the path instead).
 bool nativeDialogsAvailable();

@@ -66,6 +66,7 @@ public:
     bool newProject(const fs::path& parent, const std::string& name, double bpm);
     // safeMode: third-party plugins are not loaded (their state stays in the project)
     bool openProject(const fs::path& file, OpenMode mode = OpenMode::Normal, bool safeMode = false);
+    std::string pickedProjectFile; // chosen in the Windows file window, opened by the UI next frame
     bool save();
     void closeProject();
     bool hasProject() const { return project_ != nullptr; }
