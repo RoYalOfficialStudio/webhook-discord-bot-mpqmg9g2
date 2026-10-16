@@ -1,0 +1,161 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "Glass Halo - fifth harmony tune",
+  "created": "2026-10-16T00:00:00Z",
+  "app": "0.2.0",
+  "description": "Something new: crisp autotune (8 ms) on a CLEAR main voice, plus an invisible 'halo' choir - a quiet perfect-fifth harmony (+7) and a glassy octave-up shimmer (+12) that follow every note, a slow flanger glide through the halo, a dotted 1/8 ping-pong delay and a wide airy room. Main voice stays upfront and understandable; de-esser keeps the shine from hissing. Limiter at -1 dB.",
+  "inserts": [
+    {
+      "typeId": "roy.vocaltune",
+      "name": "Glass Tune",
+      "bypass": false,
+      "state": {
+        "params": {
+          "speed": 8.0,
+          "strength": 0.9,
+          "threshold": 0.0,
+          "offKeyFilter": 1.0,
+          "allowChromatic": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.pitch",
+      "name": "Halo Fifth (+7)",
+      "bypass": false,
+      "state": {
+        "params": {
+          "semitones": 7.0,
+          "cents": 0.0,
+          "mix": 0.16,
+          "window": 40.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.pitch",
+      "name": "Glass Shimmer (+12)",
+      "bypass": false,
+      "state": {
+        "params": {
+          "semitones": 12.0,
+          "cents": 6.0,
+          "mix": 0.1,
+          "window": 30.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Clear EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 100,
+          "lowCutSlope": 24.0,
+          "band1Freq": 180.0,
+          "band1Gain": -1.0,
+          "band2Freq": 380.0,
+          "band2Gain": -3.0,
+          "band2Q": 0.9,
+          "band3Freq": 3200,
+          "band3Gain": 3.5,
+          "band3Q": 0.8,
+          "band4Freq": 11000.0,
+          "band4Gain": 3.0,
+          "highCut": 19000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Glue Comp",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -22.0,
+          "ratio": 4.5,
+          "attack": 5.0,
+          "release": 90.0,
+          "knee": 6.0,
+          "makeup": 9.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "Glass De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 7000.0,
+          "threshold": -30.0,
+          "range": 8.0,
+          "listen": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.flanger",
+      "name": "Halo Glide",
+      "bypass": false,
+      "state": {
+        "params": {
+          "rate": 0.08,
+          "depth": 1.5,
+          "delay": 2.0,
+          "feedback": 0.35,
+          "mix": 0.12,
+          "spread": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.delay",
+      "name": "Dotted 1/8",
+      "bypass": false,
+      "state": {
+        "params": {
+          "syncBeats": 0.75,
+          "feedback": 0.3,
+          "mix": 0.1,
+          "pingPong": 1.0,
+          "lowCut": 300.0,
+          "highCut": 7000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Air Room",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 1.8,
+          "preDelay": 35.0,
+          "size": 1.2,
+          "damping": 0.35,
+          "width": 1.0,
+          "mix": 0.13,
+          "lowCut": 400.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Safety Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 60.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 0.0
+        }
+      }
+    }
+  ]
+}
