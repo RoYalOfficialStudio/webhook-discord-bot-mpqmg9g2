@@ -4,7 +4,7 @@
   "name": "Suicideboys Style - Dark Ghost Tune",
   "created": "2026-10-18T00:00:00Z",
   "app": "0.2.0",
-  "description": "Dark, washed-out underground/phonk vocal: medium autotune (25 ms) so the voice still sounds human, a ghostly detuned double, a faint octave-down shadow, dark lo-fi EQ (no shiny highs), warm tape grit plus a little dirt, slow chorus haze, short slapback echo and a dark misty reverb. Words stay understandable (presence kept, mud cut). Limiter at -1 dB.",
+  "description": "Dark, washed-out underground/phonk vocal - CLEAR + LOUD version: medium autotune (25 ms), ghostly detuned double and faint octave-down shadow kept behind the voice, mud cut and presence boosted so every word is understandable, warm tape grit, light haze, slapback and dark mist. Extra compression and +4 dB into the limiter (ceiling -1 dB) make it loud without clipping.",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -28,7 +28,7 @@
         "params": {
           "semitones": 0.0,
           "cents": -12.0,
-          "mix": 0.25,
+          "mix": 0.18,
           "window": 35.0
         }
       }
@@ -41,7 +41,7 @@
         "params": {
           "semitones": -12.0,
           "cents": 0.0,
-          "mix": 0.1,
+          "mix": 0.06,
           "window": 45.0
         }
       }
@@ -57,14 +57,14 @@
           "band1Freq": 200.0,
           "band1Gain": 1.0,
           "band2Freq": 420.0,
-          "band2Gain": -3.0,
+          "band2Gain": -4.0,
           "band2Q": 0.9,
-          "band3Freq": 2500,
-          "band3Gain": 2.5,
+          "band3Freq": 3000,
+          "band3Gain": 4.0,
           "band3Q": 0.8,
           "band4Freq": 8000.0,
-          "band4Gain": -3.0,
-          "highCut": 9500.0
+          "band4Gain": 0.0,
+          "highCut": 12500.0
         }
       }
     },
@@ -74,12 +74,12 @@
       "bypass": false,
       "state": {
         "params": {
-          "threshold": -24.0,
+          "threshold": -26.0,
           "ratio": 6.0,
           "attack": 4.0,
           "release": 90.0,
           "knee": 5.0,
-          "makeup": 11.0,
+          "makeup": 15.0,
           "mix": 1.0
         }
       }
@@ -93,7 +93,7 @@
           "drive": 12.0,
           "mode": 1.0,
           "tone": 6000.0,
-          "mix": 0.4,
+          "mix": 0.3,
           "output": -4.0
         }
       }
@@ -107,7 +107,7 @@
           "drive": 18.0,
           "mode": 0.0,
           "tone": 3000.0,
-          "mix": 0.06,
+          "mix": 0.03,
           "output": -10.0
         }
       }
@@ -122,7 +122,7 @@
           "depth": 2.5,
           "delay": 18.0,
           "feedback": 0.0,
-          "mix": 0.15,
+          "mix": 0.1,
           "spread": 1.0
         }
       }
@@ -135,7 +135,7 @@
         "params": {
           "syncBeats": 0.25,
           "feedback": 0.15,
-          "mix": 0.12,
+          "mix": 0.09,
           "pingPong": 0.0,
           "lowCut": 250.0,
           "highCut": 3500.0
@@ -153,7 +153,7 @@
           "size": 1.5,
           "damping": 0.7,
           "width": 1.0,
-          "mix": 0.14,
+          "mix": 0.1,
           "lowCut": 350.0
         }
       }
@@ -168,7 +168,7 @@
           "release": 60.0,
           "lookahead": 1.5,
           "truePeak": 1.0,
-          "inputGain": 0.0
+          "inputGain": 4.0
         }
       }
     }
