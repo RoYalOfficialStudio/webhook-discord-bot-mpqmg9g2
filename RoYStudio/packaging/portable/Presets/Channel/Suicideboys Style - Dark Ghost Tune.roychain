@@ -4,7 +4,7 @@
   "name": "Suicideboys Style - Dark Ghost Tune",
   "created": "2026-10-18T00:00:00Z",
   "app": "0.2.0",
-  "description": "Dark, washed-out underground/phonk vocal - CLEAR + LOUD version: medium autotune (25 ms), ghostly detuned double and faint octave-down shadow kept behind the voice, mud cut and presence boosted so every word is understandable, warm tape grit, light haze, slapback and dark mist. Extra compression and +4 dB into the limiter (ceiling -1 dB) make it loud without clipping.",
+  "description": "Dark, washed-out underground/phonk vocal - CLEAR + LOUD version: medium autotune (25 ms), ghostly detuned double and faint octave-down shadow kept behind the voice, mud cut and presence boosted so every word is understandable, warm tape grit, light haze, slapback and dark mist. Extra compression and +4 dB into the limiter (ceiling -1 dB) make it loud without clipping. Full range now (75 Hz - 18 kHz, body at 180 Hz, no distortion) - no telephone sound.",
   "inserts": [
     {
       "typeId": "roy.vocaltune",
@@ -52,19 +52,19 @@
       "bypass": false,
       "state": {
         "params": {
-          "lowCut": 110,
-          "lowCutSlope": 24.0,
-          "band1Freq": 200.0,
-          "band1Gain": 1.0,
+          "lowCut": 75,
+          "lowCutSlope": 12.0,
+          "band1Freq": 180.0,
+          "band1Gain": 2.5,
           "band2Freq": 420.0,
-          "band2Gain": -4.0,
+          "band2Gain": -2.5,
           "band2Q": 0.9,
           "band3Freq": 3000,
-          "band3Gain": 4.0,
-          "band3Q": 0.8,
-          "band4Freq": 8000.0,
-          "band4Gain": 0.0,
-          "highCut": 12500.0
+          "band3Gain": 2.0,
+          "band3Q": 0.5,
+          "band4Freq": 10000.0,
+          "band4Gain": 1.5,
+          "highCut": 18000.0
         }
       }
     },
@@ -92,8 +92,8 @@
         "params": {
           "drive": 12.0,
           "mode": 1.0,
-          "tone": 6000.0,
-          "mix": 0.3,
+          "tone": 11000.0,
+          "mix": 0.2,
           "output": -4.0
         }
       }
@@ -101,7 +101,7 @@
     {
       "typeId": "roy.distortion",
       "name": "Dirt",
-      "bypass": false,
+      "bypass": true,
       "state": {
         "params": {
           "drive": 18.0,
@@ -122,7 +122,7 @@
           "depth": 2.5,
           "delay": 18.0,
           "feedback": 0.0,
-          "mix": 0.1,
+          "mix": 0.08,
           "spread": 1.0
         }
       }
@@ -137,8 +137,8 @@
           "feedback": 0.15,
           "mix": 0.09,
           "pingPong": 0.0,
-          "lowCut": 250.0,
-          "highCut": 3500.0
+          "lowCut": 150.0,
+          "highCut": 7000.0
         }
       }
     },
