@@ -96,6 +96,7 @@ TEST_CASE("browser", "preview is audible, stops, bypasses project routing and ex
     }
     pv.stop();
     auto after = pump(engine, 20);
+    after[0].erase(after[0].begin(), after[0].begin() + 72); // 1.5 ms output-limiter look-ahead tail
     CHECK(peak(after[0]) < 1e-6f);
     // plays once and ends by itself
     pv.preview(tone, o);

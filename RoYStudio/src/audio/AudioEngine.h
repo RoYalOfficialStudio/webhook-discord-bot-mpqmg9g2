@@ -224,6 +224,16 @@ private:
     std::atomic<double> cpuLoad_{0.0}, peakCpuLoad_{0.0};
     std::atomic<uint64_t> overloads_{0}, nonFinite_{0}, outputOvers_{0};
     std::atomic<bool> outputProtection_{true};
+    // Output limiter (live playback only): 1.5 ms look-ahead, linked stereo gain, smooth release.
+    // Turns the level DOWN before a peak instead of bending the waveform, so loud = clean.
+    static constexpr int kLimLook = 72;
+    float limDelay_[2][kLimLook] = {};
+    float limNeed_[kLimLook + 1] = {};
+    float limEnv_[kLimLook] = {};
+    int limPos_ = 0, limNeedPos_ = 0;
+    float limGain_ = 1.0f;
+    double limSum_ = kLimLook;
+    bool limInit_ = false;
 };
 
 } // namespace roy

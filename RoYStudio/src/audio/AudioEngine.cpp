@@ -431,18 +431,44 @@ void AudioEngine::processChunk(RenderGraph* g, const float* const* inputs, int n
             }
     }
     if (previewOn) preview_.render(outputs, numOutputs, outOffset, frames);
-    if (!offlineRendering_ && outputProtection_.load(std::memory_order_relaxed)) {
-        // soft knee from -1 dBFS: transparent below, never above 0 dBFS (no hard clipping at the device)
-        constexpr float knee = 0.891f, room = 1.0f - knee;
+    if (!offlineRendering_ && numOutputs >= 1 && outputProtection_.load(std::memory_order_relaxed)) {
+        // Look-ahead peak limiter at -1 dBFS: the gain is lowered smoothly BEFORE a peak arrives and
+        // released over ~120 ms - no waveshaping, so turning things up stays clean (no crackle/distortion).
+        constexpr float ceiling = 0.891f;
+        const int nch = std::min(numOutputs, 2);
+        const float releaseCoef = 1.0f - std::exp(-1.0f / static_cast<float>(0.12 * sampleRate_));
+        if (!limInit_) {
+            std::fill(std::begin(limNeed_), std::end(limNeed_), 1.0f);
+            std::fill(std::begin(limEnv_), std::end(limEnv_), 1.0f);
+            limInit_ = true;
+        }
         uint64_t overs = 0;
-        for (int c = 0; c < numOutputs; ++c) {
-            float* dst = outputs[c] + outOffset;
-            for (int i = 0; i < frames; ++i) {
-                const float a = std::fabs(dst[i]);
-                if (a <= knee) continue;
-                overs += a > 1.0f;
-                dst[i] = std::copysign(knee + room * std::tanh((a - knee) / room), dst[i]);
+        float* ch[2] = {outputs[0] + outOffset, nch > 1 ? outputs[1] + outOffset : nullptr};
+        for (int i = 0; i < frames; ++i) {
+            float peak = 0.0f;
+            for (int c = 0; c < nch; ++c) peak = std::max(peak, std::fabs(ch[c][i]));
+            overs += peak > 1.0f;
+            // 1) gain each sample needs, held over the look-ahead window
+            limNeed_[limNeedPos_] = peak > ceiling ? ceiling / peak : 1.0f;
+            limNeedPos_ = (limNeedPos_ + 1) % (kLimLook + 1);
+            float hold = 1.0f;
+            for (float v : limNeed_) hold = std::min(hold, v);
+            // 2) instant down, smooth release
+            limGain_ = hold < limGain_ ? hold : limGain_ + (hold - limGain_) * releaseCoef;
+            // 3) moving average over the look-ahead: a smooth ramp that reaches the needed gain
+            //    exactly when the delayed peak comes out
+            limSum_ += static_cast<double>(limGain_) - limEnv_[limPos_];
+            limEnv_[limPos_] = limGain_;
+            const float g = limSum_ >= kLimLook - 1e-6 ? 1.0f : static_cast<float>(limSum_ / kLimLook);
+            for (int c = 0; c < nch; ++c) {
+                const float delayed = limDelay_[c][limPos_];
+                limDelay_[c][limPos_] = ch[c][i];
+                float y = delayed * g;
+                const float a = std::fabs(y);
+                if (a > ceiling) y = std::copysign(ceiling + 0.109f * std::tanh((a - ceiling) / 0.109f), y); // last safety
+                ch[c][i] = y;
             }
+            limPos_ = (limPos_ + 1) % kLimLook;
         }
         if (overs) outputOvers_.fetch_add(overs, std::memory_order_relaxed);
     }

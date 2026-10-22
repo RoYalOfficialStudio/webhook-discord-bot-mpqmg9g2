@@ -258,7 +258,7 @@ TEST_CASE("livevocal", "output protection: a too-loud mix never hard-clips at th
     // +6 dBFS mix, live: soft-limited below 0 dBFS, counted for the "TOO LOUD" hint
     auto [live, overs] = run(2.0f, true, false);
     CHECK(peak(live) <= 1.0f);
-    CHECK(peak(live) > 0.95f);
+    CHECK(peak(live) > 0.85f);
     CHECK(overs > 0);
     CHECK(allFinite(live));
     // the same mix rendered/exported: untouched (export has its own mastering / limiter)
@@ -268,9 +268,21 @@ TEST_CASE("livevocal", "output protection: a too-loud mix never hard-clips at th
     // protection off: raw
     auto [raw, overs3] = run(2.0f, false, false);
     CHECK(peak(raw) > 1.9f);
+    // CLEAN: the limiter turns the level down, it does not bend the wave - after it settled the
+    // output is the raw signal (1.5 ms later) scaled to -1 dBFS, no distortion
+    {
+        constexpr int look = 72;
+        const float g = 0.891f / peak(raw);
+        float maxErr = 0.0f;
+        for (size_t n = 12000; n < live.size(); ++n) maxErr = std::max(maxErr, std::fabs(live[n] - g * raw[n - look]));
+        std::printf("    limiter steady-state deviation from a clean scaled sine: %.4f\n", maxErr);
+        CHECK(maxErr < 0.01f);
+    }
     // a normal mix (-6 dBFS) is bit-identical with and without protection
     auto [a1, o1] = run(0.5f, true, false);
     auto [a2, o2] = run(0.5f, false, false);
-    CHECK(a1 == a2);
+    bool same = true; // identical, only 1.5 ms (72 samples) look-ahead later
+    for (size_t n = 72; n < a1.size(); ++n) same = same && a1[n] == a2[n - 72];
+    CHECK(same);
     CHECK(o1 == 0);
 }
