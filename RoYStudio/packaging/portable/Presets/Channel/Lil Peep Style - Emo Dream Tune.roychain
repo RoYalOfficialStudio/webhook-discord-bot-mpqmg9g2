@@ -1,0 +1,175 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "Lil Peep Style - Emo Dream Tune",
+  "created": "2026-10-22T00:00:00Z",
+  "app": "0.2.0",
+  "description": "Emo / sad-rap melodic vocal: smooth but audible autotune (15 ms) that glides between notes, soft wide double (+/- detune), warm full voice (no telephone: 70 Hz - 18 kHz), airy top, gentle tape warmth, slow dreamy chorus, dotted 1/8 ping-pong delay and a big, washed-out dreamy hall behind the voice. Clear and loud: firm compression, limiter at -1 dB.",
+  "inserts": [
+    {
+      "typeId": "roy.vocaltune",
+      "name": "Emo Tune",
+      "bypass": false,
+      "state": {
+        "params": {
+          "speed": 15.0,
+          "strength": 0.9,
+          "threshold": 0.0,
+          "offKeyFilter": 1.0,
+          "allowChromatic": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.pitch",
+      "name": "Soft Double L",
+      "bypass": false,
+      "state": {
+        "params": {
+          "semitones": 0.0,
+          "cents": -9.0,
+          "mix": 0.2,
+          "window": 35.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.pitch",
+      "name": "Soft Double R",
+      "bypass": false,
+      "state": {
+        "params": {
+          "semitones": 0.0,
+          "cents": 8.0,
+          "mix": 0.15,
+          "window": 30.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Warm Air EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 70,
+          "lowCutSlope": 12.0,
+          "band1Freq": 200.0,
+          "band1Gain": 2.0,
+          "band2Freq": 450.0,
+          "band2Gain": -2.5,
+          "band2Q": 0.8,
+          "band3Freq": 3000,
+          "band3Gain": 2.0,
+          "band3Q": 0.5,
+          "band4Freq": 12000.0,
+          "band4Gain": 3.0,
+          "highCut": 18000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Smooth Comp",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -24.0,
+          "ratio": 4.0,
+          "attack": 6.0,
+          "release": 110.0,
+          "knee": 6.0,
+          "makeup": 12.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 6800.0,
+          "threshold": -30.0,
+          "range": 8.0,
+          "listen": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.saturation",
+      "name": "Tape Warmth",
+      "bypass": false,
+      "state": {
+        "params": {
+          "drive": 8.0,
+          "mode": 1.0,
+          "tone": 12000.0,
+          "mix": 0.2,
+          "output": -2.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.chorus",
+      "name": "Dream Chorus",
+      "bypass": false,
+      "state": {
+        "params": {
+          "rate": 0.4,
+          "depth": 3.0,
+          "delay": 15.0,
+          "feedback": 0.0,
+          "mix": 0.14,
+          "spread": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.delay",
+      "name": "Dotted 1/8",
+      "bypass": false,
+      "state": {
+        "params": {
+          "syncBeats": 0.75,
+          "feedback": 0.35,
+          "mix": 0.12,
+          "pingPong": 1.0,
+          "lowCut": 250.0,
+          "highCut": 6500.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Dream Hall",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 3.2,
+          "preDelay": 45.0,
+          "size": 1.8,
+          "damping": 0.45,
+          "width": 1.0,
+          "mix": 0.18,
+          "lowCut": 350.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Safety Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 60.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 3.0
+        }
+      }
+    }
+  ]
+}
