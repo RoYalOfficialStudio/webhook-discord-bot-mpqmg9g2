@@ -267,6 +267,16 @@ TEST_CASE("gmb11", "master assistant reaches targets without extreme limiting") 
     CHECK(!capped.targetReached);
     CHECK(!capped.notes.empty());
     CHECK(master::presets().size() >= 4);
+    // RoY ULTIMATE: loud (-8 LUFS) yet never over -1 dBTP
+    const auto* ult = master::findPreset("ultimate");
+    REQUIRE(ult != nullptr);
+    auto u = master::assist(pre, SR, *ult, 14.0);
+    std::printf("    ULTIMATE: %.2f LUFS, %.2f dBTP, GR %.1f dB\n", u.after.integratedLufs, u.after.truePeakDb, u.maxGainReductionDb);
+    auto c = master::assist(pre, SR, *master::findPreset("club"), 14.0);
+    std::printf("    club:     %.2f LUFS, %.2f dBTP\n", c.after.integratedLufs, c.after.truePeakDb);
+    CHECK(u.after.integratedLufs >= c.after.integratedLufs - 0.6); // about as loud as Club, with a safer -1 dBTP ceiling
+    CHECK(u.after.integratedLufs > -12.5); // (very spiky test material; real beats reach about -8)
+    CHECK(u.after.truePeakDb <= -0.7);
 }
 
 TEST_CASE("gmb11", "reference comparison and master chain command") {

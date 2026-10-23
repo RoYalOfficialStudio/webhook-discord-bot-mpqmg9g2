@@ -1,0 +1,204 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "RoY ULTIMATE Vocal - tune",
+  "created": "2026-10-23T00:00:00Z",
+  "app": "0.2.0",
+  "description": "Everything at once, done clean: noise gate, modern fast autotune (5 ms, still natural), tight stereo double, full-range clear EQ (no telephone), two-stage compression (fast catch + smooth glue), de-esser, analog warmth, slight wide chorus, 1/8 ping-pong + short plate. Loud upfront vocal, limiter at -1 dB. Use with master preset 'RoY ULTIMATE'.",
+  "inserts": [
+    {
+      "typeId": "roy.gate",
+      "name": "Noise Gate",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -55.0,
+          "range": -18.0,
+          "attack": 1.0,
+          "release": 120.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.vocaltune",
+      "name": "Ultimate Tune",
+      "bypass": false,
+      "state": {
+        "params": {
+          "speed": 5.0,
+          "strength": 0.95,
+          "threshold": 0.0,
+          "offKeyFilter": 1.0,
+          "allowChromatic": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.pitch",
+      "name": "Double L",
+      "bypass": false,
+      "state": {
+        "params": {
+          "semitones": 0.0,
+          "cents": -7.0,
+          "mix": 0.15,
+          "window": 30.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.pitch",
+      "name": "Double R",
+      "bypass": false,
+      "state": {
+        "params": {
+          "semitones": 0.0,
+          "cents": 7.0,
+          "mix": 0.12,
+          "window": 32.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Clear Full EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 80,
+          "lowCutSlope": 24.0,
+          "band1Freq": 180.0,
+          "band1Gain": 1.5,
+          "band2Freq": 400.0,
+          "band2Gain": -3.0,
+          "band2Q": 0.8,
+          "band3Freq": 3200,
+          "band3Gain": 2.5,
+          "band3Q": 0.6,
+          "band4Freq": 12000.0,
+          "band4Gain": 3.0,
+          "highCut": 19000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Fast Catch",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -18.0,
+          "ratio": 6.0,
+          "attack": 1.0,
+          "release": 50.0,
+          "knee": 3.0,
+          "makeup": 5.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Smooth Glue",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -22.0,
+          "ratio": 3.0,
+          "attack": 10.0,
+          "release": 120.0,
+          "knee": 8.0,
+          "makeup": 7.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 6800.0,
+          "threshold": -30.0,
+          "range": 9.0,
+          "listen": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.saturation",
+      "name": "Analog Warmth",
+      "bypass": false,
+      "state": {
+        "params": {
+          "drive": 6.0,
+          "mode": 1.0,
+          "tone": 12000.0,
+          "mix": 0.25,
+          "output": -2.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.chorus",
+      "name": "Wide",
+      "bypass": false,
+      "state": {
+        "params": {
+          "rate": 0.5,
+          "depth": 2.0,
+          "delay": 14.0,
+          "feedback": 0.0,
+          "mix": 0.08,
+          "spread": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.delay",
+      "name": "1/8 Ping-Pong",
+      "bypass": false,
+      "state": {
+        "params": {
+          "syncBeats": 0.5,
+          "feedback": 0.25,
+          "mix": 0.08,
+          "pingPong": 1.0,
+          "lowCut": 300.0,
+          "highCut": 7000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Short Plate",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 1.4,
+          "preDelay": 25.0,
+          "size": 0.9,
+          "damping": 0.4,
+          "width": 1.0,
+          "mix": 0.1,
+          "lowCut": 400.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Safety Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 60.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 3.0
+        }
+      }
+    }
+  ]
+}
