@@ -524,6 +524,10 @@ void drawMaster(App& app) {
         ImGui::SameLine();
     }
     ImGui::NewLine();
+    if (goldButton("RoY ULTIMATE (loud + clean)", ImVec2(-1, 0))) app.run("CreateMasterChain", {{"preset", "ultimate"}});
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Loud rap/trap master: EQ, glue, analog warmth, wide top + mono bass, soft clipper, limiter at -1 dBTP.\n"
+                          "Best together with the vocal preset 'RoY ULTIMATE Vocal - tune'.");
     if (MixerChannel* m = p.master()) {
         for (auto& s : m->inserts) {
             ImGui::PushID(s.id.c_str());
