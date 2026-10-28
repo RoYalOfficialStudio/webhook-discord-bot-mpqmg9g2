@@ -333,7 +333,15 @@ void statusBar(App& app) {
     const ImU32 cpuC = st.cpuLoad > 0.8 ? col::Red : st.cpuLoad > 0.5 ? col::Orange : col::Green;
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(cpuC), "CPU %3.0f%%", st.cpuLoad * 100.0);
     ImGui::SameLine();
-    ImGui::TextDisabled("| xruns %llu | %s", static_cast<unsigned long long>(st.overloads), app.audioStatus().c_str());
+    const auto tm = app.device().callbackTiming();
+    ImGui::TextDisabled("| CPU over %llu | gaps %llu | %s", static_cast<unsigned long long>(st.overloads),
+                        static_cast<unsigned long long>(tm.timingGaps), app.audioStatus().c_str());
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("CPU over = callbacks where RoY needed longer than the buffer (processing too slow).\n"
+                          "gaps = the sound card called RoY late (time between callbacks much longer than the buffer):\n"
+                          "a probable dropout caused by the driver/system, NOT by RoY's processing. Largest gap %.1f ms.\n"
+                          "Note: the driver itself does not report dropouts - gaps are measured from callback timing.",
+                          tm.maxGapMs);
     // CRACKLE HELP: the two usual causes, each with a one-click answer
     {
         static uint64_t lastOvers = 0, lastXruns = 0;

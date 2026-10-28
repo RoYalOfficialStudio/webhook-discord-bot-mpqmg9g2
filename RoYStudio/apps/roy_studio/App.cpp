@@ -744,6 +744,16 @@ support::DiagnosticsInput App::diagnosticsInput() {
     const auto st = engine_.stats();
     in.audioLines.push_back(std::format("engine: {} callbacks, {} overloads (possible dropouts), peak load {:.0f} %, {} worker threads", st.callbacks,
                                         st.overloads, st.peakCpuLoad * 100.0, engine_.workerThreads()));
+    {
+        const auto tm = device_.callbackTiming();
+        in.audioLines.push_back(std::format("device timing (since start): {} callbacks, {} timing gaps (probable device dropouts), largest gap {:.1f} ms, "
+                                            "longest interval {:.1f} ms, buffer {}..{} frames, {} size changes, {} callbacks without input",
+                                            tm.callbacks, tm.timingGaps, tm.maxGapMs, tm.maxIntervalMs, tm.minFrames, tm.maxFrames, tm.sizeChanges,
+                                            tm.inputMissing));
+        in.audioLines.push_back("note: 'overloads' = RoY processing over the buffer time (CPU); 'timing gaps' = measured from callback timing, "
+                                "the driver does not report underruns through miniaudio - an indicator, not a driver confirmation; "
+                                "clicks inside the audio (DSP artefacts) are neither and need the click detector");
+    }
     for (auto& d : device_.outputDevices()) in.audioLines.push_back("output device: " + d.name + (d.isDefault ? " (default)" : ""));
     for (auto& d : device_.inputDevices()) in.audioLines.push_back("input device: " + d.name + (d.isDefault ? " (default)" : ""));
     if (midiIn_) {

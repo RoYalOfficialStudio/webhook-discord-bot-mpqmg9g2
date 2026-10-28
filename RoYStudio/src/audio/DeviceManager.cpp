@@ -3,6 +3,8 @@
 
 #include <miniaudio.h>
 
+#include <chrono>
+
 #include <algorithm>
 #include <cstring>
 
@@ -126,6 +128,8 @@ void DeviceManager::dataCallback(void* devicePtr, void* output, const void* inpu
         return;
     }
     self->callbacks_.fetch_add(1, std::memory_order_relaxed);
+    self->timing_.onCallback(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(),
+                             frameCount, self->actualRate_, self->inChannels_ > 0, input != nullptr);
     const int inCh = self->inChannels_;
     const int outCh = self->outChannels_;
     const int cap = self->outPlanar_.numFrames();
@@ -232,6 +236,7 @@ bool DeviceManager::start(std::string* error) {
     }
     if (engine_) engine_->setDeviceRunning(true);
     stopping_ = false;
+    timing_.reset(); // a stopped device is not a gap
     const ma_result r = ma_device_start(&impl_->device);
     if (r != MA_SUCCESS) {
         if (engine_) engine_->setDeviceRunning(false);

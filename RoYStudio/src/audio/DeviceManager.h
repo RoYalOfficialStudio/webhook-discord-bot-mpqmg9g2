@@ -3,6 +3,7 @@
 // Windows, ALSA / PulseAudio / JACK on Linux, Core Audio on macOS, plus a
 // "null" backend for headless tests).
 #include "audio/AudioEngine.h"
+#include "diag/CallbackTiming.h"
 
 #include <atomic>
 #include <memory>
@@ -66,6 +67,9 @@ public:
     // Round-trip latency estimate in samples (input + output buffering).
     int latencySamples() const;
     uint64_t callbackCount() const { return callbacks_.load(); }
+    // GMB 13.0: device-side timing gaps (dropout indicator), separate from the engine's CPU-over-budget count.
+    diag::CallbackTimingSnapshot callbackTiming() const { return timing_.snapshot(); }
+    void resetCallbackTiming() { timing_.reset(); }
 
     // ---- device loss / reconnect (message thread) -----------------------------
     // A device that stops without stop() being called (unplugged, taken exclusively
@@ -101,6 +105,7 @@ private:
     int actualBuffer_ = 0;
     int inChannels_ = 0, outChannels_ = 0;
     std::atomic<uint64_t> callbacks_{0};
+    diag::CallbackTiming timing_;
     // loss detection
     AudioDeviceConfig cfg_;
     AudioEngine* lostEngine_ = nullptr;
