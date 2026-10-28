@@ -1,0 +1,496 @@
+[ OK ] 808/phase reset: every hit starts identically; retrigger is de-clicked (0.033s)
+[ OK ] 808/root detection finds the settled note and the cents offset (0.104s)
+[ OK ] 808/visual analyzer: frequency overlap, timing overlap and phase correlation (0.017s)
+2026-10-28T17:01:35.392Z [WARN] [command] AnalyzeKick808 failed: needs a beat track with a kick and an 808 track
+AnalyzeKick808: needs a beat track with a kick and an 808 track
+[ OK ] 808/AnalyzeKick808 uses the project's kick and 808 as arranged; sampler auto-root (0.084s)
+[ OK ] automation/curve shapes: linear, hold, smooth, bezier (0.000s)
+2026-10-28T17:01:35.515Z [WARN] [command] DeleteAutomationPoint failed: point index out of range
+DeleteAutomationPoint failed: point index out of range
+[ OK ] automation/volume automation: Hold steps, Linear ramps, audio follows (0.040s)
+2026-10-28T17:01:35.539Z [WARN] [command] CreateAutomation failed: send not found on this channel
+CreateAutomation failed: send not found on this channel
+[ OK ] automation/pan and send automation (0.030s)
+2026-10-28T17:01:35.562Z [WARN] [command] CreateAutomation failed: tempo automation lives on the master channel
+CreateAutomation failed: tempo automation lives on the master channel
+2026-10-28T17:01:35.563Z [WARN] [command] CreateAutomation failed: the project already has a tempo lane
+CreateAutomation failed: the project already has a tempo lane
+[ OK ] automation/tempo automation: ramps change the timeline, Hold keeps it, undo restores (0.029s)
+[ OK ] automation/old projects with [beat, value] points load as Linear; bad points are dropped (0.000s)
+[ OK ] automation/tempo map with thousands of events: fast and exact (0.157s)
+[ OK ] beatimport/tempo and key from typical beat file names (0.000s)
+[ OK ] beatimport/MP3 beat: analysed, imported on its own track at bar 1 with song tempo + key, one undo step (1.145s)
+2026-10-28T17:01:37.309Z [WARN] [command] ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/readme.txt
+ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/readme.txt
+2026-10-28T17:01:37.309Z [WARN] [command] ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/missing.mp3
+ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/missing.mp3
+2026-10-28T17:01:37.309Z [WARN] [command] ImportBeat failed: tempo must be between 10 and 999 BPM
+ImportBeat failed: tempo must be between 10 and 999 BPM
+2026-10-28T17:01:37.310Z [WARN] [command] ImportBeat failed: cannot parse key H Dur
+ImportBeat failed: cannot parse key H Dur
+[ OK ] beatimport/WAV beat without tempo/key keeps the song settings; onto an existing track; bad files refused (0.650s)
+[ OK ] beatimport/export after IMPORT BEAT: the exported WAV and MP3 contain the beat (not silence) (0.479s)
+[ OK ] beatimport/export contains the RECORDED vocal take (comp), also without any other clip (0.248s)
+2026-10-28T17:01:38.259Z [WARN] [command] SetPatternGroove failed: unknown groove template No Such Groove
+SetPatternGroove failed: unknown groove template No Such Groove
+[ OK ] beatlab/groove templates shift timing and accents on playback without touching the steps (0.009s)
+2026-10-28T17:01:38.276Z [WARN] [command] SetVelocityCurve failed: unknown velocity curve Wobble
+SetVelocityCurve failed: unknown velocity curve Wobble
+[ OK ] beatlab/velocity curves shape only active steps, one undo step (0.013s)
+2026-10-28T17:01:38.286Z [WARN] [command] NoteRepeat failed: unknown note repeat rate 1/5
+NoteRepeat failed: unknown note repeat rate 1/5
+[ OK ] beatlab/note repeat: straight rates, ratchets and triplet rolls land on the right grid (0.012s)
+[ OK ] beatlab/flam and probability: grace note before the hit, probability deterministic per seed (0.023s)
+2026-10-28T17:01:38.363Z [WARN] [command] GeneratePattern failed: unknown style Polka
+GeneratePattern failed: unknown style Polka
+2026-10-28T17:01:38.393Z [WARN] [command] PlacePatternChain failed: pattern in chain not found
+PlacePatternChain failed: pattern in chain not found
+[ OK ] beatlab/generator styles, variations and pattern chains - each is one undo step (0.086s)
+2026-10-28T17:01:38.416Z [WARN] [command] MoveClips failed: clip not found: missing
+MoveClips failed: clip not found: missing
+2026-10-28T17:01:38.420Z [WARN] [command] MoveClips failed: clips cannot move before the song start
+MoveClips failed: clips cannot move before the song start
+[ OK ] beatlab/undo macros: 100 tracks, moving several clips - one undo step each, all or nothing (0.029s)
+2026-10-28T17:01:38.440Z [WARN] [command] DeletePattern failed: pattern not found
+DeletePattern failed: pattern not found
+2026-10-28T17:01:38.447Z [WARN] [command] DeletePattern failed: pattern is used on locked track 'Drums'
+DeletePattern failed: pattern is used on locked track 'Drums'
+2026-10-28T17:01:38.454Z [WARN] [command] RenamePattern failed: empty name
+RenamePattern failed: empty name
+[ OK ] beatlab/delete pattern removes its playlist clips, keeps others, one undo brings both back (0.027s)
+[ OK ] browser/bpm from file names and loop detection (0.000s)
+[ OK ] browser/preview is audible, stops, bypasses project routing and exports (0.017s)
+[ OK ] browser/tempo sync stretches loops to the project tempo without changing pitch (0.099s)
+[ OK ] browser/drop targets: drum pad sample and sampler (0.016s)
+[ OK ] faults/disk full while saving: the previous project file stays intact, the project stays in memory (0.003s)
+[ OK ] faults/export failure: full disk and a folder that is a file fail cleanly, no broken files (0.323s)
+2026-10-28T17:01:38.950Z [ERROR] [record] disk write failed: /tmp/roy_tests/fault_record/Audio/Lead Vox_Take01_20261028_170138.wav
+[ OK ] faults/disk full while recording: the take keeps what was written, the performance is recoverable (0.376s)
+2026-10-28T17:01:39.297Z [WARN] [runtime] asset 'vox.wav' (Audio/vox.wav) could not be loaded: cannot decode /tmp/roy_tests/fault_missing/Audio/vox.wav
+[ OK ] faults/missing audio file: warning, silence for that clip, the rest plays; restored file plays again (0.011s)
+corrupt variants: 41 loaded (repaired), 351 rejected with a message
+[ OK ] faults/corrupt project files never crash: truncated, bit-flipped and type-confused (0.039s)
+2026-10-28T17:01:39.351Z [WARN] [plugins] RoY Test Gain: plugin rejected the saved state
+2026-10-28T17:01:39.351Z [WARN] [runtime] RoY Test Gain: the plugin rejected its saved state (other plugin version or damaged data) - it runs with default settings; the saved state is kept in the project and not lost
+[ OK ] faults/invalid plugin state: plugin runs with defaults, the rejected state is kept in the project (0.035s)
+2026-10-28T17:01:39.649Z [ERROR] [plugins] PLUGIN CRASHED: RoY VST3 Hang (vst3:/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build/test_plugins/RoYTest.vst3|524F590448414E47524F433100000006) - hung (no audio response within 250 ms) - host process terminated. Plugin deactivated (pass-through/silence), the project continues.
+[ OK ] faults/plugin hang during playback: detected, host terminated, pass-through, restart (0.297s)
+2026-10-28T17:01:39.702Z [ERROR] [device] audio device lost: the audio device stopped unexpectedly (unplugged, disabled or taken by another application)
+[ OK ] faults/audio device loss: detected once, RoY keeps running, reconnects when the device returns (0.062s)
+2026-10-28T17:01:39.805Z [ERROR] [device] audio device lost: the audio device stopped delivering audio (driver stalled)
+[ OK ] faults/stalled audio callbacks are detected as a lost device (0.072s)
+[ OK ] gmb01/tempo map conversions (0.000s)
+[ OK ] gmb01/transport play pause stop seek (0.000s)
+[ OK ] gmb01/transport loop splits blocks (0.000s)
+[ OK ] gmb01/count-in and pre-roll (0.000s)
+[ OK ] gmb01/metronome clicks on every beat (0.000s)
+[ OK ] gmb01/engine plays a clip bit-exact at unity (0.003s)
+[ OK ] gmb01/sample rates and buffer sizes give identical output (0.038s)
+[ OK ] gmb01/routing busses sends mute solo (0.005s)
+[ OK ] gmb01/pre-fader send ignores fader (0.002s)
+[ OK ] gmb01/plugin delay compensation aligns paths (0.001s)
+[ OK ] gmb01/automation drives channel gain (0.005s)
+[ OK ] gmb01/audio callback does not allocate (0.017s)
+[ OK ] gmb01/non-finite samples never reach the output (0.001s)
+[ OK ] gmb01/graph hot swap while playing (0.003s)
+[ OK ] gmb01/null audio device runs the engine (0.042s)
+[ OK ] gmb02/save close load verify roundtrip (0.030s)
+[ OK ] gmb02/unknown keys from newer versions are preserved (0.005s)
+[ OK ] gmb02/migration from v0 keeps a backup (0.000s)
+[ OK ] gmb02/numbered backups and retention (0.015s)
+[ OK ] gmb02/autosave never touches the project file (0.003s)
+2026-10-28T17:01:39.981Z [WARN] [session] project file unreadable, opening last good backup /tmp/roy_tests/crash/Crashy/BACKUPS/Crashy_0001.roy
+[ OK ] gmb02/crash recovery: recover, last stable, discard (0.011s)
+[ OK ] gmb02/second instance cannot open a live project (0.005s)
+2026-10-28T17:01:39.991Z [WARN] [command] SetChannelGain failed: channel not found
+[ OK ] gmb02/commands with undo redo and macros (0.002s)
+[ OK ] gmb02/undo history: consecutive steps share states, byte budget drops the oldest steps (0.954s)
+[ OK ] gmb02/command palette search and shortcuts (0.000s)
+2026-10-28T17:01:40.947Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+[ OK ] gmb02/routing command rejects feedback loops (0.000s)
+[ OK ] gmb03/split clip renders sample-identical (0.015s)
+[ OK ] gmb03/move, trim, slip and duplicate (0.029s)
+[ OK ] gmb03/locked clips and groups (0.003s)
+[ OK ] gmb03/fades and crossfade are smooth (0.012s)
+[ OK ] gmb03/clip gain, mute, reverse (0.011s)
+[ OK ] gmb03/time stretch keeps pitch, changes length (0.065s)
+[ OK ] gmb03/stretched clip plays through the engine (0.038s)
+[ OK ] gmb03/waveform cache levels, persistence, speed (0.796s)
+[ OK ] gmb03/snap, time formats, markers, sections, loop (0.000s)
+[ OK ] gmb04/record a take into its own file (0.361s)
+[ OK ] gmb04/recorded take plays back at the right position (0.371s)
+[ OK ] gmb04/loop recording creates one take per pass (0.379s)
+[ OK ] gmb04/punch in and out (0.371s)
+[ OK ] gmb04/existing files are never overwritten (0.711s)
+[ OK ] gmb04/comping selects ranges across takes (0.000s)
+[ OK ] gmb04/flatten comp keeps audio identical (0.375s)
+[ OK ] gmb04/input clipping warning and meter (0.033s)
+[ OK ] gmb04/never-lose: recover a performance without pressing record (0.081s)
+[ OK ] gmb04/never-lose memory is bounded (0.555s)
+[ OK ] gmb04/recording path does not allocate on the audio thread (0.381s)
+[ OK ] gmb05/keys and scales (0.000s)
+[ OK ] gmb05/wrong note blocker modes (0.000s)
+2026-10-28T17:01:45.535Z [WARN] [command] AddNote failed: note blocked: F#4 is not in C Major
+[ OK ] gmb05/AddNote command obeys the blocker and can be disabled (0.003s)
+[ OK ] gmb05/quantize humanize transpose (0.000s)
+[ OK ] gmb05/duplicate legato strum arpeggiate (0.000s)
+[ OK ] gmb05/chord detection (0.001s)
+[ OK ] gmb05/standard MIDI file roundtrip (0.001s)
+[ OK ] gmb05/ghost notes from other clips (0.000s)
+[ OK ] gmb05/synth renders MIDI with correct pitch (0.005s)
+[ OK ] gmb05/synth polyphony, voice stealing, no allocation (0.011s)
+[ OK ] gmb05/MIDI track plays through the engine (0.023s)
+[ OK ] gmb06/Pitch Guardian command is non-destructive and undoable (0.337s)
+[ OK ] gmb06/Vocal Doctor command returns executable fixes (0.224s)
+[ OK ] gmb06/breath reduction writes undoable automation (0.307s)
+[ OK ] gmb06/Double Magnet command aligns a double track (0.272s)
+[ OK ] gmb06/pitch detection accuracy (0.288s)
+[ OK ] gmb06/analysis distinguishes stable, vibrato, slide (0.380s)
+[ OK ] gmb06/ASSIST corrects a sharp note and leaves in-tune notes untouched (0.635s)
+[ OK ] gmb06/vibrato is preserved while the centre is corrected (0.434s)
+[ OK ] gmb06/OFF-KEY filter and ALLOW CHROMATIC decide targets (0.144s)
+[ OK ] gmb06/low confidence is not corrected aggressively (0.144s)
+[ OK ] gmb06/formant preservation (0.349s)
+[ OK ] gmb06/slide is preserved and transitions stay continuous (0.302s)
+[ OK ] gmb06/vocal doctor finds technical problems (0.550s)
+[ OK ] gmb06/vocal doctor detects breaths and plosives (0.296s)
+[ OK ] gmb06/vocal microscope inspects a region (0.285s)
+[ OK ] gmb06/double magnet tightens a sloppy double (1.142s)
+[ OK ] gmb06/ghost take compares timing and pitch (0.314s)
+[ OK ] gmb06/flow analyzer classifies early, on beat, late (0.145s)
+[ OK ] gmb06/onsets, bpm and key estimation (0.134s)
+[ OK ] gmb07/pattern length, duplicate, variation, swing (0.000s)
+[ OK ] gmb07/pattern expansion: probability, flam, roll, micro timing, mute/solo (0.000s)
+[ OK ] gmb07/drum voices have the expected spectra (0.006s)
+[ OK ] gmb07/drum sample pads play assigned samples (0.001s)
+[ OK ] gmb07/beat track plays a pattern through the engine (0.039s)
+[ OK ] gmb07/808: pitch, glide/slide, key lock, saturation (0.012s)
+[ OK ] gmb07/instruments do not allocate on the audio thread (0.008s)
+[ OK ] gmb07/kick/808 collision analyzer (0.036s)
+[ OK ] gmb08/sampler key mapping, pitch, velocity layers (0.003s)
+[ OK ] gmb08/sampler loop, one-shot, reverse, choke (0.000s)
+[ OK ] gmb08/sample editing tools (0.000s)
+[ OK ] gmb08/transient slicing and SLICE TO PADS (0.008s)
+[ OK ] gmb08/root note, bpm and key detection (1.099s)
+       stem SDR: bass 31.8 dB, vocals 31.4 dB, drums 16.1 dB, crosstalk 0.57
+[ OK ] gmb08/stem separation: exact reconstruction, measured quality (0.321s)
+[ OK ] gmb08/import, slice-to-pads and stems commands (0.265s)
+[ OK ] gmb09/every processor survives all test signals at all sample rates (3.959s)
+[ OK ] gmb09/RoY EQ matches its response curve (0.009s)
+[ OK ] gmb09/compressor static curve, makeup and sidechain (0.011s)
+[ OK ] gmb09/limiter: ceiling, true peak, latency (0.116s)
+[ OK ] gmb09/gate, de-esser, transient, clipper (0.017s)
+[ OK ] gmb09/reverb decay and delay timing (0.008s)
+[ OK ] gmb09/saturation harmonics and oversampling alias suppression (0.088s)
+[ OK ] gmb09/modulation, stereo and pitch (0.020s)
+[ OK ] gmb09/VocalTune corrects a sharp note in realtime (0.049s)
+[ OK ] gmb09/noise cleaner improves SNR, analyzer, dynamic space (0.170s)
+[ OK ] gmb09/BS.1770 loudness, gating, true peak (1.324s)
+[ OK ] gmb10/mix analysis finds masking, collisions, phase, headroom, stereo (0.163s)
+[ OK ] gmb10/engine capture and suggested Dynamic Space fix work in the mix (0.101s)
+[ OK ] gmb10/what-if A/B, commit as one undo step, discard (0.080s)
+[ OK ] gmb10/producer memory: learn, hints, reset, global file (0.002s)
+[ OK ] gmb11/FLAC encoder is lossless (decoded by an independent decoder) (0.048s)
+[ OK ] gmb11/dither: TPDF statistics and noise shaping (0.015s)
+[ OK ] gmb11/export mixdown WAV/FLAC, SRC, normalisation, selection (0.461s)
+[ OK ] gmb11/export tails, plugin delay compensation, stems, instrumental (1.063s)
+    ULTIMATE: -11.08 LUFS, -0.88 dBTP, GR -14.0 dB
+    club:     -10.59 LUFS, -0.73 dBTP
+[ OK ] gmb11/master assistant reaches targets without extreme limiting (22.707s)
+[ OK ] gmb11/reference comparison and master chain command (0.181s)
+[ OK ] gmb12/energy map and section suggestions (1.902s)
+[ OK ] gmb12/vocal DNA learns the own voice and flags deviations (1.333s)
+[ OK ] gmb12/project assistant findings (0.000s)
+[ OK ] gmb12/intelligence commands through the engine (1.927s)
+    sine 110 Hz                    clicks 0, max score 0.00
+    sine 440 Hz                    clicks 0, max score 0.00
+    sine 2 kHz                     clicks 0, max score 0.00
+    glissando 100->1000 Hz         clicks 0, max score 1.63
+    vibrato 220 Hz 6 Hz +-50 c     clicks 0, max score 1.90
+    sung melody (smooth voice)     clicks 0, max score 5.28
+    voice with vibrato             clicks 0, max score 6.08
+    silence                        clicks 0, max score 0.00
+    very quiet sine (-80 dBFS)     clicks 0, max score 0.00
+[ OK ] gmb13/click detector: smooth reference signals have no clicks (1.852s)
+    sine 440 single-sample spike +0.05          events 1, max score 45.8 at 30011
+    sine 440 dropout: 64 samples of silence     events 1, max score 16.7 at 40064
+    sine 440 block jump: 0.5 ms skipped         events 2, max score 152.5 at 50000
+    sine 440 polarity flip                      events 1, max score 103.0 at 61234
+    sine 440 gain step -6 dB                    events 1, max score 104.2 at 70000
+    melody   single-sample spike +0.05          events 1, max score 43.5 at 30012
+    melody   dropout: 64 samples of silence     events 1, max score 72.6 at 40064
+    melody   block jump: 0.5 ms skipped         events 2, max score 73.9 at 50000
+    melody   polarity flip                      events 1, max score 25.8 at 61234
+    melody   gain step -6 dB                    events 1, max score 34.6 at 70000
+[ OK ] gmb13/click detector finds jumps, dropouts and block discontinuities at the right sample (2.032s)
+    hard-clipped sine (+12 dB): events 0, max score 11.7 (corner of the clip, reported - clipping is a distortion)
+[ OK ] gmb13/click detector: hard clipping and extreme levels are measured, not crashing (0.181s)
+    bursty delivery: 0 gaps, longest interval 21.3 ms
+    25 ms stall: 1 gap(s), size 24.85 ms
+[ OK ] gmb13/callback timing: jitter, bursty delivery and clock drift give no gaps; a stall is counted with its size (0.001s)
+    null backend 0.7 s: 130 callbacks, 0 timing gaps, longest interval 12.15 ms, frames 256..256, CPU overloads 0
+[ OK ] gmb13/device timing on the null backend: counters run, kept separate from CPU overloads (0.702s)
+    VocalTune block 256       max diff to block 64: 0
+    VocalTune block 512       max diff to block 64: 0
+    VocalTune block 562       max diff to block 64: 0
+    VocalTune block 1024      max diff to block 64: 0
+    VocalTune block irregular max diff to block 64: 0
+[ OK ] gmb13/block independence: existing RoyVocalTune gives the same output for every block size (0.849s)
+    LIVE chain output (block 64): peak 0.299, clicks 1, max score 51.0
+    LIVE chain block 256       max diff to block 64: 0
+    LIVE chain block 512       max diff to block 64: 0
+    LIVE chain block 562       max diff to block 64: 0
+    LIVE chain block 1024      max diff to block 64: 0
+    LIVE chain block irregular max diff to block 64: 0
+    worst difference over all block sizes: 0 (-999.0 dBFS)
+[ OK ] gmb13/block independence: the whole LIVE VOCAL chain in the engine (measured per block size) (1.412s)
+    abrupt-start sine C4 (test-signal onset) input clicks 0 | output clicks   1, max score   39.7 | 0.015s
+    in-tune sine C4 (no correction)        input clicks 0 | output clicks   0, max score    1.6 |
+    sharp sine C4 +40 c, speed 20          input clicks 0 | output clicks   0, max score    0.0 |
+    sharp sine C4 +40 c, speed 0 (hard)    input clicks 0 | output clicks   0, max score    1.4 |
+    melody off-key, speed 20               input clicks 0 | output clicks   0, max score    5.2 |
+    melody off-key, speed 0 (hard)         input clicks 0 | output clicks   0, max score    5.0 |
+    phrase after 0.5 s silence, speed 0    input clicks 0 | output clicks   0, max score    5.8 |
+    glissando A3->A4, speed 0              input clicks 0 | output clicks   0, max score    4.6 |
+    vibrato A3 +-50 c, speed 20            input clicks 0 | output clicks   0, max score    0.0 |
+    F#4 in C major (off-key), speed 0      input clicks 0 | output clicks   0, max score    1.5 |
+    between E4/F4 (64.5), speed 0          input clicks 0 | output clicks   0, max score    1.6 |
+[ OK ] gmb13/MEASUREMENT: discontinuities produced by the existing RoyVocalTune (algorithm unchanged) (4.793s)
+    speed 200 -> 0 ms      output clicks   0, max score    5.3
+    strength 0 -> 1        output clicks   0, max score    5.6
+    key C -> F#            output clicks   0, max score    5.2
+    threshold 50 -> 0 c    output clicks   0, max score    4.9
+[ OK ] gmb13/MEASUREMENT: parameter changes during playback (existing RoyVocalTune) (1.501s)
+    44.1 kHz sharp sine: detected 60.40 MIDI (input 60.40), applied shift -0.40 st, output clicks 0 (max 0.0)
+    48.0 kHz sharp sine: detected 60.40 MIDI (input 60.40), applied shift -0.40 st, output clicks 0 (max 0.0)
+    overload +20 dB for 1 s, then normal: peak after 1.2 s 0.400 (input 0.4)
+[ OK ] gmb13/MEASUREMENT: existing RoyVocalTune at 44.1 kHz and 48 kHz, silence and overload recovery (0.632s)
+    44100 Hz no loopback (noise only): ok=0, no clear echo of the test signal (correlation 0.06) - is output connected to input?
+    48000 Hz no loopback (noise only): ok=0, no clear echo of the test signal (correlation 0.06) - is output connected to input?
+[ OK ] gmb13/round-trip latency: probe analysis finds the exact delay, rejects missing loopback (2.915s)
+    engine loopback 777 samples: round-trip latency 777 samples = 16.19 ms (correlation 1.00)
+[ OK ] gmb13/round-trip latency through the engine with a simulated loopback cable; no probe left in the output afterwards (0.244s)
+    edited: note 1 61.997 (target 62), note 2 64.381 (kept, sung 64.38)
+[ OK ] gmb14/manual note target and keep-as-sung win over the automatic correction (0.539s)
+2026-10-28T17:02:47.471Z [WARN] [command] SetNoteEdit failed: invalid note range
+[ OK ] gmb14/SetNoteEdit / ClearNoteEdits: one undo step each, replace per note, saved with the project (0.002s)
+2026-10-28T17:02:47.472Z [WARN] [command] SetPunch failed: punch out must be after punch in
+2026-10-28T17:02:47.472Z [WARN] [command] SetPunch failed: punch in before the song start
+[ OK ] gmb15/SetPunch: range check, pre-roll in bars, one undo step, saved with the project (0.001s)
+2026-10-28T17:02:49.104Z [WARN] [command] AddNote failed: note blocked: C#4 is not in A Minor
+[ OK ] integration/definition of done: full production workflow survives save, close and reopen (14.392s)
+[ OK ] live-midi/parser: running status, real-time bytes, SysEx, 1-byte messages (0.000s)
+[ OK ] live-midi/MIDI thru plays the target instrument with the transport stopped; switching releases notes (0.027s)
+[ OK ] live-midi/sustain pedal holds notes until it is released (0.019s)
+2026-10-28T17:03:01.944Z [WARN] [command] AddMidiRecording failed: no notes were played
+[ OK ] live-midi/recording: notes land on the timeline as played, one undo step, pedal extends (0.034s)
+[ OK ] live-midi/flooding the input never blocks or crashes; offline renders ignore live MIDI (0.052s)
+[ OK ] live-midi/timestamps: sample-accurate placement with constant latency, late messages wait, chunked callbacks (0.001s)
+[ OK ] live-midi/raw MIDI device reader (FIFO in place of /dev/snd/midiC*D*) (0.112s)
+[ OK ] live-midi/hot-plug: rescan opens new inputs, closes unplugged ones, respects switched-off inputs (0.113s)
+2026-10-28T17:03:02.338Z [WARN] [command] SetupLiveVocal failed: LIVE VOCAL needs an audio / vocal track
+SetupLiveVocal: LIVE VOCAL needs an audio / vocal track
+[ OK ] livevocal/LIVE VOCAL: the voice is heard in real time, tuned to the song key, with the transport stopped (0.115s)
+2026-10-28T17:03:02.344Z [WARN] [command] ApplyChannelPreset failed: not a RoY channel preset
+ApplyChannelPreset: not a RoY channel preset
+[ OK ] livevocal/channel preset: save a mixed vocal, load it into the next song (new key), undo, backups (0.008s)
+[ OK ] livevocal/factory vocal chains are valid, use only built-in effects and load (0.002s)
+    Bright Double Vocal - light tune: live peak 0.296
+    Crystal Hard Vocal - clear, light tune: live peak 0.483
+    Dark Double Vocal - light tune: live peak 0.336
+    Devil Voice - hard tune: live peak 0.412
+    Glass Halo - fifth harmony tune: live peak 0.366
+    Lil Peep Style - Emo Dream Tune: live peak 0.548
+    New Wave Clear Vocal: live peak 0.379
+    PRO Beat - room for vocals: live peak 0.602
+    PRO Vocal Mix: live peak 0.397
+    RoY ULTIMATE Vocal - tune: live peak 0.513
+    Shasko Style - Melodic Autotune: live peak 0.469
+    Suicideboys Style - Dark Ghost Tune: live peak 0.749
+    Travis Style - Aggressive Rage Vocal: live peak 0.406
+    Travis Style - Clear Rage Vocal: live peak 0.346
+    UK Drill Dirty Vocal: live peak 0.365
+    US Street Raw Vocal: live peak 0.439
+    Warm Loud Vocal - autotune: live peak 0.891
+[ OK ] livevocal/shipped vocal chains (UserData presets of the portable build) load and sound sane live (4.008s)
+    limiter steady-state deviation from a clean scaled sine: 0.0001
+[ OK ] livevocal/output protection: a too-loud mix never hard-clips at the sound card, renders stay untouched (0.036s)
+2026-10-28T17:03:06.396Z [WARN] [command] AddMidiMapping failed: unknown channel parameter nope
+AddMidiMapping: unknown channel parameter nope
+2026-10-28T17:03:06.396Z [WARN] [command] AddMidiMapping failed: controller number must be 0..119
+AddMidiMapping: controller number must be 0..119
+2026-10-28T17:03:06.396Z [WARN] [command] AddMidiMapping failed: channel not found
+AddMidiMapping: channel not found
+2026-10-28T17:03:06.397Z [WARN] [command] AddMidiMapping failed: unknown parameter no_such_param
+AddMidiMapping: unknown parameter no_such_param
+2026-10-28T17:03:06.399Z [WARN] [command] ClearMidiMappings failed: no MIDI mappings
+ClearMidiMappings: no MIDI mappings
+[ OK ] midi-learn/mapping commands: validation, replace on same CC or target, undo, save/load (0.008s)
+[ OK ] midi-learn/controller moves change model + running engine audibly, last value wins, no undo steps (0.006s)
+[ OK ] midi-learn/input: mapped CCs reach the message thread but not the instrument; learn mode consumes all (0.005s)
+[ OK ] midi-learn/mappings go away with their targets (send, effect, track), undo restores them (0.007s)
+2026-10-28T17:03:06.429Z [WARN] [command] SetSoloSafe failed: the master is never muted by solo
+SetSoloSafe failed: the master is never muted by solo
+[ OK ] mixer/solo safe: a solo-safe track stays audible while another track is soloed (0.013s)
+[ OK ] mixer/sends: pre/post switch takes effect immediately, remove send drops its automation (0.008s)
+2026-10-28T17:03:06.450Z [WARN] [command] DeleteBus failed: bus not found
+DeleteBus failed: bus not found
+2026-10-28T17:03:06.452Z [WARN] [command] RenameChannel failed: name must not be empty
+RenameChannel failed: name must not be empty
+[ OK ] mixer/delete bus re-routes its inputs, removes sends into it; rename keeps track and channel in sync (0.013s)
+2026-10-28T17:03:06.627Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:03:06.765Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:03:06.897Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:03:06.898Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:03:06.899Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:03:06.957Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+[ OK ] mixer/random routing graphs: cycles rejected, superposition holds, multi-core is bit-identical (0.537s)
+2026-10-28T17:03:06.994Z [WARN] [command] AddSend failed: this send would create a feedback loop
+AddSend failed: this send would create a feedback loop
+2026-10-28T17:03:06.995Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:03:06.995Z [WARN] [command] AddInsert failed: this sidechain would create a feedback loop
+AddInsert failed: this sidechain would create a feedback loop
+2026-10-28T17:03:06.996Z [WARN] [command] SetSidechain failed: this sidechain would create a feedback loop
+SetSidechain failed: this sidechain would create a feedback loop
+2026-10-28T17:03:06.997Z [WARN] [command] SetSidechain failed: sidechain source not found
+SetSidechain failed: sidechain source not found
+[ OK ] mixer/feedback loops through sends and sidechains are refused (0.009s)
+[ OK ] mp3/encoder library is available (LAME 3.100) (0.000s)
+[ OK ] mp3/CBR 128/192/256/320: encode, decode, size, quality, stereo (0.814s)
+[ OK ] mp3/VBR, mono, metadata (ID3v2 + ID3v1) (0.509s)
+       10 min @320 kbps encoded in 5.3 s (113x realtime)
+[ OK ] mp3/long file: 10 minutes stereo (9.120s)
+[ OK ] mp3/error cases: bitrate, sample rate, unwritable path, no overwrite, library missing (0.100s)
+[ OK ] mp3/Export command: MP3 with metadata from a project, 96 kHz project is resampled (0.253s)
+[ OK ] parallel/multi-core mixing is bit-identical to single-threaded (3.457s)
+[ OK ] parallel/graph levels respect routing and sidechains (0.101s)
+[ OK ] parallel/worker threads start and stop cleanly while graphs change (0.180s)
+[ OK ] plugins/scanner: CLAP detection, categories, database views, rescan, duplicates (0.018s)
+2026-10-28T17:03:21.563Z [WARN] [plugins] QUARANTINED /tmp/roy_tests/plugquar/crash.clap: plugin crashed the scanner: signal 11
+2026-10-28T17:03:23.166Z [WARN] [plugins] QUARANTINED /tmp/roy_tests/plugquar/hang.clap: no answer within 1500 ms - scanner terminated
+[ OK ] plugins/scanner: crash and hang are quarantined, VST3 detected, wrong architecture rejected (1.622s)
+[ OK ] plugins/sandboxed CLAP effect processes audio in a separate process, state round-trips (0.051s)
+[ OK ] plugins/sandboxed CLAP instrument plays MIDI notes (0.017s)
+2026-10-28T17:03:23.272Z [ERROR] [plugins] PLUGIN CRASHED: RoY Test Crash (clap:/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build/test_plugins/roy_test_crash.clap|com.roystudio.test.crash) - crashed (signal 11). Plugin deactivated (pass-through/silence), the project continues.
+[ OK ] plugins/plugin crash during playback: PLUGIN CRASHED, project continues, restart recovers (0.048s)
+2026-10-28T17:03:23.805Z [ERROR] [plugins] PLUGIN CRASHED: RoY Test Gain (clap:/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build/test_plugins/roy_test_gain.clap|com.roystudio.test.gain) - hung (no reply to 'reset' within 500 ms) - host process terminated. Plugin deactivated (pass-through/silence), the project continues.
+[ OK ] plugins/hung plugin host is detected by timeout and the audio continues (0.527s)
+2026-10-28T17:03:23.824Z [ERROR] [plugins] cannot load clap:/nonexistent/none.clap|x.y: dlopen failed: /nonexistent/none.clap: cannot open shared object file: No such file or directory
+2026-10-28T17:03:23.825Z [WARN] [runtime] processor type 'clap:/nonexistent/none.clap|x.y' (gone) is not available - slot bypassed
+[ OK ] plugins/missing plugin module is reported, project still builds (0.009s)
+[ OK ] stems/IStemSeparator registry: basic always available, advanced reports why not (0.001s)
+[ OK ] stems/advanced adapter: runs the engine, reads its stems, residual goes to Other, sum == input (0.020s)
+[ OK ] stems/advanced adapter failures: exit code, hang (timeout), missing output, wrong rate, cancel (10.397s)
+[ OK ] stems/basic separator keeps its behaviour behind the interface (0.082s)
+[ OK ] support/crash handler: invalid access / abort / terminate in a child -> report + marker, still a crash (0.014s)
+[ OK ] support/diagnostics report: sections, plugin failures, crash reports, bounded log tail, anonymised (0.002s)
+[ OK ] support/sanitize: home folder in both slash styles and the user name as a path component (0.000s)
+[ OK ] support/app settings: roundtrip, tolerant loading, damaged file kept + defaults, unknown keys preserved (0.001s)
+[ OK ] support/engine input peak meter: max of the device input, reset on read (0.000s)
+[ OK ] support/zip writer: stored entries, CRC-32, UTF-8 names, read back exactly (0.003s)
+[ OK ] support/system check: every item has a verdict, write test leaves no file, failures are reported (0.004s)
+[ OK ] support/test signals: files written, synthetic vocal is detected with its off-key / detuned notes (0.372s)
+[ OK ] support/microphone test capture: exact input copied, completes once, cancel works (0.000s)
+2026-10-28T17:03:34.733Z [WARN] [command] CompSelect failed: take not found or range outside the take
+CompSelect: take not found or range outside the take
+2026-10-28T17:03:34.733Z [WARN] [command] CompSelect failed: empty comp range
+CompSelect: empty comp range
+2026-10-28T17:03:34.733Z [WARN] [command] CompSelect failed: take not found or range outside the take
+CompSelect: take not found or range outside the take
+[ OK ] takes/swipe comp: a range plays from the chosen take, undo restores the previous comp (0.011s)
+2026-10-28T17:03:34.738Z [WARN] [command] RenameTake failed: empty name
+RenameTake: empty name
+2026-10-28T17:03:34.747Z [WARN] [command] CompWholeTake failed: track is locked
+CompWholeTake: track is locked
+2026-10-28T17:03:34.747Z [WARN] [command] DeleteTake failed: track is locked
+DeleteTake: track is locked
+[ OK ] takes/delete / rename / clear: model and audio follow, undo brings everything back (0.014s)
+2026-10-28T17:03:34.757Z [WARN] [command] FlattenComp failed: track has no comp
+FlattenComp: track has no comp
+[ OK ] takes/flatten comp: clips replace the comp with identical audio, one undo step (0.010s)
+[ OK ] takes/runtime asset cache: deleted takes and old stretch variants are released, pinned/used data stays (0.063s)
+[ OK ] takes/waveform store keeps only peaks of assets the project still references (0.004s)
+[ OK ] vocal-editor/pitch editor data: waveform, curve, targets, cents and statuses; changes nothing (0.254s)
+2026-10-28T17:03:35.289Z [WARN] [command] VocalAB failed: no tuned version yet - apply Pitch Guardian first
+VocalAB failed: no tuned version yet - apply Pitch Guardian first
+[ OK ] vocal-editor/A/B: original stays untouched, switching is undoable, re-tuning starts from the original (0.417s)
+[ OK ] vocal-editor/low confidence notes are shown UNCERTAIN and not corrected aggressively (0.113s)
+[ OK ] vocal/detection across the vocal range with jitter, shimmer, breathiness and noise (0.810s)
+[ OK ] vocal/ASSIST corrects detuned notes to the nearest in-key note on realistic material (0.448s)
+[ OK ] vocal/breaths, sibilants and plosives pass through untouched (0.148s)
+[ OK ] vocal/fast note changes are corrected note by note (no smearing) (0.494s)
+[ OK ] vocal/OFF-KEY filter in Major, Minor, Dorian, Phrygian, Pentatonic; ALLOW CHROMATIC (14.428s)
+       rap: 0/35 segments corrected, max shift 0.00 st
+[ OK ] vocal/rap: speech-like glides are not pulled to notes (0.490s)
+[ OK ] vocal/low confidence (heavy noise) is never corrected aggressively (0.140s)
+[ OK ] vocal/vibrato and slides preserved on a high voice (0.293s)
+    white noise: 0 of 500 estimates voiced
+[ OK ] vocaltune2/realtime tracker: accuracy 80..900 Hz at 44.1/48 kHz, confidence, silence, noise, no allocation (0.425s)
+    PSOLA latency at 48 kHz: 1264 samples (26.33 ms)
+    ratio 1, voiced sine: max deviation from the delayed input 2.98e-08
+    -5 st, formant kept : pitch 50.000 (target 50.000), F-centroid 745 -> 768 Hz (+3.1 %)
+    -5 st, formant moved: pitch 50.000 (target 50.000), F-centroid 745 -> 600 Hz (-19.4 %)
+    +2 st, formant kept : pitch 57.001 (target 57.000), F-centroid 745 -> 757 Hz (+1.7 %)
+    +2 st, formant moved: pitch 57.001 (target 57.000), F-centroid 745 -> 829 Hz (+11.3 %)
+    +5 st, formant kept : pitch 60.000 (target 60.000), F-centroid 745 -> 740 Hz (-0.6 %)
+    +5 st, formant moved: pitch 60.000 (target 60.000), F-centroid 745 -> 960 Hz (+29.0 %)
+[ OK ] vocaltune2/PSOLA: fixed latency, transparent at ratio 1, exact pitch shift, formants kept (0.801s)
+[ OK ] vocaltune2/VocalTune 2 corrects to the scale: +-40 cents at several pitches, 44.1 and 48 kHz (1.023s)
+    F#4+20c, allowChromatic 0 -> 67.00
+    F#4+20c, allowChromatic 1 -> 66.00
+    white noise: max applied shift 0.000 st
+[ OK ] vocaltune2/VocalTune 2: chromatic vs diatonic targets, threshold, unvoiced/noise do not move the pitch (0.236s)
+    vibrato depth input 0.49 st (centre 57.30) | keep: 0.54 st (centre 56.99) | hard: 0.22 st (centre 57.00)
+    held C4+35c: humanize 0 -> 59.999, humanize 1 -> 60.209
+    glissando A3->A4 (hard): 0 clicks, max score 4.0
+[ OK ] vocaltune2/VocalTune 2: vibrato kept (vibrato 1) or flattened (Hard), held notes, glides without steps (1.201s)
+    mix 0: max deviation from the input delayed by 1432 samples: 0.00e+00
+    mix 50 %: level -0.00 dB vs input
+    mix 100 %: level -0.00 dB vs input
+    speed          200 -> 0     clicks 0, max score 5.3
+    mix              0 -> 1     clicks 0, max score 5.4
+    keyRoot          0 -> 6     clicks 0, max score 5.4
+    mode             0 -> 3     clicks 0, max score 5.4
+    formantShift     0 -> 4     clicks 0, max score 5.4
+    strength         0 -> 1     clicks 0, max score 5.4
+[ OK ] vocaltune2/VocalTune 2: dry/wet 0/50/100 %, no comb filter, smooth parameter changes, no clicks (2.127s)
+    block 256       max diff to block 64: 0
+    block 512       max diff to block 64: 0
+    block 562       max diff to block 64: 0
+    block 1024      max diff to block 64: 0
+    block irregular max diff to block 64: 0
+    +20 dB for 1 s then normal: peak after 1.3 s 0.300
+    roy.vocaltune  worst note error   0.5 cents (per note: -0 -0 +0 -0 -0 -0 -1 -0), clicks 0 (max score 5.0), latency 0 samples
+    roy.vocaltune2 worst note error   0.2 cents (per note: -0 -0 +0 -0 -0 -0 +0 +0), clicks 0 (max score 5.8), latency 1432 samples
+    vt2 Natural    worst note error  11.7 cents (per note: +2 +11 +10 +11 +7 +8 +12 +4), clicks 0 (max score 5.6), latency 1432 samples
+    vt2 Modern     worst note error   2.8 cents (per note: -0 +3 +2 +2 +1 +2 +3 +1), clicks 0 (max score 5.5), latency 1432 samples
+[ OK ] vocaltune2/VocalTune 2: block independence, silence, overload recovery, no allocation, old vs new (2.693s)
+    impulse at output: vocal (VocalTune 2) 13432, beat 13432
+    bypassed: vocal 13432, beat 13432
+[ OK ] vocaltune2/VocalTune 2 in the engine: latency reported, delay compensation lines the channel up with the beat (0.160s)
+[ OK ] vocaltune2/LIVE VOCAL can use VocalTune 2; switching keeps key/speed; presets with roy.vocaltune2 follow the song key (0.001s)
+[ OK ] vst3/scan: VST3 bundle scanned out of process, classes instantiated (0.008s)
+[ OK ] vst3/effect: load, process audio, parameters, automation (0.047s)
+[ OK ] vst3/instrument: MIDI notes -> audio (0.021s)
+[ OK ] vst3/state: component + controller state saved in the project and restored after reopen (0.045s)
+[ OK ] vst3/editor: open, plugin-requested resize, GUI edit reaches RoY, close keeps the plugin (0.042s)
+[ OK ] vst3/clap editor: gui extension, host resize, timers, output events (0.023s)
+2026-10-28T17:04:01.747Z [ERROR] [plugins] PLUGIN CRASHED: RoY VST3 Crash (vst3:/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build/test_plugins/RoYTest.vst3|524F590343524150524F433100000005) - crashed (signal 11). Plugin deactivated (pass-through/silence), the project continues.
+[ OK ] vst3/crash during processing: PLUGIN CRASHED, pass-through, restart (0.050s)
+[ OK ] vst3/unload: removing the plugin ends its host process (0.024s)
+2026-10-28T17:04:01.802Z [WARN] [command] OpenPluginEditor failed: not a plugin slot (or plugin not loaded)
+2026-10-28T17:04:01.803Z [WARN] [runtime] SAFE MODE: plugin 'vst3:/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build/test_plugins/RoYTest.vst3|524F590147414950524F433100000001' (vst3:/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build/test_plugins/RoYTest.vst3|524F590147414950524F433100000001) not loaded - slot bypassed
+[ OK ] vst3/safe mode skips third-party plugins and keeps their state; UI data never recreates the plugin (0.024s)
+2026-10-28T17:04:01.889Z [ERROR] [plugins] PLUGIN CRASHED: RoY VST3 Crash (vst3:/tmp/roy_tests/compat/RoYTest.vst3|524F590343524150524F433100000005) - crashed (signal 11). Plugin deactivated (pass-through/silence), the project continues.
+2026-10-28T17:04:02.164Z [ERROR] [plugins] PLUGIN CRASHED: RoY VST3 Hang (vst3:/tmp/roy_tests/compat/RoYTest.vst3|524F590448414E47524F433100000006) - hung (no audio response within 250 ms) - host process terminated. Plugin deactivated (pass-through/silence), the project continues.
+[ OK ] vst3/plugin-compat: healthy plugins PASS, crashing and hanging ones FAIL cleanly (0.363s)
+
+253 tests, 0 failed, 102512 checks total
+EXIT 0

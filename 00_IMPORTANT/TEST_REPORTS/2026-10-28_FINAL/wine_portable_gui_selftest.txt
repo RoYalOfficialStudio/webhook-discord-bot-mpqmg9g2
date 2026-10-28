@@ -1,0 +1,32 @@
+RoY Studio 0.2.0 self test 2026-10-28T17:06:02Z
+[PASS] audio device running - Null | 48000 Hz | 256 samples | 16.0 ms
+[PASS] demo project
+[PASS] realtime playback advances - 2.51 beats after 1 s
+[PASS] master meter shows signal - peak 0.883
+[PASS] record take (realtime)
+[PASS] PUNCH IN/OUT records only the punch range - take 33.00 .. 34.00 beats
+[PASS] metronome audible (CLICK) - 2 clicks
+[PASS] count-in before recording
+[PASS] 808 track for preview
+[PASS] 808 preview audible (transport stopped) - peak 0.761
+[PASS] 808 preview ends by itself
+[PASS] IMPORT BEAT (WAV, tempo + key from the file name) - 140 BPM, A Minor
+[PASS] IMPORT BEAT undone in one step
+[PASS] LIVE VOCAL (monitor + autotune in song key)
+[PASS] LIVE VOCAL with VocalTune 2 (formant, latency reported) - 1432 samples = 29.8 ms
+[PASS] vocal chain preset loads
+[PASS] pitch analysis - 76 notes
+[PASS] pitch guardian (lock + off-key filter)
+[PASS] vocal doctor
+[PASS] mix analysis
+[PASS] export wav - Z:\tmp\stw\RoY Demo\Exports\selftest.wav
+[PASS] audio device resumed after export
+[PASS] MIDI learn (CC 102 -> master volume) - gain 6.00 dB
+[PASS] diagnostics report - Z:\tmp\pkg\RoYStudio-0.2.0-PORTABLE-win64\UserData\Diagnostics\RoY_Diagnostics_2026-10-28T17-06-21Z.md
+[PASS] undo
+[PASS] redo
+[PASS] save
+[PASS] reopen
+[PASS] reopened project identical
+[PASS] no plugin crashes
+SELFTEST PASSED (0 failed)
