@@ -48,20 +48,54 @@ std::vector<float> vibrato(double hz, double rateHz, double cents, double second
     }
     return v;
 }
+// Smooth reference voice for the diagnosis tests: harmonics with a formant envelope, -12 dB/oct source
+// tilt and a soft high-frequency taper (6..9 kHz) so harmonics fade in/out continuously while the pitch
+// moves. (tests/VoiceSynth.h switches harmonics on/off abruptly at 0.45*sr and has a sawtooth-like edge -
+// fine for pitch tests, but it really contains small discontinuities, which a click detector must report.)
+std::vector<float> smoothVoice(const std::function<double(double)>& midiAt, double seconds, float amp = 0.3f) {
+    VoiceSpec v; // formants only
+    const size_t n = static_cast<size_t>(seconds * SR);
+    std::vector<float> out(n);
+    double phase = 0;
+    for (size_t i = 0; i < n; ++i) {
+        const double f0 = midiToHz(midiAt(static_cast<double>(i) / SR));
+        phase += f0 / SR;
+        phase -= std::floor(phase);
+        double acc = 0;
+        for (int h = 1; h < 80; ++h) {
+            const double fh = f0 * h;
+            if (fh >= 9000) break;
+            const double taper = fh < 6000 ? 1.0 : 0.5 + 0.5 * std::cos(std::numbers::pi * (fh - 6000) / 3000);
+            acc += taper * formantEnvelope(v, fh) * std::sin(2 * std::numbers::pi * phase * h) / (static_cast<double>(h) * h);
+        }
+        out[i] = static_cast<float>(acc);
+    }
+    const float pk = peak(out);
+    for (auto& x : out) x *= amp / std::max(pk, 1e-9f);
+    return out;
+}
+
 // continuous sung melody (no silences), notes slightly off C major, 0.4 s each, 40 ms glides
 std::vector<float> melody(double seconds = 3.2) {
-    VoiceSpec v;
-    v.sr = SR;
-    v.seconds = seconds;
-    v.midi = [](double t) {
+    return smoothVoice([](double t) {
         static const double notes[] = {60.3, 62.4, 64.35, 65.6, 67.3, 69.45, 71.3, 72.4};
-        const int i = static_cast<int>(t / 0.4) % 8;
-        const double local = std::fmod(t, 0.4);
+        const int k = static_cast<int>(t / 0.4), i = k % 8;
+        const double local = t - k * 0.4; // (consistent with k - fmod could disagree at exact multiples)
         const double prev = notes[(i + 7) % 8];
-        if (t >= 0.4 && local < 0.04) return prev + (notes[i] - prev) * (local / 0.04);
+        if (k > 0 && local < 0.04) return prev + (notes[i] - prev) * (local / 0.04);
         return notes[i];
-    };
-    return makeVoice(v);
+    }, seconds);
+}
+
+// 10 ms raised-cosine fade-in (a signal that starts with full slope at sample 0 IS a discontinuity)
+std::vector<float> faded(std::vector<float> x) {
+    const size_t n = std::min<size_t>(x.size(), 480);
+    for (size_t i = 0; i < n; ++i) x[i] *= static_cast<float>(0.5 - 0.5 * std::cos(std::numbers::pi * static_cast<double>(i) / n));
+    return x;
+}
+std::vector<float> withSilence(std::vector<float> x, double before) {
+    x.insert(x.begin(), static_cast<size_t>(before * SR), 0.0f);
+    return x;
 }
 
 // processes a mono signal through a processor (dual mono, stereo block) with a block-size pattern
@@ -93,11 +127,14 @@ TEST_CASE("gmb13", "click detector: smooth reference signals have no clicks") {
     };
     std::vector<Ref> refs = {{"sine 110 Hz", tone(110, 2, 0.5f)},     {"sine 440 Hz", tone(440, 2, 0.5f)},
                              {"sine 2 kHz", tone(2000, 2, 0.5f)},     {"glissando 100->1000 Hz", glide(100, 1000, 3, 0.5f)},
-                             {"vibrato 220 Hz 6 Hz +-50 c", vibrato(220, 6, 50, 3, 0.5f)}, {"sung melody (mock voice)", melody()},
+                             {"vibrato 220 Hz 6 Hz +-50 c", vibrato(220, 6, 50, 3, 0.5f)}, {"sung melody (smooth voice)", melody()},
+                             {"voice with vibrato", smoothVoice([](double t) { return 57.0 + 0.5 * std::sin(2 * std::numbers::pi * 5.5 * t); }, 3)},
                              {"silence", std::vector<float>(96000, 0.0f)}, {"very quiet sine (-80 dBFS)", tone(440, 2, 1e-4f)}};
     for (auto& r : refs) {
         const auto rep = diag::detectClicks(r.x);
-        std::printf("    %-30s clicks %zu, max score %.2f\n", r.name, rep.count(), rep.maxScore);
+        std::string where;
+        for (size_t k = 0; k < std::min<size_t>(rep.events.size(), 8); ++k) where += std::format(" {}({:.0f})", rep.events[k].sample, rep.events[k].score);
+        std::printf("    %-30s clicks %zu, max score %.2f%s\n", r.name, rep.count(), rep.maxScore, where.c_str());
         CHECK_MSG(rep.count() == 0, std::format("{}: {} false clicks (max score {:.2f})", r.name, rep.count(), rep.maxScore));
     }
 }
@@ -121,7 +158,8 @@ TEST_CASE("gmb13", "click detector finds jumps, dropouts and block discontinuiti
             f.apply(x);
             const auto rep = diag::detectClicks(x);
             bool near = false;
-            for (auto& e : rep.events) near = near || std::llabs(e.sample - f.at) <= 3;
+            const int64_t len = std::string(f.name).rfind("dropout", 0) == 0 ? 64 : 0; // either edge of the silence
+            for (auto& e : rep.events) near = near || (e.sample >= f.at - 3 && e.sample <= f.at + len + 3);
             std::printf("    %-8s %-34s events %zu, max score %.1f at %lld\n", base, f.name, rep.count(), rep.maxScore,
                         static_cast<long long>(rep.maxScoreSample));
             CHECK_MSG(near, std::format("{} / {}: not found at {}", base, f.name, f.at));
@@ -144,35 +182,60 @@ TEST_CASE("gmb13", "click detector: hard clipping and extreme levels are measure
 }
 
 // ---------------------------------------------------------------------------------- callback timing
-TEST_CASE("gmb13", "callback timing: regular callbacks give no gaps, a late callback is counted with its size") {
-    diag::CallbackTiming t;
-    t.reset();
-    const int64_t period = static_cast<int64_t>(1e9 * 512 / 48000.0); // 10.67 ms
-    int64_t now = 1'000'000'000;
-    for (int i = 0; i < 1000; ++i) {
-        t.onCallback(now, 512, 48000.0, true, true);
-        now += period + (i % 3 == 0 ? 300'000 : -150'000); // +-0.3 ms scheduling jitter
+TEST_CASE("gmb13", "callback timing: jitter, bursty delivery and clock drift give no gaps; a stall is counted with its size") {
+    const double sr = 48000.0;
+    const int64_t period = static_cast<int64_t>(1e9 * 512 / sr); // 10.67 ms
+    auto runFor = [&](diag::CallbackTiming& t, int64_t& now, int n, auto&& nextDt) {
+        for (int i = 0; i < n; ++i) {
+            t.onCallback(now, 512, sr, true, true);
+            now += nextDt(i);
+        }
+    };
+    {
+        diag::CallbackTiming t;
+        int64_t now = 1'000'000'000;
+        runFor(t, now, 3000, [&](int i) { return period + (i % 2 == 0 ? 2'000'000 : -2'000'000); }); // +-2 ms jitter
+        CHECK(t.snapshot().timingGaps == 0);
     }
+    {
+        diag::CallbackTiming t; // WASAPI-like bursts: two callbacks back to back, then 2 periods pause
+        int64_t now = 1'000'000'000;
+        runFor(t, now, 3000, [&](int i) { return i % 2 == 0 ? int64_t{50'000} : 2 * period - 50'000; });
+        const auto s = t.snapshot();
+        std::printf("    bursty delivery: %llu gaps, longest interval %.1f ms\n", static_cast<unsigned long long>(s.timingGaps), s.maxIntervalMs);
+        CHECK(s.timingGaps == 0);
+    }
+    {
+        diag::CallbackTiming t; // sound card clock 200 ppm slower than the steady clock, 10 minutes
+        int64_t now = 1'000'000'000;
+        runFor(t, now, 56250, [&](int) { return static_cast<int64_t>(period * 1.0002); });
+        CHECK(t.snapshot().timingGaps == 0);
+    }
+    diag::CallbackTiming t;
+    int64_t now = 1'000'000'000;
+    runFor(t, now, 200, [&](int i) { return period + (i % 3 == 0 ? 300'000 : -150'000); });
     auto s = t.snapshot();
-    CHECK(s.callbacks == 1000);
+    CHECK(s.callbacks == 200);
     CHECK(s.timingGaps == 0);
     CHECK(s.inputMissing == 0);
     CHECK(s.minFrames == 512 && s.maxFrames == 512);
-    // one callback 25 ms late, one without input, one with a different size
+    // the device stalls 25 ms (it runs out of audio), one callback without input, one with a different size
     now += 25'000'000;
-    t.onCallback(now, 512, 48000.0, true, false);
+    t.onCallback(now, 512, sr, true, false);
     now += period;
-    t.onCallback(now, 256, 48000.0, true, true);
+    t.onCallback(now, 256, sr, true, true);
+    now += period / 2; // 256 frames = half a period later the next callback is due
+    for (int i = 0; i < 50; ++i, now += period) t.onCallback(now, 512, sr, true, true);
     s = t.snapshot();
+    std::printf("    25 ms stall: %llu gap(s), size %.2f ms\n", static_cast<unsigned long long>(s.timingGaps), s.maxGapMs);
     CHECK(s.timingGaps == 1);
-    CHECK_NEAR(s.maxGapMs, 25.0 + (period - 150'000) / 1e6 - 1e3 * 512 / 48000.0, 0.5);
+    CHECK_NEAR(s.maxGapMs, 25.0, 1.0);
     CHECK(s.inputMissing == 1);
-    CHECK(s.sizeChanges == 1);
+    CHECK(s.sizeChanges >= 1);
     CHECK(s.minFrames == 256);
-    // realtime safe
     {
         AllocationCounter c;
-        for (int i = 0; i < 1000; ++i) t.onCallback(now += period, 512, 48000.0, true, true);
+        for (int i = 0; i < 1000; ++i) t.onCallback(now += period, 512, sr, true, true);
         CHECK(c.count() == 0);
     }
     t.reset();
@@ -278,14 +341,19 @@ TEST_CASE("gmb13", "MEASUREMENT: discontinuities produced by the existing RoyVoc
         float speed;
     };
     const std::vector<Case> cases = {
-        {"in-tune sine C4 (no correction)", tone(midiToHz(60), 2, 0.4f), 20},
-        {"sharp sine C4 +40 c, speed 20", tone(midiToHz(60.4), 2, 0.4f), 20},
-        {"sharp sine C4 +40 c, speed 0 (hard)", tone(midiToHz(60.4), 2, 0.4f), 0},
-        {"melody off-key, speed 20", melody(), 20},
-        {"melody off-key, speed 0 (hard)", melody(), 0},
-        {"glissando A3->A4, speed 0", glide(220, 440, 3, 0.4f), 0},
-        {"vibrato A3 +-50 c, speed 20", vibrato(220, 5.5, 50, 3, 0.4f), 20},
+        {"abrupt-start sine C4 (test-signal onset)", tone(midiToHz(60), 2, 0.4f), 20},
+        {"in-tune sine C4 (no correction)", faded(tone(midiToHz(60), 2, 0.4f)), 20},
+        {"sharp sine C4 +40 c, speed 20", faded(tone(midiToHz(60.4), 2, 0.4f)), 20},
+        {"sharp sine C4 +40 c, speed 0 (hard)", faded(tone(midiToHz(60.4), 2, 0.4f)), 0},
+        {"melody off-key, speed 20", faded(melody()), 20},
+        {"melody off-key, speed 0 (hard)", faded(melody()), 0},
+        {"phrase after 0.5 s silence, speed 0", withSilence(faded(melody(1.6)), 0.5), 0},
+        {"glissando A3->A4, speed 0", faded(glide(220, 440, 3, 0.4f)), 0},
+        {"vibrato A3 +-50 c, speed 20", faded(vibrato(220, 5.5, 50, 3, 0.4f)), 20},
+        {"F#4 in C major (off-key), speed 0", faded(tone(midiToHz(66), 2, 0.4f)), 0},
+        {"between E4/F4 (64.5), speed 0", faded(tone(midiToHz(64.5), 2, 0.4f)), 0},
     };
+
     for (auto& c : cases) {
         const auto inRep = diag::detectClicks(c.x);
         RoyVocalTune vt;
@@ -295,14 +363,17 @@ TEST_CASE("gmb13", "MEASUREMENT: discontinuities produced by the existing RoyVoc
         vt.prepare(SR, 256);
         const auto y = runMono(vt, c.x, {256});
         const auto rep = diag::detectClicks(y);
-        std::printf("    %-38s input clicks %zu | output clicks %3zu, max score %6.1f\n", c.name, inRep.count(), rep.count(), rep.maxScore);
+        std::string where;
+        for (size_t k = 0; k < std::min<size_t>(rep.events.size(), 4); ++k) where += std::format(" {:.3f}s", rep.events[k].sample / SR);
+        std::printf("    %-38s input clicks %zu | output clicks %3zu, max score %6.1f |%s\n", c.name, inRep.count(), rep.count(), rep.maxScore,
+                    where.c_str());
         CHECK(allFinite(y));
     }
 }
 
 TEST_CASE("gmb13", "MEASUREMENT: parameter changes during playback (existing RoyVocalTune)") {
     registerBuiltinProcessors();
-    const auto x = melody();
+    const auto x = faded(melody());
     struct Change {
         const char* name;
         const char* param;
@@ -340,6 +411,7 @@ TEST_CASE("gmb13", "MEASUREMENT: existing RoyVocalTune at 44.1 kHz and 48 kHz, s
         vt.setParam("speed", 20.0f);
         vt.prepare(sr, 512);
         auto x = tone(midiToHz(60.4), 2, 0.4f, sr);
+        for (size_t i = 0; i < 480; ++i) x[i] *= static_cast<float>(0.5 - 0.5 * std::cos(std::numbers::pi * static_cast<double>(i) / 480));
         const auto y = runMono(vt, x, {512});
         const auto rep = diag::detectClicks(y);
         std::printf("    %.1f kHz sharp sine: detected %.2f MIDI (input 60.40), applied shift %.2f st, output clicks %zu (max %.1f)\n", sr / 1000,

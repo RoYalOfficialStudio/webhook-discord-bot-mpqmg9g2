@@ -1,13 +1,15 @@
 #pragma once
 // GMB 13.0 - CLICK / DISCONTINUITY DETECTOR (offline analysis, not for the audio thread).
 //
-// Finds sample-level discontinuities: a second-order linear predictor x^[n] = 2x[n-1] - x[n-2]
-// follows smooth audio (sines, glides, vibrato, voices) closely; a click, a dropout edge, a jump
-// between two blocks or a hard parameter step leaves a large prediction error e[n] compared to the
-// local level of e around it. score = |e[n]| / (RMS of e in +-window, centre excluded) - for smooth
-// material the score stays low, for a discontinuity it is high.
-// It measures "is there a discontinuity" - it cannot say whether it is audible (needs a listening test)
-// and it does not know WHY it happened (DSP artefact vs. device dropout: compare with CallbackTiming).
+// Finds sample-level discontinuities that a smooth or periodic signal cannot contain:
+//   1. short-term linear prediction (LPC order 24, per 512-sample hop, 2048 Hann window) removes the
+//      spectral envelope (formants, tones) -> residual e1;
+//   2. long-term (pitch) prediction removes the periodic glottal pulses of a voice:
+//      e2[n] = e1[n] - b * (e1[n-T] + e1[n+T]) / 2, T = best period in 40..800 samples;
+//   3. score[n] = |e2[n]| / RMS of e2 in +-window (centre excluded).
+// A click, a dropout edge, a skipped block or a hard gain/polarity step keeps a high score; tones,
+// glides, vibrato and sung vowels do not. It measures discontinuities - audibility needs a listening
+// test - and it does not know the cause (DSP artefact vs. device dropout: compare with CallbackTiming).
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -16,7 +18,7 @@ namespace roy::diag {
 
 struct ClickOptions {
     double threshold = 12.0;      // score above which a sample counts as a click
-    double absFloor = 2e-3;       // |e| must exceed this (ignores noise floor / near silence)
+    double absFloor = 1e-3;       // |residual| must exceed this (ignores noise floor / near silence)
     int windowSamples = 256;      // half window of the local level
     int mergeSamples = 96;        // detections closer than this are one event (2 ms at 48 kHz)
 };
