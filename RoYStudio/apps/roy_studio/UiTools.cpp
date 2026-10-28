@@ -245,7 +245,27 @@ void drawVocals(App& app) {
                 const double m = lo + (o.y + H - y) / H * (hi - lo);
                 return ImGui::GetIO().KeyAlt ? std::round(m * 100.0) / 100.0 : std::round(m);
             };
-            if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) dragNote = noteAt(mp);
+            // GMB 16 REGION TOOLS: SHIFT + drag selects a time range of the take
+            static std::string regionClip;
+            static double regionA = 0, regionB = 0;
+            static bool selecting = false;
+            auto timeAt = [&](float x) { return std::clamp(static_cast<double>((x - o.x) / W) * dur, 0.0, dur); };
+            if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::GetIO().KeyShift) {
+                selecting = true;
+                regionClip = clip->id;
+                regionA = regionB = timeAt(mp.x);
+            } else if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                dragNote = noteAt(mp);
+            }
+            if (selecting) {
+                if (ImGui::IsItemActive()) regionB = timeAt(mp.x);
+                else selecting = false;
+            }
+            if (selecting || (regionClip == clip->id && ImGui::IsItemDeactivated()))
+                app.vocalRegion = {{"clipId", clip->id}, {"start", std::min(regionA, regionB)}, {"end", std::max(regionA, regionB)}};
+            if (!app.vocalRegion.is_object() || app.vocalRegion.value("clipId", "") != clip->id) regionClip.clear();
+            if (regionClip == clip->id && std::fabs(regionB - regionA) > 1e-3)
+                dl->AddRectFilled(ImVec2(X(std::min(regionA, regionB)), o.y), ImVec2(X(std::max(regionA, regionB)), o.y + H), col::rgb(0x4FC3F7, 40));
             if (dragNote >= 0 && ImGui::IsItemActive()) {
                 dragPitch = pitchAt(mp.y);
                 const auto& n = notes[static_cast<size_t>(dragNote)];
@@ -291,6 +311,42 @@ void drawVocals(App& app) {
                     }
                 }
                 ImGui::EndPopup();
+            }
+        }
+        { // region toolbar (selection made with SHIFT + drag in the editor above)
+            static std::string regionClip;
+            static double ra = 0, rb = 0;
+            static float gainDb = -3.0f, semis = 1.0f;
+            static json micro;
+            regionClip.clear(); // the selection made in the canvas above is mirrored in app.vocalRegion
+            if (app.vocalRegion.is_object() && app.vocalRegion.value("clipId", "") == clip->id) {
+                regionClip = clip->id;
+                ra = app.vocalRegion.value("start", 0.0);
+                rb = app.vocalRegion.value("end", 0.0);
+            }
+            if (!regionClip.empty() && rb - ra > 1e-3) {
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::rgb(0x4FC3F7)), "REGION %.2f - %.2f s", ra, rb);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(110 * dpi);
+                ImGui::SliderFloat("##rg", &gainDb, -24.0f, 12.0f, "%+.1f dB");
+                ImGui::SameLine();
+                if (ImGui::Button("Apply gain")) app.run("RegionGain", {{"clipId", clip->id}, {"start", ra}, {"end", rb}, {"gainDb", gainDb}});
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(110 * dpi);
+                ImGui::SliderFloat("##rp", &semis, -12.0f, 12.0f, "%+.1f st");
+                ImGui::SameLine();
+                if (ImGui::Button("Apply pitch")) app.run("RegionPitch", {{"clipId", clip->id}, {"start", ra}, {"end", rb}, {"semitones", semis}, {"formantPreserve", true}});
+                ImGui::SameLine();
+                if (ImGui::Button("Microscope") && app.run("VocalMicroscope", {{"clipId", clip->id}, {"start", ra}, {"end", rb}})) micro = app.lastResult();
+                ImGui::SameLine();
+                if (ImGui::SmallButton("x")) app.vocalRegion = json::object();
+                if (micro.is_object() && !micro.empty())
+                    ImGui::TextDisabled("pitch %.2f (%.0f c stability) | voiced %.0f %% | peak %.1f dB rms %.1f dB | sibilance %.1f dB | noise %.1f dB%s",
+                                        micro.value("pitchMedian", 0.0), micro.value("pitchStabilityCents", 0.0), micro.value("voicedRatio", 0.0) * 100,
+                                        micro.value("peakDb", -120.0), micro.value("rmsDb", -120.0), micro.value("sibilanceRatioDb", -120.0),
+                                        micro.value("noiseFloorDb", -120.0), micro.value("breath", false) ? " | looks like a BREATH" : "");
+            } else {
+                ImGui::TextDisabled("SHIFT + drag in the editor = select a region (gain, pitch, microscope)");
             }
         }
         if (ImGui::BeginTable("editnotes", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImVec2(0, 0))) {

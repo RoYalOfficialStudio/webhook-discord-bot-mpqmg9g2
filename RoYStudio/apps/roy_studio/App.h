@@ -222,6 +222,7 @@ public:
     void message(int level, const std::string& text);
     json vocalResult = json::object();  // last vocal analysis result shown in VOCALS
     json vocalEditorSettings = json::object(); // GMB 14: settings the pitch editor was opened with
+    json vocalRegion = json::object();         // GMB 16: selected region {clipId, start, end} in the pitch editor
     json masterResult = json::object(); // last mix/master analysis
     json checkResult = json::object();  // project assistant findings
 

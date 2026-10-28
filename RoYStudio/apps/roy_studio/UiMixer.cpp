@@ -175,6 +175,22 @@ void paramEditor(App& app, const std::string& slotId) {
     const float dpi = ImGui::GetFontSize() / 15.0f;
     MixerChannel* owner = nullptr;
     PluginSlot* slot = app.project().findSlot(slotId, &owner);
+    if (proc->wantsSidechain() && slot && owner) { // GMB 16: SIDECHAIN source (e.g. the vocal ducks the beat, the kick ducks the 808)
+        const MixerChannel* src = app.project().findChannel(slot->sidechainChannelId);
+        ImGui::SetNextItemWidth(240 * dpi);
+        if (ImGui::BeginCombo("sidechain (key input)", src ? src->name.c_str() : "none - uses its own signal")) {
+            if (ImGui::Selectable("none - uses its own signal", !src)) app.run("SetSidechain", {{"slotId", slotId}, {"sidechain", ""}});
+            for (auto& c : app.project().channels) {
+                if (c.id == owner->id || c.kind == ChannelKind::Master) continue;
+                if (ImGui::Selectable(c.name.c_str(), src && src->id == c.id) && !app.run("SetSidechain", {{"slotId", slotId}, {"sidechain", c.id}}))
+                    app.message(1, "sidechain: " + app.lastError());
+            }
+            ImGui::EndCombo();
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("The effect listens to another channel: e.g. a compressor on the BEAT keyed by the VOCAL makes room for the voice.\n"
+                              "Feedback loops are refused.");
+    }
     if (auto* sp = dynamic_cast<SandboxedPluginProcessor*>(proc.get())) {
         if (!sp->alive()) {
             ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Red), "PLUGIN CRASHED: %s", sp->problem().c_str());
