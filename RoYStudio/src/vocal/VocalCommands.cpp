@@ -106,6 +106,19 @@ vocal::PitchGuardianSettings guardianSettings(const Project& p, const json& a) {
     return s;
 }
 
+// GMB 14: the clip's manual note edits for Pitch Guardian / the editor
+void addNoteEdits(vocal::PitchGuardianSettings& s, const AudioClip& c) {
+    if (!c.noteEdits.is_array()) return;
+    for (auto& e : c.noteEdits) {
+        vocal::NoteEdit ed;
+        ed.start = e.value("start", 0.0);
+        ed.end = e.value("end", 0.0);
+        ed.targetMidi = e.value("target", 0.0);
+        ed.keep = e.value("keep", false);
+        if (ed.end > ed.start) s.edits.push_back(ed);
+    }
+}
+
 json settingsJson(const vocal::PitchGuardianSettings& s) {
     return {{"mode", vocal::guardianModeId(s.mode)}, {"key", s.key.name()}, {"strength", s.strength}, {"speedMs", s.speedMs},
             {"humanize", s.humanize}, {"formantPreserve", s.formantPreserve}, {"vibratoPreserve", s.vibratoPreserve},
@@ -133,6 +146,7 @@ void registerVocalCommands(CommandRegistry& r) {
                double sr = 48000;
                if (!clipAudio(ctx, source, audio, sr)) return false;
                auto s = guardianSettings(ctx.project, a);
+               addNoteEdits(s, *c);
                auto res = vocal::runPitchGuardian(audio, sr, s);
                json notes = json::array();
                int corrected = 0;
@@ -189,6 +203,7 @@ void registerVocalCommands(CommandRegistry& r) {
                double sr = 48000;
                if (!clipAudio(ctx, source, audio, sr)) return false;
                auto s = guardianSettings(ctx.project, a);
+               addNoteEdits(s, *c);
                const auto track = vocal::detectPitch(audio, sr);
                const auto an = vocal::analyzePitch(track);
                const auto plan = vocal::planCorrection(track, an, s);
@@ -228,7 +243,9 @@ void registerVocalCommands(CommandRegistry& r) {
                    const auto& n = an.notes[i];
                    const auto* nc = byNote[i];
                    std::string status;
-                   if (nc && nc->corrected) status = "CORRECTED", ++correctedN;
+                   const bool manual = nc && nc->reason.rfind("manual", 0) == 0;
+                   if (manual) status = "EDITED";
+                   else if (nc && nc->corrected) status = "CORRECTED", ++correctedN;
                    else if (n.meanConfidence < s.minConfidence) status = "UNCERTAIN", ++uncertain;
                    else if (!s.key.contains(n.nearestNote)) status = "OFF_KEY", ++offKey;
                    else status = "IN_SCALE", ++inScale;
@@ -236,13 +253,48 @@ void registerVocalCommands(CommandRegistry& r) {
                    notes.push_back({{"start", n.start}, {"end", n.end}, {"detected", n.medianMidi}, {"target", target},
                                     {"note", noteName(n.nearestNote)}, {"targetNote", noteName(static_cast<int>(std::lround(target)))},
                                     {"cents", n.centsFromNearest}, {"confidence", n.meanConfidence}, {"kind", vocal::frameKindName(n.kind)},
-                                    {"status", status}, {"reason", nc ? nc->reason : std::string()}, {"shift", nc ? nc->shift : 0.0}});
+                                    {"status", status}, {"reason", nc ? nc->reason : std::string()}, {"shift", nc ? nc->shift : 0.0},
+                                    {"edited", manual}});
                }
                ctx.result = {{"duration", static_cast<double>(len) / sr}, {"waveMin", wmin}, {"waveMax", wmax}, {"curve", curve},
                              {"notes", notes}, {"key", s.key.name()}, {"settings", settingsJson(s)},
                              {"counts", {{"IN_SCALE", inScale}, {"OFF_KEY", offKey}, {"UNCERTAIN", uncertain}, {"CORRECTED", correctedN}}},
                              {"ab", {{"available", !c->rawAssetId.empty() && !c->tunedAssetId.empty()},
                                      {"listening", c->listeningOriginal() ? "original" : "corrected"}}}};
+               return true;
+           }});
+    // GMB 14 VOCAL NOTE EDITOR: a manual decision for the note between start..end (seconds of the
+    // original take): "target" (MIDI, fractional allowed) or "keep" (as sung) or "clear" (automatic again).
+    // One undo step; applied by the next Pitch Guardian render (the editor preview shows it at once).
+    r.add({"SetNoteEdit", "Edit Vocal Note", "Vocal", "", true, false, [](CommandContext& ctx, const json& a) {
+               AudioClip* c = ctx.project.findAudioClip(str(a, "clipId"));
+               if (!c) return fail(ctx, "audio clip not found");
+               if (c->locked) return fail(ctx, "clip is locked");
+               const double start = num(a, "start", 0.0), end = num(a, "end", 0.0);
+               if (!(end > start)) return fail(ctx, "invalid note range");
+               if (!c->noteEdits.is_array()) c->noteEdits = json::array();
+               const double mid = 0.5 * (start + end);
+               json kept = json::array();
+               for (auto& e : c->noteEdits) // replace an edit of the same note
+                   if (!(mid >= e.value("start", 0.0) && mid <= e.value("end", 0.0))) kept.push_back(e);
+               if (!flag(a, "clear", false)) {
+                   json e = {{"start", start}, {"end", end}};
+                   if (flag(a, "keep", false)) e["keep"] = true;
+                   else {
+                       const double t = num(a, "target", -1.0);
+                       if (!(t >= 0.0 && t <= 127.0)) return fail(ctx, "target pitch missing");
+                       e["target"] = t;
+                   }
+                   kept.push_back(e);
+               }
+               c->noteEdits = kept;
+               ctx.result["edits"] = c->noteEdits.size();
+               return true;
+           }});
+    r.add({"ClearNoteEdits", "Reset Vocal Note Edits", "Vocal", "", true, false, [](CommandContext& ctx, const json& a) {
+               AudioClip* c = ctx.project.findAudioClip(str(a, "clipId"));
+               if (!c) return fail(ctx, "audio clip not found");
+               c->noteEdits = json::array();
                return true;
            }});
     // A/B: play the untouched original or the tuned render (switches the clip's source only).

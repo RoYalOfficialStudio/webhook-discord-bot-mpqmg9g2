@@ -85,6 +85,7 @@ json toJ(const AudioClip& c) {
         j["rawOffsetSec"] = c.rawOffsetSec;
         j["tunedAssetId"] = c.tunedAssetId;
     }
+    if (c.noteEdits.is_array() && !c.noteEdits.empty()) j["noteEdits"] = c.noteEdits;
     return j;
 }
 AudioClip audioClipFrom(const json& j) {
@@ -110,6 +111,9 @@ AudioClip audioClipFrom(const json& j) {
     c.rawAssetId = get<std::string>(j, "rawAssetId", "");
     c.rawOffsetSec = get<double>(j, "rawOffsetSec", 0.0);
     c.tunedAssetId = get<std::string>(j, "tunedAssetId", "");
+    if (j.contains("noteEdits") && j["noteEdits"].is_array())
+        for (auto& e : j["noteEdits"])
+            if (e.is_object() && e.contains("start") && e.contains("end")) c.noteEdits.push_back(e);
     return c;
 }
 

@@ -96,6 +96,36 @@ CorrectionPlan planCorrection(const PitchTrack& track, const PitchAnalysis& a, c
         NoteCorrection nc;
         nc.note = ni;
         nc.fromMidi = note.medianMidi;
+        {   // manual note edit (GMB 14) wins over every automatic rule
+            const double mid = 0.5 * (note.start + note.end);
+            const NoteEdit* e = nullptr;
+            for (auto& ed : s.edits)
+                if (mid >= ed.start && mid <= ed.end) e = &ed;
+            if (e) {
+                if (e->keep) {
+                    nc.toMidi = note.medianMidi;
+                    nc.reason = "manual: keep as sung";
+                    plan.notes.push_back(nc);
+                    for (size_t k = note.firstFrame; k <= note.lastFrame && k < n; ++k) { // pinned: no shift from the neighbours either
+                        raw[k] = 0.0;
+                        defined[k] = true;
+                    }
+                    continue;
+                }
+                nc.toMidi = e->targetMidi;
+                nc.corrected = std::fabs(e->targetMidi - note.medianMidi) > 1e-4;
+                nc.shift = e->targetMidi - note.medianMidi;
+                nc.reason = "manual target";
+                noteShift[ni] = nc.shift;
+                plan.notes.push_back(nc);
+                if (nc.corrected)
+                    for (size_t k = note.firstFrame; k <= note.lastFrame && k < n; ++k) {
+                        raw[k] = nc.shift;
+                        defined[k] = true;
+                    }
+                continue;
+            }
+        }
         if (note.kind == FrameKind::Transition || note.kind == FrameKind::Slide) {
             nc.reason = note.kind == FrameKind::Slide ? "slide" : "transition";
             plan.notes.push_back(nc);

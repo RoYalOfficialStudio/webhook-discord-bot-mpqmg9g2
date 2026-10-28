@@ -83,6 +83,7 @@ void drawVocals(App& app) {
     const json settings = {{"clipId", clip->id}, {"mode", modes[mode]}, {"strength", strength}, {"speedMs", speed}, {"humanize", humanize},
                            {"vibratoPreserve", vibrato}, {"slidePreserve", slide}, {"offKeyFilter", offKey}, {"formantPreserve", formant},
                            {"allowChromatic", chromatic}};
+    app.vocalEditorSettings = settings; // the note editor (right) refreshes with the same settings
     auto refreshEditor = [&] {
         if (app.run("PitchEditorData", settings)) {
             app.vocalResult = app.lastResult();
@@ -149,7 +150,10 @@ void drawVocals(App& app) {
         legend("OFF_KEY", cOff);
         legend("UNCERTAIN", cUnc);
         legend("CORRECTED", cCor);
+        legend("EDITED", col::rgb(0x4FC3F7));
         ImGui::TextDisabled("| key %s | editing the ORIGINAL take - the file is never changed", r.value("key", "").c_str());
+        ImGui::TextDisabled("Drag a note up/down = set its pitch (snaps to semitones, hold ALT for cents). Right-click a note: keep as sung / automatic. "
+                            "Then APPLY PITCH GUARDIAN.");
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const ImVec2 o = ImGui::GetCursorScreenPos();
         const float W = ImGui::GetContentRegionAvail().x, H = std::max(260.0f * dpi, ImGui::GetContentRegionAvail().y * 0.55f);
@@ -205,7 +209,90 @@ void drawVocals(App& app) {
             dl->AddLine(ImVec2(X(a0[0].get<double>()), Y(a0[1].get<double>())), ImVec2(X(a1[0].get<double>()), Y(a1[1].get<double>())),
                         col::rgb(0xFFFFF0, static_cast<int>(60 + 195 * std::clamp(conf, 0.0f, 1.0f))), 1.2f * dpi);
         }
-        ImGui::Dummy(ImVec2(W, H));
+        // GMB 14 note editor: drag notes, right-click menu
+        {
+            const ImU32 cEd = col::rgb(0x4FC3F7);
+            for (auto& n : notes)
+                if (n.value("edited", false)) {
+                    const float x0 = X(n.value("start", 0.0)), x1 = std::max(x0 + 3, X(n.value("end", 0.0)));
+                    const double tgt = n.value("target", 60.0);
+                    dl->AddRectFilled(ImVec2(x0, Y(tgt) - 4), ImVec2(x1, Y(tgt) + 4), col::rgb(0x4FC3F7, 190), 2);
+                    dl->AddRect(ImVec2(x0, Y(tgt) - 5), ImVec2(x1, Y(tgt) + 5), cEd, 2, 0, 1.5f);
+                }
+            ImGui::SetCursorScreenPos(o);
+            ImGui::InvisibleButton("##noteCanvas", ImVec2(W, H), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+            static int dragNote = -1, menuNote = -1;
+            static double dragPitch = 0;
+            const ImVec2 mp = ImGui::GetIO().MousePos;
+            auto noteAt = [&](const ImVec2& m) {
+                int best = -1;
+                float bestDy = 10 * dpi;
+                for (size_t i = 0; i < notes.size(); ++i) {
+                    const auto& n = notes[i];
+                    const float x0 = X(n.value("start", 0.0)), x1 = std::max(x0 + 3, X(n.value("end", 0.0)));
+                    if (m.x < x0 || m.x > x1) continue;
+                    for (double pitch : {n.value("detected", 60.0), n.value("target", 60.0)}) {
+                        const float dy = std::fabs(Y(pitch) - m.y);
+                        if (dy < bestDy) {
+                            bestDy = dy;
+                            best = static_cast<int>(i);
+                        }
+                    }
+                }
+                return best;
+            };
+            auto pitchAt = [&](float y) {
+                const double m = lo + (o.y + H - y) / H * (hi - lo);
+                return ImGui::GetIO().KeyAlt ? std::round(m * 100.0) / 100.0 : std::round(m);
+            };
+            if (ImGui::IsItemActivated() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) dragNote = noteAt(mp);
+            if (dragNote >= 0 && ImGui::IsItemActive()) {
+                dragPitch = pitchAt(mp.y);
+                const auto& n = notes[static_cast<size_t>(dragNote)];
+                const float x0 = X(n.value("start", 0.0)), x1 = std::max(x0 + 3, X(n.value("end", 0.0)));
+                dl->AddRectFilled(ImVec2(x0, Y(dragPitch) - 5), ImVec2(x1, Y(dragPitch) + 5), col::rgb(0x4FC3F7, 220), 2);
+                ImGui::SetTooltip("%s  (%+.0f cents vs sung)", noteName(static_cast<int>(std::lround(dragPitch))).c_str(),
+                                  (dragPitch - n.value("detected", 60.0)) * 100.0);
+            }
+            if (dragNote >= 0 && ImGui::IsItemDeactivated()) {
+                const auto& n = notes[static_cast<size_t>(dragNote)];
+                if (std::fabs(dragPitch - n.value("target", 60.0)) > 0.005 &&
+                    app.run("SetNoteEdit", {{"clipId", clip->id}, {"start", n.value("start", 0.0)}, {"end", n.value("end", 0.0)}, {"target", dragPitch}}) &&
+                    app.run("PitchEditorData", app.vocalEditorSettings)) {
+                    app.vocalResult = app.lastResult();
+                    app.vocalResult["kind"] = "editor";
+                }
+                dragNote = -1;
+            }
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                menuNote = noteAt(mp);
+                if (menuNote >= 0) ImGui::OpenPopup("noteMenu");
+            }
+            if (ImGui::BeginPopup("noteMenu")) {
+                if (menuNote >= 0 && menuNote < static_cast<int>(app.vocalResult.value("notes", json::array()).size())) {
+                    const json n = app.vocalResult["notes"][static_cast<size_t>(menuNote)];
+                    ImGui::TextDisabled("%s at %.2f s", n.value("note", "").c_str(), n.value("start", 0.0));
+                    const json base = {{"clipId", clip->id}, {"start", n.value("start", 0.0)}, {"end", n.value("end", 0.0)}};
+                    bool changed = false;
+                    if (ImGui::MenuItem("Keep as sung (no correction)")) {
+                        json a = base;
+                        a["keep"] = true;
+                        changed = app.run("SetNoteEdit", a);
+                    }
+                    if (ImGui::MenuItem("Automatic (remove my edit)")) {
+                        json a = base;
+                        a["clear"] = true;
+                        changed = app.run("SetNoteEdit", a);
+                    }
+                    if (ImGui::MenuItem("Reset ALL my note edits of this clip")) changed = app.run("ClearNoteEdits", {{"clipId", clip->id}});
+                    if (changed && app.run("PitchEditorData", app.vocalEditorSettings)) {
+                        app.vocalResult = app.lastResult();
+                        app.vocalResult["kind"] = "editor";
+                    }
+                }
+                ImGui::EndPopup();
+            }
+        }
         if (ImGui::BeginTable("editnotes", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Borders, ImVec2(0, 0))) {
             for (const char* h : {"time", "detected", "target", "cents", "confidence", "status", "why"}) ImGui::TableSetupColumn(h);
             ImGui::TableHeadersRow();

@@ -22,6 +22,15 @@ enum class GuardianMode { Off, Warn, Assist, Lock };
 const char* guardianModeId(GuardianMode m);
 GuardianMode guardianModeFromId(const std::string& s);
 
+// GMB 14: a manual decision for one note of the take (seconds in the ORIGINAL take). It wins over
+// the automatic rules: keep = leave the note exactly as sung; otherwise move its centre to targetMidi
+// (full strength; vibrato/slide shapes inside the note are kept like for automatic corrections).
+struct NoteEdit {
+    double start = 0, end = 0;
+    double targetMidi = 0;
+    bool keep = false;
+};
+
 struct PitchGuardianSettings {
     GuardianMode mode = GuardianMode::Assist;
     Key key;
@@ -42,6 +51,7 @@ struct PitchGuardianSettings {
     // For rap-like takes (analysis.rapIndicator > 0.6) the limit is raised to rapMinNoteSeconds.
     double minNoteSeconds = 0.10;
     double rapMinNoteSeconds = 0.20;
+    std::vector<NoteEdit> edits;      // GMB 14 manual note decisions (applied to the note whose centre lies inside)
 };
 
 struct NoteCorrection {

@@ -221,6 +221,7 @@ public:
     std::deque<UiLog> log;
     void message(int level, const std::string& text);
     json vocalResult = json::object();  // last vocal analysis result shown in VOCALS
+    json vocalEditorSettings = json::object(); // GMB 14: settings the pitch editor was opened with
     json masterResult = json::object(); // last mix/master analysis
     json checkResult = json::object();  // project assistant findings
 

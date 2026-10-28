@@ -61,6 +61,8 @@ struct AudioClip {
     std::string rawAssetId;
     double rawOffsetSec = 0.0;
     std::string tunedAssetId;
+    // GMB 14 manual note edits of the pitch editor: [{start, end, target, keep}] in seconds of the original take
+    nlohmann::json noteEdits = nlohmann::json::array();
     bool listeningOriginal() const { return !rawAssetId.empty() && assetId == rawAssetId; }
     double endBeat() const { return startBeat + lengthBeats; }
 };
