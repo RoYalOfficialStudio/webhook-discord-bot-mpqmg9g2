@@ -1,0 +1,507 @@
+== gmb13
+    sine 110 Hz                    clicks 0, max score 0.00
+    sine 440 Hz                    clicks 0, max score 0.00
+    sine 2 kHz                     clicks 0, max score 0.00
+    glissando 100->1000 Hz         clicks 0, max score 1.63
+    vibrato 220 Hz 6 Hz +-50 c     clicks 0, max score 1.90
+    sung melody (smooth voice)     clicks 0, max score 5.28
+    voice with vibrato             clicks 0, max score 6.08
+    silence                        clicks 0, max score 0.00
+    very quiet sine (-80 dBFS)     clicks 0, max score 0.00
+[ OK ] gmb13/click detector: smooth reference signals have no clicks (8.640s)
+    sine 440 single-sample spike +0.05          events 1, max score 45.8 at 30011
+    sine 440 dropout: 64 samples of silence     events 1, max score 16.7 at 40064
+    sine 440 block jump: 0.5 ms skipped         events 2, max score 152.5 at 50000
+    sine 440 polarity flip                      events 1, max score 103.0 at 61234
+    sine 440 gain step -6 dB                    events 1, max score 104.2 at 70000
+    melody   single-sample spike +0.05          events 1, max score 43.5 at 30012
+    melody   dropout: 64 samples of silence     events 1, max score 72.6 at 40064
+    melody   block jump: 0.5 ms skipped         events 2, max score 73.9 at 50000
+    melody   polarity flip                      events 1, max score 25.8 at 61234
+    melody   gain step -6 dB                    events 1, max score 34.6 at 70000
+[ OK ] gmb13/click detector finds jumps, dropouts and block discontinuities at the right sample (9.296s)
+    hard-clipped sine (+12 dB): events 0, max score 11.7 (corner of the clip, reported - clipping is a distortion)
+[ OK ] gmb13/click detector: hard clipping and extreme levels are measured, not crashing (1.454s)
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x55cbcec7159a in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x55cbcec7159a in roy_test_fn_90 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb13_diag.cpp:144
+    #2 0x55cbce5b52a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55cbce5b52a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7f56e622a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7f56e622a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55cbce5cc684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+    bursty delivery: 0 gaps, longest interval 21.3 ms
+    25 ms stall: 1 gap(s), size 24.85 ms
+[ OK ] gmb13/callback timing: jitter, bursty delivery and clock drift give no gaps; a stall is counted with its size (0.372s)
+    null backend 0.7 s: 131 callbacks, 0 timing gaps, longest interval 11.13 ms, frames 256..256, CPU overloads 0
+[ OK ] gmb13/device timing on the null backend: counters run, kept separate from CPU overloads (0.712s)
+    VocalTune block 256       max diff to block 64: 0
+    VocalTune block 512       max diff to block 64: 0
+    VocalTune block 562       max diff to block 64: 0
+    VocalTune block 1024      max diff to block 64: 0
+    VocalTune block irregular max diff to block 64: 0
+[ OK ] gmb13/block independence: existing RoyVocalTune gives the same output for every block size (4.576s)
+    LIVE chain output (block 64): peak 0.299, clicks 1, max score 51.0
+    LIVE chain block 256       max diff to block 64: 0
+    LIVE chain block 512       max diff to block 64: 0
+    LIVE chain block 562       max diff to block 64: 0
+    LIVE chain block 1024      max diff to block 64: 0
+    LIVE chain block irregular max diff to block 64: 0
+    worst difference over all block sizes: 0 (-999.0 dBFS)
+[ OK ] gmb13/block independence: the whole LIVE VOCAL chain in the engine (measured per block size) (6.794s)
+    abrupt-start sine C4 (test-signal onset) input clicks 0 | output clicks   1, max score   39.7 | 0.015s
+    in-tune sine C4 (no correction)        input clicks 0 | output clicks   0, max score    1.6 |
+    sharp sine C4 +40 c, speed 20          input clicks 0 | output clicks   0, max score    0.0 |
+    sharp sine C4 +40 c, speed 0 (hard)    input clicks 0 | output clicks   0, max score    1.4 |
+    melody off-key, speed 20               input clicks 0 | output clicks   0, max score    5.2 |
+    melody off-key, speed 0 (hard)         input clicks 0 | output clicks   0, max score    5.0 |
+    phrase after 0.5 s silence, speed 0    input clicks 0 | output clicks   0, max score    5.8 |
+    glissando A3->A4, speed 0              input clicks 0 | output clicks   0, max score    4.6 |
+    vibrato A3 +-50 c, speed 20            input clicks 0 | output clicks   0, max score    0.0 |
+    F#4 in C major (off-key), speed 0      input clicks 0 | output clicks   0, max score    1.5 |
+    between E4/F4 (64.5), speed 0          input clicks 0 | output clicks   0, max score    1.6 |
+[ OK ] gmb13/MEASUREMENT: discontinuities produced by the existing RoyVocalTune (algorithm unchanged) (29.152s)
+    speed 200 -> 0 ms      output clicks   0, max score    5.3
+    strength 0 -> 1        output clicks   0, max score    5.6
+    key C -> F#            output clicks   0, max score    5.2
+    threshold 50 -> 0 c    output clicks   0, max score    4.9
+[ OK ] gmb13/MEASUREMENT: parameter changes during playback (existing RoyVocalTune) (8.125s)
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37:69: runtime error: store to null pointer of type 'bool'
+    #0 0x55cbcec6e67d in roytest::AllocationCounter::AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37
+    #1 0x55cbcec6e67d in roy_test_fn_310 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb13_diag.cpp:353
+    #2 0x55cbce5b52a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55cbce5b52a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7f56e622a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7f56e622a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55cbce5cc684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x55cbcec6e431 in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x55cbcec6e431 in roy_test_fn_310 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb13_diag.cpp:359
+    #2 0x55cbce5b52a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55cbce5b52a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7f56e622a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7f56e622a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55cbce5cc684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38:47: runtime error: store to null pointer of type 'bool'
+    #0 0x55cbcec6e41e in roytest::AllocationCounter::~AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38
+    #1 0x55cbcec6e41e in roy_test_fn_310 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb13_diag.cpp:360
+    #2 0x55cbce5b52a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55cbce5b52a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7f56e622a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7f56e622a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55cbce5cc684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+    44.1 kHz sharp sine: detected 60.40 MIDI (input 60.40), applied shift -0.40 st, output clicks 0 (max 0.0)
+    48.0 kHz sharp sine: detected 60.40 MIDI (input 60.40), applied shift -0.40 st, output clicks 0 (max 0.0)
+    overload +20 dB for 1 s, then normal: peak after 1.2 s 0.400 (input 0.4)
+[ OK ] gmb13/MEASUREMENT: existing RoyVocalTune at 44.1 kHz and 48 kHz, silence and overload recovery (3.155s)
+    44100 Hz no loopback (noise only): ok=0, no clear echo of the test signal (correlation 0.06) - is output connected to input?
+    48000 Hz no loopback (noise only): ok=0, no clear echo of the test signal (correlation 0.06) - is output connected to input?
+[ OK ] gmb13/round-trip latency: probe analysis finds the exact delay, rejects missing loopback (19.383s)
+    engine loopback 777 samples: round-trip latency 777 samples = 16.19 ms (correlation 1.00)
+[ OK ] gmb13/round-trip latency through the engine with a simulated loopback cable; no probe left in the output afterwards (1.736s)
+
+12 tests, 0 failed, 116 checks total
+EXIT 0
+== vocaltune2
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37:69: runtime error: store to null pointer of type 'bool'
+    #0 0x55acfd542203 in roytest::AllocationCounter::AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37
+    #1 0x55acfd542203 in roy_test_fn_72 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:111
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x55acfd542172 in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x55acfd542172 in roy_test_fn_72 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:113
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38:47: runtime error: store to null pointer of type 'bool'
+    #0 0x55acfd54215f in roytest::AllocationCounter::~AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38
+    #1 0x55acfd54215f in roy_test_fn_72 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:114
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+    white noise: 0 of 500 estimates voiced
+[ OK ] vocaltune2/realtime tracker: accuracy 80..900 Hz at 44.1/48 kHz, confidence, silence, noise, no allocation (3.373s)
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37:69: runtime error: store to null pointer of type 'bool'
+    #0 0x55acfd54a223 in roytest::AllocationCounter::AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37
+    #1 0x55acfd54a223 in roy_test_fn_118 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:176
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x55acfd54a210 in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x55acfd54a210 in roy_test_fn_118 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:179
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38:47: runtime error: store to null pointer of type 'bool'
+    #0 0x55acfd54a1fd in roytest::AllocationCounter::~AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38
+    #1 0x55acfd54a1fd in roy_test_fn_118 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:180
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+    PSOLA latency at 48 kHz: 1264 samples (26.33 ms)
+    ratio 1, voiced sine: max deviation from the delayed input 2.98e-08
+    -5 st, formant kept : pitch 50.000 (target 50.000), F-centroid 745 -> 768 Hz (+3.1 %)
+    -5 st, formant moved: pitch 50.000 (target 50.000), F-centroid 745 -> 600 Hz (-19.4 %)
+    +2 st, formant kept : pitch 57.001 (target 57.000), F-centroid 745 -> 757 Hz (+1.7 %)
+    +2 st, formant moved: pitch 57.001 (target 57.000), F-centroid 745 -> 829 Hz (+11.3 %)
+    +5 st, formant kept : pitch 60.000 (target 60.000), F-centroid 745 -> 740 Hz (-0.6 %)
+    +5 st, formant moved: pitch 60.000 (target 60.000), F-centroid 745 -> 960 Hz (+29.0 %)
+[ OK ] vocaltune2/PSOLA: fixed latency, transparent at ratio 1, exact pitch shift, formants kept (5.399s)
+[ OK ] vocaltune2/VocalTune 2 corrects to the scale: +-40 cents at several pitches, 44.1 and 48 kHz (9.592s)
+    F#4+20c, allowChromatic 0 -> 67.00
+    F#4+20c, allowChromatic 1 -> 66.00
+    white noise: max applied shift 0.000 st
+[ OK ] vocaltune2/VocalTune 2: chromatic vs diatonic targets, threshold, unvoiced/noise do not move the pitch (1.494s)
+    vibrato depth input 0.49 st (centre 57.30) | keep: 0.54 st (centre 56.99) | hard: 0.22 st (centre 57.00)
+    held C4+35c: humanize 0 -> 59.999, humanize 1 -> 60.209
+    glissando A3->A4 (hard): 0 clicks, max score 4.0
+[ OK ] vocaltune2/VocalTune 2: vibrato kept (vibrato 1) or flattened (Hard), held notes, glides without steps (9.277s)
+    mix 0: max deviation from the input delayed by 1432 samples: 0.00e+00
+    mix 50 %: level -0.00 dB vs input
+    mix 100 %: level -0.00 dB vs input
+    speed          200 -> 0     clicks 0, max score 5.3
+    mix              0 -> 1     clicks 0, max score 5.4
+    keyRoot          0 -> 6     clicks 0, max score 5.4
+    mode             0 -> 3     clicks 0, max score 5.4
+    formantShift     0 -> 4     clicks 0, max score 5.4
+    strength         0 -> 1     clicks 0, max score 5.4
+[ OK ] vocaltune2/VocalTune 2: dry/wet 0/50/100 %, no comb filter, smooth parameter changes, no clicks (12.873s)
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37:69: runtime error: store to null pointer of type 'bool'
+    #0 0x55acfd54f962 in roytest::AllocationCounter::AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37
+    #1 0x55acfd54f962 in roy_test_fn_332 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:364
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x55acfd54fa9b in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x55acfd54fa9b in roy_test_fn_332 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:370
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38:47: runtime error: store to null pointer of type 'bool'
+    #0 0x55acfd54fa88 in roytest::AllocationCounter::~AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38
+    #1 0x55acfd54fa88 in roy_test_fn_332 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_vocaltune2.cpp:371
+    #2 0x55acfcb272a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55acfcb272a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcf8c42a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcf8c42a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55acfcb3e684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+    block 256       max diff to block 64: 0
+    block 512       max diff to block 64: 0
+    block 562       max diff to block 64: 0
+    block 1024      max diff to block 64: 0
+    block irregular max diff to block 64: 0
+    +20 dB for 1 s then normal: peak after 1.3 s 0.300
+    roy.vocaltune  worst note error   0.5 cents (per note: -0 -0 +0 -0 -0 -0 -1 -0), clicks 0 (max score 5.0), latency 0 samples
+    roy.vocaltune2 worst note error   0.2 cents (per note: -0 -0 +0 -0 -0 -0 +0 +0), clicks 0 (max score 5.8), latency 1432 samples
+    vt2 Natural    worst note error  11.7 cents (per note: +2 +11 +10 +11 +7 +8 +12 +4), clicks 0 (max score 5.6), latency 1432 samples
+    vt2 Modern     worst note error   2.8 cents (per note: -0 +3 +2 +2 +1 +2 +3 +1), clicks 0 (max score 5.5), latency 1432 samples
+[ OK ] vocaltune2/VocalTune 2: block independence, silence, overload recovery, no allocation, old vs new (20.499s)
+    impulse at output: vocal (VocalTune 2) 13432, beat 13432
+    bypassed: vocal 13432, beat 13432
+[ OK ] vocaltune2/VocalTune 2 in the engine: latency reported, delay compensation lines the channel up with the beat (0.693s)
+[ OK ] vocaltune2/LIVE VOCAL can use VocalTune 2; switching keeps key/speed; presets with roy.vocaltune2 follow the song key (0.014s)
+
+9 tests, 0 failed, 145 checks total
+EXIT 0
+== gmb14
+    edited: note 1 61.997 (target 62), note 2 64.381 (kept, sung 64.38)
+[ OK ] gmb14/manual note target and keep-as-sung win over the automatic correction (4.962s)
+2026-10-28T17:26:45.530Z [WARN] [command] SetNoteEdit failed: invalid note range
+[ OK ] gmb14/SetNoteEdit / ClearNoteEdits: one undo step each, replace per note, saved with the project (0.031s)
+
+2 tests, 0 failed, 19 checks total
+EXIT 0
+== gmb15
+2026-10-28T17:26:45.822Z [WARN] [command] SetPunch failed: punch out must be after punch in
+2026-10-28T17:26:45.830Z [WARN] [command] SetPunch failed: punch in before the song start
+[ OK ] gmb15/SetPunch: range check, pre-roll in bars, one undo step, saved with the project (0.026s)
+
+1 tests, 0 failed, 16 checks total
+EXIT 0
+== livevocal
+2026-10-28T17:26:46.706Z [WARN] [command] SetupLiveVocal failed: LIVE VOCAL needs an audio / vocal track
+SetupLiveVocal: LIVE VOCAL needs an audio / vocal track
+[ OK ] livevocal/LIVE VOCAL: the voice is heard in real time, tuned to the song key, with the transport stopped (0.619s)
+2026-10-28T17:26:46.736Z [WARN] [command] ApplyChannelPreset failed: not a RoY channel preset
+ApplyChannelPreset: not a RoY channel preset
+[ OK ] livevocal/channel preset: save a mixed vocal, load it into the next song (new key), undo, backups (0.032s)
+[ OK ] livevocal/factory vocal chains are valid, use only built-in effects and load (0.013s)
+    Bright Double Vocal - light tune: live peak 0.296
+    Crystal Hard Vocal - clear, light tune: live peak 0.483
+    Dark Double Vocal - light tune: live peak 0.336
+    Devil Voice - hard tune: live peak 0.412
+    Glass Halo - fifth harmony tune: live peak 0.366
+    Lil Peep Style - Emo Dream Tune: live peak 0.548
+    New Wave Clear Vocal: live peak 0.379
+    PRO Beat - room for vocals: live peak 0.602
+    PRO Vocal Mix: live peak 0.397
+    RoY ULTIMATE Vocal - tune: live peak 0.513
+    Shasko Style - Melodic Autotune: live peak 0.469
+    Suicideboys Style - Dark Ghost Tune: live peak 0.749
+    Travis Style - Aggressive Rage Vocal: live peak 0.406
+    Travis Style - Clear Rage Vocal: live peak 0.346
+    UK Drill Dirty Vocal: live peak 0.365
+    US Street Raw Vocal: live peak 0.439
+    Warm Loud Vocal - autotune: live peak 0.891
+[ OK ] livevocal/shipped vocal chains (UserData presets of the portable build) load and sound sane live (22.339s)
+    limiter steady-state deviation from a clean scaled sine: 0.0001
+[ OK ] livevocal/output protection: a too-loud mix never hard-clips at the sound card, renders stay untouched (0.107s)
+
+5 tests, 0 failed, 260 checks total
+EXIT 0
+== gmb01
+[ OK ] gmb01/tempo map conversions (0.001s)
+[ OK ] gmb01/transport play pause stop seek (0.000s)
+[ OK ] gmb01/transport loop splits blocks (0.000s)
+[ OK ] gmb01/count-in and pre-roll (0.000s)
+[ OK ] gmb01/metronome clicks on every beat (0.004s)
+[ OK ] gmb01/engine plays a clip bit-exact at unity (0.015s)
+[ OK ] gmb01/sample rates and buffer sizes give identical output (0.195s)
+[ OK ] gmb01/routing busses sends mute solo (0.029s)
+[ OK ] gmb01/pre-fader send ignores fader (0.009s)
+[ OK ] gmb01/plugin delay compensation aligns paths (0.005s)
+[ OK ] gmb01/automation drives channel gain (0.025s)
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x557be69d0ff5 in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x557be69d0ff5 in roy_test_fn_330 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb01_audio.cpp:356
+    #2 0x557be66822a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x557be66822a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7fcd7202a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7fcd7202a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x557be6699684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+[ OK ] gmb01/audio callback does not allocate (0.357s)
+[ OK ] gmb01/non-finite samples never reach the output (0.002s)
+[ OK ] gmb01/graph hot swap while playing (0.017s)
+[ OK ] gmb01/null audio device runs the engine (0.043s)
+
+15 tests, 0 failed, 140 checks total
+EXIT 0
+== gmb04
+[ OK ] gmb04/record a take into its own file (0.422s)
+[ OK ] gmb04/recorded take plays back at the right position (0.427s)
+[ OK ] gmb04/loop recording creates one take per pass (0.468s)
+[ OK ] gmb04/punch in and out (0.450s)
+[ OK ] gmb04/existing files are never overwritten (0.727s)
+[ OK ] gmb04/comping selects ranges across takes (0.000s)
+[ OK ] gmb04/flatten comp keeps audio identical (0.442s)
+[ OK ] gmb04/input clipping warning and meter (0.066s)
+[ OK ] gmb04/never-lose: recover a performance without pressing record (0.389s)
+[ OK ] gmb04/never-lose memory is bounded (0.992s)
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37:69: runtime error: store to null pointer of type 'bool'
+    #0 0x5614f58b3d81 in roytest::AllocationCounter::AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37
+    #1 0x5614f58b3d81 in roy_test_fn_268 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb04_record.cpp:278
+    #2 0x5614f54602a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x5614f54602a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7f992682a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7f992682a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x5614f5477684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x5614f58b3d6e in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x5614f58b3d6e in roy_test_fn_268 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb04_record.cpp:280
+    #2 0x5614f54602a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x5614f54602a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7f992682a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7f992682a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x5614f5477684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38:47: runtime error: store to null pointer of type 'bool'
+    #0 0x5614f58b3d51 in roytest::AllocationCounter::~AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38
+    #1 0x5614f58b3d51 in roy_test_fn_268 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb04_record.cpp:281
+    #2 0x5614f54602a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x5614f54602a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7f992682a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7f992682a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x5614f5477684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+[ OK ] gmb04/recording path does not allocate on the audio thread (0.623s)
+
+11 tests, 0 failed, 92 checks total
+EXIT 0
+== gmb06
+[ OK ] gmb06/Pitch Guardian command is non-destructive and undoable (2.695s)
+[ OK ] gmb06/Vocal Doctor command returns executable fixes (1.352s)
+[ OK ] gmb06/breath reduction writes undoable automation (0.454s)
+[ OK ] gmb06/Double Magnet command aligns a double track (0.994s)
+[ OK ] gmb06/pitch detection accuracy (2.602s)
+[ OK ] gmb06/analysis distinguishes stable, vibrato, slide (1.739s)
+[ OK ] gmb06/ASSIST corrects a sharp note and leaves in-tune notes untouched (2.845s)
+[ OK ] gmb06/vibrato is preserved while the centre is corrected (3.879s)
+[ OK ] gmb06/OFF-KEY filter and ALLOW CHROMATIC decide targets (0.671s)
+[ OK ] gmb06/low confidence is not corrected aggressively (0.660s)
+[ OK ] gmb06/formant preservation (2.247s)
+[ OK ] gmb06/slide is preserved and transitions stay continuous (2.231s)
+[ OK ] gmb06/vocal doctor finds technical problems (4.514s)
+[ OK ] gmb06/vocal doctor detects breaths and plosives (1.750s)
+[ OK ] gmb06/vocal microscope inspects a region (2.654s)
+[ OK ] gmb06/double magnet tightens a sloppy double (8.103s)
+[ OK ] gmb06/ghost take compares timing and pitch (1.565s)
+[ OK ] gmb06/flow analyzer classifies early, on beat, late (0.334s)
+[ OK ] gmb06/onsets, bpm and key estimation (1.194s)
+
+19 tests, 0 failed, 256 checks total
+EXIT 0
+== gmb09
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37:69: runtime error: store to null pointer of type 'bool'
+    #0 0x55c381c33c18 in roytest::AllocationCounter::AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:37
+    #1 0x55c381c33c18 in roy_test_fn_54 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb09_effects.cpp:99
+    #2 0x55c38163e2a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55c38163e2a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7ff7d6c2a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7ff7d6c2a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55c381655684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39:33: runtime error: load of null pointer of type 'long int'
+    #0 0x55c381c347e9 in roytest::AllocationCounter::count() const /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:39
+    #1 0x55c381c347e9 in roy_test_fn_54 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb09_effects.cpp:101
+    #2 0x55c38163e2a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55c38163e2a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7ff7d6c2a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7ff7d6c2a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55c381655684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38:47: runtime error: store to null pointer of type 'bool'
+    #0 0x55c381c347ca in roytest::AllocationCounter::~AllocationCounter() /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/TestFramework.h:38
+    #1 0x55c381c347ca in roy_test_fn_54 /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/test_gmb09_effects.cpp:102
+    #2 0x55c38163e2a5 in std::function<void ()>::operator()() const /usr/include/c++/13/bits/std_function.h:591
+    #3 0x55c38163e2a5 in main /home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/tests/main.cpp:132
+    #4 0x7ff7d6c2a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #5 0x7ff7d6c2a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #6 0x55c381655684 in _start (/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-asan/roy_tests+0x83fd684) (BuildId: eae240d236ff12275325a481a07c9d4b64c5e197)
+
+[ OK ] gmb09/every processor survives all test signals at all sample rates (26.645s)
+[ OK ] gmb09/RoY EQ matches its response curve (0.024s)
+[ OK ] gmb09/compressor static curve, makeup and sidechain (0.026s)
+[ OK ] gmb09/limiter: ceiling, true peak, latency (0.638s)
+[ OK ] gmb09/gate, de-esser, transient, clipper (0.127s)
+[ OK ] gmb09/reverb decay and delay timing (0.053s)
+[ OK ] gmb09/saturation harmonics and oversampling alias suppression (0.673s)
+[ OK ] gmb09/modulation, stereo and pitch (0.078s)
+[ OK ] gmb09/VocalTune corrects a sharp note in realtime (0.308s)
+[ OK ] gmb09/noise cleaner improves SNR, analyzer, dynamic space (1.812s)
+[ OK ] gmb09/BS.1770 loudness, gating, true peak (13.467s)
+
+11 tests, 0 failed, 1171 checks total
+EXIT 0
+== mixer
+2026-10-28T17:28:42.680Z [WARN] [command] SetSoloSafe failed: the master is never muted by solo
+SetSoloSafe failed: the master is never muted by solo
+[ OK ] mixer/solo safe: a solo-safe track stays audible while another track is soloed (0.066s)
+[ OK ] mixer/sends: pre/post switch takes effect immediately, remove send drops its automation (0.042s)
+2026-10-28T17:28:42.788Z [WARN] [command] DeleteBus failed: bus not found
+DeleteBus failed: bus not found
+2026-10-28T17:28:42.801Z [WARN] [command] RenameChannel failed: name must not be empty
+RenameChannel failed: name must not be empty
+[ OK ] mixer/delete bus re-routes its inputs, removes sends into it; rename keeps track and channel in sync (0.062s)
+2026-10-28T17:28:43.612Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:28:44.098Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:28:44.797Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:28:44.805Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:28:44.813Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:28:45.167Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+[ OK ] mixer/random routing graphs: cycles rejected, superposition holds, multi-core is bit-identical (2.497s)
+2026-10-28T17:28:45.315Z [WARN] [command] AddSend failed: this send would create a feedback loop
+AddSend failed: this send would create a feedback loop
+2026-10-28T17:28:45.326Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:28:45.330Z [WARN] [command] AddInsert failed: this sidechain would create a feedback loop
+AddInsert failed: this sidechain would create a feedback loop
+2026-10-28T17:28:45.336Z [WARN] [command] SetSidechain failed: this sidechain would create a feedback loop
+SetSidechain failed: this sidechain would create a feedback loop
+2026-10-28T17:28:45.340Z [WARN] [command] SetSidechain failed: sidechain source not found
+SetSidechain failed: sidechain source not found
+[ OK ] mixer/feedback loops through sends and sidechains are refused (0.048s)
+
+5 tests, 0 failed, 491 checks total
+EXIT 0
+== takes
+[ OK ] gmb04/comping selects ranges across takes (0.000s)
+[ OK ] mixer/sends: pre/post switch takes effect immediately, remove send drops its automation (0.050s)
+2026-10-28T17:28:45.756Z [WARN] [command] CompSelect failed: take not found or range outside the take
+CompSelect: take not found or range outside the take
+2026-10-28T17:28:45.762Z [WARN] [command] CompSelect failed: empty comp range
+CompSelect: empty comp range
+2026-10-28T17:28:45.765Z [WARN] [command] CompSelect failed: take not found or range outside the take
+CompSelect: take not found or range outside the take
+[ OK ] takes/swipe comp: a range plays from the chosen take, undo restores the previous comp (0.060s)
+2026-10-28T17:28:45.784Z [WARN] [command] RenameTake failed: empty name
+RenameTake: empty name
+2026-10-28T17:28:45.838Z [WARN] [command] CompWholeTake failed: track is locked
+CompWholeTake: track is locked
+2026-10-28T17:28:45.841Z [WARN] [command] DeleteTake failed: track is locked
+DeleteTake: track is locked
+[ OK ] takes/delete / rename / clear: model and audio follow, undo brings everything back (0.076s)
+2026-10-28T17:28:45.896Z [WARN] [command] FlattenComp failed: track has no comp
+FlattenComp: track has no comp
+[ OK ] takes/flatten comp: clips replace the comp with identical audio, one undo step (0.057s)
+[ OK ] takes/runtime asset cache: deleted takes and old stretch variants are released, pinned/used data stays (0.480s)
+[ OK ] takes/waveform store keeps only peaks of assets the project still references (0.017s)
+
+7 tests, 0 failed, 125 checks total
+EXIT 0
+== vocal-editor
+[ OK ] vocal-editor/pitch editor data: waveform, curve, targets, cents and statuses; changes nothing (1.154s)
+2026-10-28T17:28:48.076Z [WARN] [command] VocalAB failed: no tuned version yet - apply Pitch Guardian first
+VocalAB failed: no tuned version yet - apply Pitch Guardian first
+[ OK ] vocal-editor/A/B: original stays untouched, switching is undoable, re-tuning starts from the original (3.255s)
+[ OK ] vocal-editor/low confidence notes are shown UNCERTAIN and not corrected aggressively (0.533s)
+
+3 tests, 0 failed, 52 checks total
+EXIT 0
+== beatimport
+[ OK ] beatimport/tempo and key from typical beat file names (0.008s)
+[ OK ] beatimport/MP3 beat: analysed, imported on its own track at bar 1 with song tempo + key, one undo step (12.279s)
+2026-10-28T17:29:09.640Z [WARN] [command] ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/readme.txt
+ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/readme.txt
+2026-10-28T17:29:09.647Z [WARN] [command] ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/missing.mp3
+ImportBeat failed: cannot read audio file: cannot decode /tmp/roy_tests/beat_wav_src/missing.mp3
+2026-10-28T17:29:09.651Z [WARN] [command] ImportBeat failed: tempo must be between 10 and 999 BPM
+ImportBeat failed: tempo must be between 10 and 999 BPM
+2026-10-28T17:29:09.655Z [WARN] [command] ImportBeat failed: cannot parse key H Dur
+ImportBeat failed: cannot parse key H Dur
+[ OK ] beatimport/WAV beat without tempo/key keeps the song settings; onto an existing track; bad files refused (8.297s)
+[ OK ] beatimport/export after IMPORT BEAT: the exported WAV and MP3 contain the beat (not silence) (2.806s)
+[ OK ] beatimport/export contains the RECORDED vocal take (comp), also without any other clip (1.436s)
+
+5 tests, 0 failed, 96 checks total
+EXIT 0

@@ -1,0 +1,233 @@
+== gmb13
+    sine 110 Hz                    clicks 0, max score 0.00
+    sine 440 Hz                    clicks 0, max score 0.00
+    sine 2 kHz                     clicks 0, max score 0.00
+    glissando 100->1000 Hz         clicks 0, max score 1.63
+    vibrato 220 Hz 6 Hz +-50 c     clicks 0, max score 1.90
+    sung melody (smooth voice)     clicks 0, max score 5.28
+    voice with vibrato             clicks 0, max score 6.08
+    silence                        clicks 0, max score 0.00
+    very quiet sine (-80 dBFS)     clicks 0, max score 0.00
+[ OK ] gmb13/click detector: smooth reference signals have no clicks (17.334s)
+    sine 440 single-sample spike +0.05          events 1, max score 45.8 at 30011
+    sine 440 dropout: 64 samples of silence     events 1, max score 16.7 at 40064
+    sine 440 block jump: 0.5 ms skipped         events 2, max score 152.5 at 50000
+    sine 440 polarity flip                      events 1, max score 103.0 at 61234
+    sine 440 gain step -6 dB                    events 1, max score 104.2 at 70000
+    melody   single-sample spike +0.05          events 1, max score 43.5 at 30012
+    melody   dropout: 64 samples of silence     events 1, max score 72.6 at 40064
+    melody   block jump: 0.5 ms skipped         events 2, max score 73.9 at 50000
+    melody   polarity flip                      events 1, max score 25.8 at 61234
+    melody   gain step -6 dB                    events 1, max score 34.6 at 70000
+[ OK ] gmb13/click detector finds jumps, dropouts and block discontinuities at the right sample (18.205s)
+    hard-clipped sine (+12 dB): events 0, max score 11.7 (corner of the clip, reported - clipping is a distortion)
+[ OK ] gmb13/click detector: hard clipping and extreme levels are measured, not crashing (2.454s)
+    bursty delivery: 0 gaps, longest interval 21.3 ms
+    25 ms stall: 1 gap(s), size 24.85 ms
+[ OK ] gmb13/callback timing: jitter, bursty delivery and clock drift give no gaps; a stall is counted with its size (0.021s)
+    null backend 0.7 s: 131 callbacks, 0 timing gaps, longest interval 12.36 ms, frames 256..256, CPU overloads 0
+[ OK ] gmb13/device timing on the null backend: counters run, kept separate from CPU overloads (0.714s)
+    VocalTune block 256       max diff to block 64: 0
+    VocalTune block 512       max diff to block 64: 0
+    VocalTune block 562       max diff to block 64: 0
+    VocalTune block 1024      max diff to block 64: 0
+    VocalTune block irregular max diff to block 64: 0
+[ OK ] gmb13/block independence: existing RoyVocalTune gives the same output for every block size (8.394s)
+    LIVE chain output (block 64): peak 0.299, clicks 1, max score 51.0
+    LIVE chain block 256       max diff to block 64: 0
+    LIVE chain block 512       max diff to block 64: 0
+    LIVE chain block 562       max diff to block 64: 0
+    LIVE chain block 1024      max diff to block 64: 0
+    LIVE chain block irregular max diff to block 64: 0
+    worst difference over all block sizes: 0 (-999.0 dBFS)
+[ OK ] gmb13/block independence: the whole LIVE VOCAL chain in the engine (measured per block size) (13.973s)
+    abrupt-start sine C4 (test-signal onset) input clicks 0 | output clicks   1, max score   39.7 | 0.015s
+    in-tune sine C4 (no correction)        input clicks 0 | output clicks   0, max score    1.6 |
+    sharp sine C4 +40 c, speed 20          input clicks 0 | output clicks   0, max score    0.0 |
+    sharp sine C4 +40 c, speed 0 (hard)    input clicks 0 | output clicks   0, max score    1.4 |
+    melody off-key, speed 20               input clicks 0 | output clicks   0, max score    5.2 |
+    melody off-key, speed 0 (hard)         input clicks 0 | output clicks   0, max score    5.0 |
+    phrase after 0.5 s silence, speed 0    input clicks 0 | output clicks   0, max score    5.8 |
+    glissando A3->A4, speed 0              input clicks 0 | output clicks   0, max score    4.6 |
+    vibrato A3 +-50 c, speed 20            input clicks 0 | output clicks   0, max score    0.0 |
+    F#4 in C major (off-key), speed 0      input clicks 0 | output clicks   0, max score    1.5 |
+    between E4/F4 (64.5), speed 0          input clicks 0 | output clicks   0, max score    1.6 |
+[ OK ] gmb13/MEASUREMENT: discontinuities produced by the existing RoyVocalTune (algorithm unchanged) (55.216s)
+    speed 200 -> 0 ms      output clicks   0, max score    5.3
+    strength 0 -> 1        output clicks   0, max score    5.6
+    key C -> F#            output clicks   0, max score    5.2
+    threshold 50 -> 0 c    output clicks   0, max score    4.9
+[ OK ] gmb13/MEASUREMENT: parameter changes during playback (existing RoyVocalTune) (16.606s)
+    44.1 kHz sharp sine: detected 60.40 MIDI (input 60.40), applied shift -0.40 st, output clicks 0 (max 0.0)
+    48.0 kHz sharp sine: detected 60.40 MIDI (input 60.40), applied shift -0.40 st, output clicks 0 (max 0.0)
+    overload +20 dB for 1 s, then normal: peak after 1.2 s 0.400 (input 0.4)
+[ OK ] gmb13/MEASUREMENT: existing RoyVocalTune at 44.1 kHz and 48 kHz, silence and overload recovery (6.215s)
+    44100 Hz no loopback (noise only): ok=0, no clear echo of the test signal (correlation 0.06) - is output connected to input?
+    48000 Hz no loopback (noise only): ok=0, no clear echo of the test signal (correlation 0.06) - is output connected to input?
+[ OK ] gmb13/round-trip latency: probe analysis finds the exact delay, rejects missing loopback (39.373s)
+    engine loopback 777 samples: round-trip latency 777 samples = 16.19 ms (correlation 1.00)
+[ OK ] gmb13/round-trip latency through the engine with a simulated loopback cable; no probe left in the output afterwards (4.540s)
+
+12 tests, 0 failed, 116 checks total
+EXIT 0
+== vocaltune2
+    white noise: 0 of 500 estimates voiced
+[ OK ] vocaltune2/realtime tracker: accuracy 80..900 Hz at 44.1/48 kHz, confidence, silence, noise, no allocation (5.655s)
+    PSOLA latency at 48 kHz: 1264 samples (26.33 ms)
+    ratio 1, voiced sine: max deviation from the delayed input 2.98e-08
+    -5 st, formant kept : pitch 50.000 (target 50.000), F-centroid 745 -> 768 Hz (+3.1 %)
+    -5 st, formant moved: pitch 50.000 (target 50.000), F-centroid 745 -> 600 Hz (-19.4 %)
+    +2 st, formant kept : pitch 57.001 (target 57.000), F-centroid 745 -> 757 Hz (+1.7 %)
+    +2 st, formant moved: pitch 57.001 (target 57.000), F-centroid 745 -> 829 Hz (+11.3 %)
+    +5 st, formant kept : pitch 60.000 (target 60.000), F-centroid 745 -> 740 Hz (-0.6 %)
+    +5 st, formant moved: pitch 60.000 (target 60.000), F-centroid 745 -> 960 Hz (+29.0 %)
+[ OK ] vocaltune2/PSOLA: fixed latency, transparent at ratio 1, exact pitch shift, formants kept (7.742s)
+[ OK ] vocaltune2/VocalTune 2 corrects to the scale: +-40 cents at several pitches, 44.1 and 48 kHz (16.183s)
+    F#4+20c, allowChromatic 0 -> 67.00
+    F#4+20c, allowChromatic 1 -> 66.00
+    white noise: max applied shift 0.000 st
+[ OK ] vocaltune2/VocalTune 2: chromatic vs diatonic targets, threshold, unvoiced/noise do not move the pitch (2.618s)
+    vibrato depth input 0.49 st (centre 57.30) | keep: 0.54 st (centre 56.99) | hard: 0.22 st (centre 57.00)
+    held C4+35c: humanize 0 -> 59.999, humanize 1 -> 60.209
+    glissando A3->A4 (hard): 0 clicks, max score 4.0
+[ OK ] vocaltune2/VocalTune 2: vibrato kept (vibrato 1) or flattened (Hard), held notes, glides without steps (15.207s)
+    mix 0: max deviation from the input delayed by 1432 samples: 0.00e+00
+    mix 50 %: level -0.00 dB vs input
+    mix 100 %: level -0.00 dB vs input
+    speed          200 -> 0     clicks 0, max score 5.3
+    mix              0 -> 1     clicks 0, max score 5.4
+    keyRoot          0 -> 6     clicks 0, max score 5.4
+    mode             0 -> 3     clicks 0, max score 5.4
+    formantShift     0 -> 4     clicks 0, max score 5.4
+    strength         0 -> 1     clicks 0, max score 5.4
+[ OK ] vocaltune2/VocalTune 2: dry/wet 0/50/100 %, no comb filter, smooth parameter changes, no clicks (24.882s)
+    block 256       max diff to block 64: 0
+    block 512       max diff to block 64: 0
+    block 562       max diff to block 64: 0
+    block 1024      max diff to block 64: 0
+    block irregular max diff to block 64: 0
+    +20 dB for 1 s then normal: peak after 1.3 s 0.300
+    roy.vocaltune  worst note error   0.5 cents (per note: -0 -0 +0 -0 -0 -0 -1 -0), clicks 0 (max score 5.0), latency 0 samples
+    roy.vocaltune2 worst note error   0.2 cents (per note: -0 -0 +0 -0 -0 -0 +0 +0), clicks 0 (max score 5.8), latency 1432 samples
+    vt2 Natural    worst note error  11.7 cents (per note: +2 +11 +10 +11 +7 +8 +12 +4), clicks 0 (max score 5.6), latency 1432 samples
+    vt2 Modern     worst note error   2.8 cents (per note: -0 +3 +2 +2 +1 +2 +3 +1), clicks 0 (max score 5.5), latency 1432 samples
+[ OK ] vocaltune2/VocalTune 2: block independence, silence, overload recovery, no allocation, old vs new (33.926s)
+    impulse at output: vocal (VocalTune 2) 13432, beat 13432
+    bypassed: vocal 13432, beat 13432
+[ OK ] vocaltune2/VocalTune 2 in the engine: latency reported, delay compensation lines the channel up with the beat (1.699s)
+[ OK ] vocaltune2/LIVE VOCAL can use VocalTune 2; switching keeps key/speed; presets with roy.vocaltune2 follow the song key (0.015s)
+
+9 tests, 0 failed, 145 checks total
+EXIT 0
+== parallel
+[ OK ] parallel/multi-core mixing is bit-identical to single-threaded (34.653s)
+[ OK ] parallel/graph levels respect routing and sidechains (1.029s)
+[ OK ] parallel/worker threads start and stop cleanly while graphs change (2.332s)
+
+3 tests, 0 failed, 228 checks total
+EXIT 0
+== mixer
+2026-10-28T17:34:46.102Z [WARN] [command] SetSoloSafe failed: the master is never muted by solo
+SetSoloSafe failed: the master is never muted by solo
+[ OK ] mixer/solo safe: a solo-safe track stays audible while another track is soloed (0.121s)
+[ OK ] mixer/sends: pre/post switch takes effect immediately, remove send drops its automation (0.090s)
+2026-10-28T17:34:46.344Z [WARN] [command] DeleteBus failed: bus not found
+DeleteBus failed: bus not found
+2026-10-28T17:34:46.384Z [WARN] [command] RenameChannel failed: name must not be empty
+RenameChannel failed: name must not be empty
+[ OK ] mixer/delete bus re-routes its inputs, removes sends into it; rename keeps track and channel in sync (0.167s)
+2026-10-28T17:34:48.427Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:34:49.710Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:34:51.497Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:34:51.507Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:34:51.515Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:34:52.306Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+[ OK ] mixer/random routing graphs: cycles rejected, superposition holds, multi-core is bit-identical (6.249s)
+2026-10-28T17:34:52.675Z [WARN] [command] AddSend failed: this send would create a feedback loop
+AddSend failed: this send would create a feedback loop
+2026-10-28T17:34:52.699Z [WARN] [command] RouteChannel failed: routing would create a feedback loop
+RouteChannel failed: routing would create a feedback loop
+2026-10-28T17:34:52.709Z [WARN] [command] AddInsert failed: this sidechain would create a feedback loop
+AddInsert failed: this sidechain would create a feedback loop
+2026-10-28T17:34:52.718Z [WARN] [command] SetSidechain failed: this sidechain would create a feedback loop
+SetSidechain failed: this sidechain would create a feedback loop
+2026-10-28T17:34:52.723Z [WARN] [command] SetSidechain failed: sidechain source not found
+SetSidechain failed: sidechain source not found
+[ OK ] mixer/feedback loops through sends and sidechains are refused (0.114s)
+
+5 tests, 0 failed, 491 checks total
+EXIT 0
+== faults
+[ OK ] faults/disk full while saving: the previous project file stays intact, the project stays in memory (0.033s)
+[ OK ] faults/export failure: full disk and a folder that is a file fail cleanly, no broken files (5.559s)
+2026-10-28T17:34:58.738Z [ERROR] [record] disk write failed: /tmp/roy_tests/fault_record/Audio/Lead Vox_Take01_20261028_173458.wav
+[ OK ] faults/disk full while recording: the take keeps what was written, the performance is recoverable (0.801s)
+2026-10-28T17:34:59.263Z [WARN] [runtime] asset 'vox.wav' (Audio/vox.wav) could not be loaded: cannot decode /tmp/roy_tests/fault_missing/Audio/vox.wav
+[ OK ] faults/missing audio file: warning, silence for that clip, the rest plays; restored file plays again (0.217s)
+corrupt variants: 41 loaded (repaired), 351 rejected with a message
+[ OK ] faults/corrupt project files never crash: truncated, bit-flipped and type-confused (0.642s)
+2026-10-28T17:35:00.124Z [WARN] [plugins] RoY Test Gain: plugin rejected the saved state
+2026-10-28T17:35:00.125Z [WARN] [runtime] RoY Test Gain: the plugin rejected its saved state (other plugin version or damaged data) - it runs with default settings; the saved state is kept in the project and not lost
+[ OK ] faults/invalid plugin state: plugin runs with defaults, the rejected state is kept in the project (0.139s)
+2026-10-28T17:35:00.585Z [ERROR] [plugins] PLUGIN CRASHED: RoY VST3 Hang (vst3:/home/user/webhook-discord-bot-mpqmg9g2/RoYStudio/build-tsan/test_plugins/RoYTest.vst3|524F590448414E47524F433100000006) - hung (no audio response within 250 ms) - host process terminated. Plugin deactivated (pass-through/silence), the project continues.
+[ OK ] faults/plugin hang during playback: detected, host terminated, pass-through, restart (0.511s)
+2026-10-28T17:35:00.719Z [ERROR] [device] audio device lost: the audio device stopped unexpectedly (unplugged, disabled or taken by another application)
+[ OK ] faults/audio device loss: detected once, RoY keeps running, reconnects when the device returns (0.071s)
+2026-10-28T17:35:00.833Z [ERROR] [device] audio device lost: the audio device stopped delivering audio (driver stalled)
+[ OK ] faults/stalled audio callbacks are detected as a lost device (0.086s)
+[ OK ] support/app settings: roundtrip, tolerant loading, damaged file kept + defaults, unknown keys preserved (0.009s)
+
+10 tests, 0 failed, 513 checks total
+EXIT 0
+== livevocal
+2026-10-28T17:35:02.053Z [WARN] [command] SetupLiveVocal failed: LIVE VOCAL needs an audio / vocal track
+SetupLiveVocal: LIVE VOCAL needs an audio / vocal track
+[ OK ] livevocal/LIVE VOCAL: the voice is heard in real time, tuned to the song key, with the transport stopped (1.182s)
+2026-10-28T17:35:02.086Z [WARN] [command] ApplyChannelPreset failed: not a RoY channel preset
+ApplyChannelPreset: not a RoY channel preset
+[ OK ] livevocal/channel preset: save a mixed vocal, load it into the next song (new key), undo, backups (0.036s)
+[ OK ] livevocal/factory vocal chains are valid, use only built-in effects and load (0.021s)
+    Bright Double Vocal - light tune: live peak 0.296
+    Crystal Hard Vocal - clear, light tune: live peak 0.483
+    Dark Double Vocal - light tune: live peak 0.336
+    Devil Voice - hard tune: live peak 0.412
+    Glass Halo - fifth harmony tune: live peak 0.366
+    Lil Peep Style - Emo Dream Tune: live peak 0.548
+    New Wave Clear Vocal: live peak 0.379
+    PRO Beat - room for vocals: live peak 0.602
+    PRO Vocal Mix: live peak 0.397
+    RoY ULTIMATE Vocal - tune: live peak 0.513
+    Shasko Style - Melodic Autotune: live peak 0.469
+    Suicideboys Style - Dark Ghost Tune: live peak 0.749
+    Travis Style - Aggressive Rage Vocal: live peak 0.406
+    Travis Style - Clear Rage Vocal: live peak 0.346
+    UK Drill Dirty Vocal: live peak 0.365
+    US Street Raw Vocal: live peak 0.439
+    Warm Loud Vocal - autotune: live peak 0.891
+[ OK ] livevocal/shipped vocal chains (UserData presets of the portable build) load and sound sane live (48.731s)
+    limiter steady-state deviation from a clean scaled sine: 0.0001
+[ OK ] livevocal/output protection: a too-loud mix never hard-clips at the sound card, renders stay untouched (0.465s)
+
+5 tests, 0 failed, 260 checks total
+EXIT 0
+== gmb04
+[ OK ] gmb04/record a take into its own file (0.652s)
+[ OK ] gmb04/recorded take plays back at the right position (0.721s)
+[ OK ] gmb04/loop recording creates one take per pass (0.735s)
+[ OK ] gmb04/punch in and out (0.655s)
+[ OK ] gmb04/existing files are never overwritten (0.927s)
+[ OK ] gmb04/comping selects ranges across takes (0.000s)
+[ OK ] gmb04/flatten comp keeps audio identical (0.816s)
+[ OK ] gmb04/input clipping warning and meter (0.257s)
+[ OK ] gmb04/never-lose: recover a performance without pressing record (1.160s)
+[ OK ] gmb04/never-lose memory is bounded (3.952s)
+[ OK ] gmb04/recording path does not allocate on the audio thread (0.689s)
+
+11 tests, 0 failed, 92 checks total
+EXIT 0
