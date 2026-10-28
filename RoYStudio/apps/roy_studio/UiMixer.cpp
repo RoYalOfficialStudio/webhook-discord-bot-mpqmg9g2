@@ -91,7 +91,7 @@ void liveVocalButton(App& app, const std::string& trackId, const ImVec2& size) {
     const PluginSlot* tune = nullptr;
     if (ch)
         for (auto& s : ch->inserts)
-            if (s.typeId == "roy.vocaltune" && !tune) tune = &s;
+            if ((s.typeId == "roy.vocaltune" || s.typeId == "roy.vocaltune2") && !tune) tune = &s;
     const bool live = t->monitor && tune && !tune->bypass;
     if (toggleButton("LIVE", live, col::Green, size)) {
         if (live) app.run("MonitorTrack", {{"trackId", trackId}, {"monitor", false}});
@@ -109,6 +109,10 @@ void liveVocalButton(App& app, const std::string& trackId, const ImVec2& size) {
         if (ImGui::Checkbox("hear my input (monitor)", &mon)) app.run("MonitorTrack", {{"trackId", trackId}, {"monitor", mon}});
         if (!tune) {
             if (ImGui::Button("Add autotune (RoY VocalTune)")) app.liveVocal(trackId);
+            if (ImGui::Button("Add autotune HQ (RoY VocalTune 2)")) app.liveVocal(trackId, true);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("VocalTune 2 keeps your voice colour (formants) and has dry/wet, humanize, vibrato and modes.\n"
+                                  "It needs about 30 ms look-ahead: you hear yourself a little later while monitoring.");
         } else {
             const std::string slotId = tune->id;
             bool on = !tune->bypass;
@@ -128,6 +132,22 @@ void liveVocalButton(App& app, const std::string& trackId, const ImVec2& size) {
                 };
                 slider("speed", "retune speed", 0, 200, "%.0f ms", "0-10 ms = hard autotune effect (rap/trap), 40-100 ms = natural correction");
                 slider("strength", "strength", 0, 1, "%.2f", "1 = fully in tune, lower = keep some of your own pitch");
+                if (tune->typeId == "roy.vocaltune2") {
+                    slider("mix", "dry/wet", 0, 1, "%.2f", "0 = your voice untouched, 1 = fully tuned");
+                    slider("humanize", "humanize", 0, 1, "%.2f", "held notes are corrected more gently - sounds more natural");
+                    slider("vibrato", "keep vibrato", 0, 1, "%.2f", "1 = only the note centre is corrected, your vibrato stays");
+                    slider("formantShift", "voice colour", -6, 6, "%.1f st", "formant shift: - = darker / bigger, + = brighter / smaller");
+                    for (int i = 0; i < proc->numParams(); ++i)
+                        if (proc->paramInfo(i).id == "mode") {
+                            static const char* modes[] = {"Custom", "Natural", "Modern", "Hard (trap/drill)"};
+                            int m = static_cast<int>(proc->getParam(i) + 0.5f);
+                            ImGui::SetNextItemWidth(200 * dpi);
+                            if (ImGui::Combo("mode", &m, modes, 4)) app.run("SetParam", {{"slotId", slotId}, {"paramId", "mode"}, {"value", m}});
+                        }
+                    ImGui::TextDisabled("latency %.1f ms (compensated in playback)", proc->latencySamples() * 1000.0 / app.engine().sampleRate());
+                } else if (ImGui::Button("Switch to VocalTune 2 (HQ, keeps voice colour)")) {
+                    app.liveVocal(trackId, true);
+                }
             }
         }
         ImGui::Separator();
@@ -285,6 +305,18 @@ void strip(App& app, MixerChannel& ch, float width, float height, bool master) {
     if (ImGui::BeginPopupContextItem("chPresetMenu")) {
         channelPresetMenu(app, ch.id, ch.name + " chain");
         ImGui::EndPopup();
+    }
+    { // effect latency of this channel (look-ahead effects: VocalTune 2, limiter ...) - compensated in playback
+        int lat = 0;
+        for (auto& sl : ch.inserts)
+            if (!sl.bypass)
+                if (auto proc = app.runtime().processorForSlot(sl.id)) lat += std::max(0, proc->latencySamples());
+        if (lat > 0) {
+            ImGui::TextDisabled("lat %.1f ms", lat * 1000.0 / app.engine().sampleRate());
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Effect latency of this channel: %d samples. Playback is delay-compensated (all tracks stay in time);\n"
+                                  "live monitoring through this channel is heard this much later.", lat);
+        }
     }
     if (!master) { // PRESETS: save this mix for the next song / load a saved one
         if (ImGui::Button("PRESETS", ImVec2(-1, 0))) ImGui::OpenPopup("chPresetMenu");

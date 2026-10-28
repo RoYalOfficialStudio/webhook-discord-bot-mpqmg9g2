@@ -175,7 +175,7 @@ public:
     std::optional<DroppedFiles>& droppedFiles() { return dropped_; } // the PLAYLIST may consume it
     void handleDroppedFiles();                                        // everything the UI did not take
     // LIVE VOCAL: monitoring + RoY VocalTune in the song key on this track (one undo step)
-    bool liveVocal(const std::string& trackId);
+    bool liveVocal(const std::string& trackId, bool vocalTune2 = false);
     // ---- channel presets ("vocal chains"), stored in <user data>/Presets/Channel ----
     bool saveChannelPreset(const std::string& channelId, const std::string& name, bool overwrite);
     bool applyChannelPreset(const std::string& channelId, const json& preset);

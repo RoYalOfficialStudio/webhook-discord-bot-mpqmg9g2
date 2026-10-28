@@ -442,4 +442,44 @@ TEST_CASE("vocaltune2", "VocalTune 2 in the engine: latency reported, delay comp
     const size_t tBeat = renderSolo(ac);
     std::printf("    impulse at output: vocal (VocalTune 2) %zu, beat %zu\n", tVocal, tBeat);
     CHECK(tVocal == tBeat);
+    // bypassed VocalTune 2 keeps its delay: still in time with the beat
+    p.findChannel(ac)->inserts.front().bypass = true;
+    const size_t tVocalBypassed = renderSolo(bc);
+    std::printf("    bypassed: vocal %zu, beat %zu\n", tVocalBypassed, tBeat);
+    CHECK(tVocalBypassed == tBeat);
+}
+
+TEST_CASE("vocaltune2", "LIVE VOCAL can use VocalTune 2; switching keeps key/speed; presets with roy.vocaltune2 follow the song key") {
+    AudioEngine engine;
+    engine.prepare(SR, 256);
+    ProjectRuntime rt{engine};
+    Project p = makeNewProject("live2", SR, 120.0);
+    UndoManager undo{p};
+    CommandRegistry reg;
+    registerBuiltinProcessors();
+    registerCoreCommands(reg);
+    CommandContext ctx{p, undo, &rt};
+    p.key = Key{9, ScaleType::NaturalMinor}; // A minor
+    const std::string tid = addTrack(p, TrackType::Audio, "Vocal").id;
+    REQUIRE(rt.rebuild(p));
+    REQUIRE(reg.execute(ctx, "SetupLiveVocal", {{"trackId", tid}, {"speed", 7.0}}));
+    const std::string ch = p.findTrack(tid)->channelId;
+    CHECK(p.findChannel(ch)->inserts.front().typeId == "roy.vocaltune");
+    REQUIRE(reg.execute(ctx, "SetupLiveVocal", {{"trackId", tid}, {"tune", "vocaltune2"}}));
+    const auto& slot = p.findChannel(ch)->inserts.front();
+    CHECK(slot.typeId == "roy.vocaltune2");
+    CHECK(p.findChannel(ch)->inserts.size() == 1);
+    CHECK(slot.state["params"]["speed"].get<double>() == 7.0);
+    CHECK(slot.state["params"]["keyRoot"].get<int>() == 9);
+    REQUIRE(rt.rebuild(p));
+    auto proc = rt.processorForSlot(slot.id);
+    REQUIRE(proc != nullptr);
+    CHECK(proc->latencySamples() == 1432);
+    undo.undo(); // one step back: the old VocalTune again
+    CHECK(p.findChannel(ch)->inserts.front().typeId == "roy.vocaltune");
+    // a preset containing roy.vocaltune2 is re-keyed to this song
+    json preset = {{"format", "roy.channelPreset"}, {"version", 1}, {"name", "t"},
+                   {"inserts", json::array({{{"typeId", "roy.vocaltune2"}, {"name", "VT2"}, {"state", {{"params", {{"keyRoot", 2}}}}}}})}};
+    REQUIRE(reg.execute(ctx, "ApplyChannelPreset", {{"channelId", ch}, {"preset", preset}}));
+    CHECK(p.findChannel(ch)->inserts.front().state["params"]["keyRoot"].get<int>() == 9);
 }

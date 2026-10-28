@@ -72,6 +72,9 @@ public:
     virtual void process(const AudioBlock& io, const AudioBlock* sidechain, const NoteEvent* events,
                          int numEvents) noexcept = 0;
     virtual int latencySamples() const { return 0; }
+    // Called instead of process() while the slot is bypassed. Processors that report a latency can keep
+    // that delay here (dry, delayed), so the engine's delay compensation stays correct when bypassed.
+    virtual void processBypassed(const AudioBlock&) noexcept {}
     virtual double tailSeconds() const { return 0.0; }
     // Project tempo (BPM) for tempo-synced processors. Message thread; stored atomically by implementations.
     virtual void setHostTempo(double bpm) {}

@@ -105,11 +105,13 @@ void RoyVocalTune2::updateTarget() noexcept {
     targetShift_ = std::clamp(dev * strength, -6.0, 6.0);
 }
 
-void RoyVocalTune2::process(const AudioBlock& io, const AudioBlock*, const NoteEvent*, int) noexcept {
+void RoyVocalTune2::process(const AudioBlock& io, const AudioBlock*, const NoteEvent*, int) noexcept { run(io, false); }
+
+void RoyVocalTune2::run(const AudioBlock& io, bool bypassed) noexcept {
     float* L = io.channel(0);
     float* R = io.numChannels > 1 ? io.channel(1) : io.channel(0);
     const double sr = sampleRate_;
-    const float mixTarget = p(Mix);
+    const float mixTarget = bypassed ? 0.0f : p(Mix); // bypass = dry (delayed), via the same 20 ms ramp
     const float mixStep = 1.0f / static_cast<float>(0.02 * sr); // full sweep in 20 ms
     const bool formantOn = p(Formant) > 0.5f;
     const double fShift = std::pow(2.0, p(FormantShift) / 12.0);

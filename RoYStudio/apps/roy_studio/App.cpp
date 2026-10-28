@@ -531,8 +531,10 @@ void App::handleDroppedFiles() {
     beginImportBeat(files);
 }
 
-bool App::liveVocal(const std::string& trackId) {
-    if (!run("SetupLiveVocal", {{"trackId", trackId}})) {
+bool App::liveVocal(const std::string& trackId, bool vocalTune2) {
+    json args = {{"trackId", trackId}};
+    if (vocalTune2) args["tune"] = "vocaltune2";
+    if (!run("SetupLiveVocal", args)) {
         message(1, "LIVE VOCAL: " + lastError_);
         return false;
     }
@@ -1293,9 +1295,19 @@ bool App::selfTest(const fs::path& folder) {
         bool tuneOk = liveVocal(vocal);
         if (const Track* vt = project_->findTrack(vocal); vt && tuneOk) {
             const MixerChannel* vch = project_->findChannel(vt->channelId);
-            tuneOk = vt->monitor && vch && std::any_of(vch->inserts.begin(), vch->inserts.end(), [](auto& s) { return s.typeId == "roy.vocaltune"; });
+            tuneOk = vt->monitor && vch && std::any_of(vch->inserts.begin(), vch->inserts.end(), [](auto& s) { return s.typeId == "roy.vocaltune" || s.typeId == "roy.vocaltune2"; });
         }
         step("LIVE VOCAL (monitor + autotune in song key)", tuneOk);
+        {   // VocalTune 2 (HQ): switch, reports its look-ahead latency, playback stays compensated
+            bool v2 = liveVocal(vocal, true);
+            int lat = 0;
+            if (const Track* t2 = project_->findTrack(vocal); v2 && t2)
+                for (auto& s : project_->findChannel(t2->channelId)->inserts)
+                    if (s.typeId == "roy.vocaltune2")
+                        if (auto proc = runtime_->processorForSlot(s.id)) lat = proc->latencySamples();
+            step("LIVE VOCAL with VocalTune 2 (formant, latency reported)", v2 && lat > 0,
+                 std::format("{} samples = {:.1f} ms", lat, lat * 1000.0 / engine_.sampleRate()));
+        }
         const Track* vt = project_->findTrack(vocal);
         const json f = presets::factoryChannelPresets().front();
         const bool applied = vt && applyChannelPreset(vt->channelId, f);

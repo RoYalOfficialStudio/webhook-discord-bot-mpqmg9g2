@@ -528,14 +528,26 @@ void registerCoreCommands(CommandRegistry& r) {
                MixerChannel* ch = ctx.project.findChannel(t->channelId);
                if (!ch) return fail(ctx, "channel not found");
                const json key = {{"keyRoot", ctx.project.key.root}, {"keyScale", static_cast<int>(ctx.project.key.scale)}};
+               // an existing tune of either version is reused; a new one is VocalTune (low latency) unless
+               // "tune": "vocaltune2" asks for VocalTune 2 (formant preserving, +30 ms monitoring latency)
                PluginSlot* tune = nullptr;
                for (auto& s : ch->inserts)
-                   if (s.typeId == "roy.vocaltune" && !tune) tune = &s;
+                   if ((s.typeId == "roy.vocaltune" || s.typeId == "roy.vocaltune2") && !tune) tune = &s;
+               const bool v2 = argStr(a, "tune") == "vocaltune2";
+               if (tune && v2 && tune->typeId == "roy.vocaltune") { // switch the version, keep position + key/speed
+                   const json old = tune->state.is_object() && tune->state.contains("params") ? tune->state["params"] : json::object();
+                   tune->typeId = "roy.vocaltune2";
+                   tune->name = "RoY VocalTune 2";
+                   tune->state = {{"params", json::object()}};
+                   for (const char* k : {"keyRoot", "keyScale", "speed", "strength", "offKeyFilter", "allowChromatic", "threshold"})
+                       if (old.contains(k)) tune->state["params"][k] = old[k];
+                   ctx.result["switchedTo"] = "roy.vocaltune2";
+               }
                if (!tune) {
                    PluginSlot s;
                    s.id = files::newId();
-                   s.typeId = "roy.vocaltune";
-                   s.name = "RoY VocalTune";
+                   s.typeId = v2 ? "roy.vocaltune2" : "roy.vocaltune";
+                   s.name = v2 ? "RoY VocalTune 2" : "RoY VocalTune";
                    s.state = {{"params", key}};
                    s.state["params"]["speed"] = argNum(a, "speed", 20.0);
                    ch->inserts.insert(ch->inserts.begin(), s); // first: pitch detection sees the dry voice
@@ -577,7 +589,7 @@ void registerCoreCommands(CommandRegistry& r) {
                    s.name = i.value("name", type);
                    s.bypass = i.value("bypass", false);
                    s.state = i.contains("state") && i["state"].is_object() ? i["state"] : json::object();
-                   if (type == "roy.vocaltune" && argBool(a, "matchKey", true)) { // tune to THIS song's key
+                   if ((type == "roy.vocaltune" || type == "roy.vocaltune2") && argBool(a, "matchKey", true)) { // tune to THIS song's key
                        s.state["params"]["keyRoot"] = ctx.project.key.root;
                        s.state["params"]["keyScale"] = static_cast<int>(ctx.project.key.scale);
                    }

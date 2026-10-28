@@ -712,7 +712,10 @@ void AudioEngine::processChannel(RenderGraph& g, GraphChannel& ch, int frames) n
         ch.instrument->process(blk, nullptr, ch.eventScratch.data(), static_cast<int>(ch.eventScratch.size()));
     }
     for (auto& ins : ch.inserts) {
-        if (P.insertBypass[ins.bypassIndex & 31].load(std::memory_order_relaxed)) continue;
+        if (P.insertBypass[ins.bypassIndex & 31].load(std::memory_order_relaxed)) {
+            ins.processor->processBypassed(blk); // latency-keeping processors stay in time while bypassed
+            continue;
+        }
         if (ins.sidechainChannel >= 0) {
             auto& sc = g.channels[static_cast<size_t>(ins.sidechainChannel)];
             float* scp[2] = {sc.out.channel(0), sc.out.channel(1)};

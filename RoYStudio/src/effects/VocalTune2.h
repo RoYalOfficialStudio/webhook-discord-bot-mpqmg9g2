@@ -33,6 +33,8 @@ public:
     void reset() override;
     void process(const AudioBlock& io, const AudioBlock*, const NoteEvent*, int) noexcept override;
     int latencySamples() const override { return psola_.latencySamples(); }
+    // bypassed: the voice passes dry but delayed by the same latency (delay compensation stays right)
+    void processBypassed(const AudioBlock& io) noexcept override { run(io, true); }
 
     double detectedMidi() const { return detected_.load(std::memory_order_relaxed); }
     double appliedShift() const { return shiftOut_.load(std::memory_order_relaxed); }
@@ -40,6 +42,7 @@ public:
 
 private:
     void updateTarget() noexcept;
+    void run(const AudioBlock& io, bool bypassed) noexcept;
     dsp::PitchTrackerRt tracker_;
     dsp::PsolaShifter psola_;
     double shift_ = 0, targetShift_ = 0, center_ = 0, note_ = -1000, heldSec_ = 0, effSpeedMs_ = 40;
