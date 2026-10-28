@@ -983,6 +983,23 @@ void App::toggleRecord() {
         message(1, "arm a track first (R button in the playlist)");
         return;
     }
+    // GMB 15: punch range + pre-roll (start a little earlier so the singer can get in)
+    const auto& ps = project_->settings;
+    const double sr = engine_.sampleRate();
+    if (ps.punchEnabled && ps.punchOutBeat > ps.punchInBeat) {
+        recorder_.setPunch(true, static_cast<int64_t>(std::llround(project_->tempo.beatToSample(ps.punchInBeat, sr))),
+                           static_cast<int64_t>(std::llround(project_->tempo.beatToSample(ps.punchOutBeat, sr))));
+    } else {
+        recorder_.setPunch(false, 0, 0);
+    }
+    if (ps.preRollBeats > 0) {
+        const double from = ps.punchEnabled ? ps.punchInBeat : positionBeats();
+        const double startBeat = std::max(0.0, from - ps.preRollBeats);
+        engine_.transport().seek(static_cast<int64_t>(std::llround(project_->tempo.beatToSample(startBeat, sr))));
+    } else if (ps.punchEnabled && positionBeats() > ps.punchInBeat) {
+        // the play position is already past the punch-in: start at the punch-in
+        engine_.transport().seek(static_cast<int64_t>(std::llround(project_->tempo.beatToSample(ps.punchInBeat, sr))));
+    }
     if (audioArmed) {
         recorder_.setTracks(takes::recordConfig(*project_));
         recorder_.setOutputFolder(session_.folder() / "Audio");
@@ -1010,7 +1027,11 @@ void App::toggleRecord() {
     }
     engine_.transport().setCountInSamples(countIn);
     engine_.transport().play();
-    message(0, countIn > 0 ? std::format("count-in {} bar(s), then recording...", bars) : std::string("recording..."));
+    std::string what = countIn > 0 ? std::format("count-in {} bar(s), then recording...", bars) : std::string("recording...");
+    if (ps.punchEnabled)
+        what += std::format(" PUNCH: only bar {:.1f} .. {:.1f} is recorded", ps.punchInBeat / project_->tempo.signatureAtBar(0).numerator + 1,
+                            ps.punchOutBeat / project_->tempo.signatureAtBar(0).numerator + 1);
+    message(0, what);
 }
 
 void App::seekBeat(double beat) {
@@ -1292,6 +1313,20 @@ bool App::selfTest(const fs::path& folder) {
     toggleRecord();
     pump(0.3);
     step("record take (realtime)", project_->findTrack(vocal)->takes.size() == takesBefore + 1);
+    {   // GMB 15 punch in/out: only beat 33..34 is written although the transport runs from 32
+        const size_t n0 = project_->findTrack(vocal)->takes.size();
+        run("SetPunch", {{"enabled", true}, {"inBeat", 33.0}, {"outBeat", 34.0}, {"preRollBars", 0}});
+        seekBeat(32);
+        toggleRecord();
+        pump(1.6);
+        toggleRecord();
+        pump(0.3);
+        const auto& tk = project_->findTrack(vocal)->takes;
+        const bool ok = tk.size() == n0 + 1 && std::fabs(tk.back().startBeat - 33.0) < 0.02 && std::fabs(tk.back().lengthBeats - 1.0) < 0.02;
+        step("PUNCH IN/OUT records only the punch range", ok,
+             tk.size() > n0 ? std::format("take {:.2f} .. {:.2f} beats", tk.back().startBeat, tk.back().startBeat + tk.back().lengthBeats) : "no take");
+        run("SetPunch", {{"enabled", false}});
+    }
     // metronome (CLICK) and count-in reach the engine
     {
         run("SetMetronome", {{"enabled", true}, {"countInBars", 1}});

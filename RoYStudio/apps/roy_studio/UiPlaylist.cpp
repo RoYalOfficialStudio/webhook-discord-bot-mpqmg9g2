@@ -662,6 +662,9 @@ void drawPlaylist(App& app) {
         }
         if (p.loop.enabled)
             dl->AddRectFilled(ImVec2(beatToX(p.loop.startBeat), ry + rulerH - 5), ImVec2(beatToX(p.loop.endBeat), ry + rulerH), col::rgb(0xFF8C00, 180));
+        if (p.settings.punchEnabled && p.settings.punchOutBeat > p.settings.punchInBeat) // GMB 15 punch range (red)
+            dl->AddRectFilled(ImVec2(beatToX(p.settings.punchInBeat), ry + rulerH - 10), ImVec2(beatToX(p.settings.punchOutBeat), ry + rulerH - 5),
+                              col::rgb(0xE53935, 200));
         ImGui::SetCursorScreenPos(ImVec2(laneX0, ry));
         ImGui::InvisibleButton("ruler", ImVec2(std::max(1.0f, contentW - headerW), rulerH));
         if (ImGui::IsItemActive()) app.seekBeat(snap(xToBeat(ImGui::GetIO().MousePos.x), app.snapBeats));

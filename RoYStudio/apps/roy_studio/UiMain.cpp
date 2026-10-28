@@ -478,6 +478,51 @@ void drawTransport(App& app) {
         if (toggleButton("LOOP", loop, col::Orange, bs))
             app.run("SetLoop", {{"enabled", !loop}, {"startBeat", p.loop.startBeat}, {"endBeat", p.loop.endBeat > p.loop.startBeat ? p.loop.endBeat : 16.0}});
         ImGui::SameLine();
+        { // GMB 15 PUNCH: record only a part (fix one line without touching the rest); right-click = range + pre-roll
+            auto& st = p.settings;
+            const bool punch = st.punchEnabled;
+            const double bpb = p.tempo.signatureAtBar(0).numerator;
+            if (toggleButton("PUNCH", punch, col::Red, bs)) {
+                double in = st.punchInBeat, out = st.punchOutBeat;
+                if (!(out > in)) { // first time: the loop range, or 2 bars from the play position
+                    if (p.loop.endBeat > p.loop.startBeat && p.loop.enabled) {
+                        in = p.loop.startBeat;
+                        out = p.loop.endBeat;
+                    } else {
+                        in = std::floor(app.positionBeats() / bpb) * bpb;
+                        out = in + 2 * bpb;
+                    }
+                }
+                app.run("SetPunch", {{"enabled", !punch}, {"inBeat", in}, {"outBeat", out}});
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("PUNCH IN/OUT: only the red range in the playlist is recorded (bar %.1f .. %.1f).\n"
+                                  "Right-click: set the range and the pre-roll.", st.punchInBeat / bpb + 1, st.punchOutBeat / bpb + 1);
+            if (ImGui::BeginPopupContextItem("punchMenu")) {
+                float inBar = static_cast<float>(st.punchInBeat / bpb + 1), outBar = static_cast<float>(st.punchOutBeat / bpb + 1);
+                int pre = static_cast<int>(std::lround(st.preRollBeats / bpb));
+                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Gold), "PUNCH IN / OUT");
+                ImGui::SetNextItemWidth(120);
+                ImGui::DragFloat("punch in (bar)", &inBar, 0.05f, 1.0f, 999.0f, "%.2f");
+                const bool e1 = editFinished(inBar);
+                ImGui::SetNextItemWidth(120);
+                ImGui::DragFloat("punch out (bar)", &outBar, 0.05f, 1.0f, 999.0f, "%.2f");
+                const bool e2 = editFinished(outBar);
+                ImGui::SetNextItemWidth(120);
+                ImGui::SliderInt("pre-roll (bars)", &pre, 0, 4);
+                const bool e3 = editFinished(pre);
+                if (ImGui::Button("use LOOP range") && p.loop.endBeat > p.loop.startBeat) {
+                    inBar = static_cast<float>(p.loop.startBeat / bpb + 1);
+                    outBar = static_cast<float>(p.loop.endBeat / bpb + 1);
+                    app.run("SetPunch", {{"enabled", true}, {"inBeat", (inBar - 1) * bpb}, {"outBeat", (outBar - 1) * bpb}});
+                }
+                if ((e1 || e2 || e3) && outBar > inBar)
+                    app.run("SetPunch", {{"enabled", st.punchEnabled}, {"inBeat", (inBar - 1) * bpb}, {"outBeat", (outBar - 1) * bpb}, {"preRollBars", pre}});
+                ImGui::TextDisabled("pre-roll: playback starts this many bars before the punch-in");
+                ImGui::EndPopup();
+            }
+        }
+        ImGui::SameLine();
         const bool metro = p.settings.metronome;
         if (toggleButton("CLICK", metro, col::Gold, bs)) app.run("SetMetronome", {{"enabled", !metro}});
         ImGui::SameLine();

@@ -919,6 +919,20 @@ void registerCoreCommands(CommandRegistry& r) {
                arrange::setLoop(ctx.project, argBool(a, "enabled", true), argNum(a, "startBeat", 0.0), argNum(a, "endBeat", 16.0));
                return true;
            }});
+    // GMB 15 PUNCH IN/OUT + PRE-ROLL: recording only writes between in and out (beats); playback
+    // starts preRoll bars before the punch-in (or before the play position) so the singer gets in.
+    r.add({"SetPunch", "Punch In/Out", "Transport", "", true, false, [](CommandContext& ctx, const json& a) {
+               auto& s = ctx.project.settings;
+               const double in = argNum(a, "inBeat", s.punchInBeat), out = argNum(a, "outBeat", s.punchOutBeat);
+               const bool enabled = argBool(a, "enabled", !s.punchEnabled);
+               if (enabled && !(out > in)) return fail(ctx, "punch out must be after punch in");
+               if (in < 0) return fail(ctx, "punch in before the song start");
+               s.punchEnabled = enabled;
+               s.punchInBeat = in;
+               s.punchOutBeat = out;
+               if (a.contains("preRollBars")) s.preRollBeats = std::clamp(argNum(a, "preRollBars", 0.0), 0.0, 8.0) * ctx.project.tempo.signatureAtBar(0).numerator;
+               return true;
+           }});
     r.add({"SetMetronome", "Metronome", "Transport", "", true, false, [](CommandContext& ctx, const json& a) {
                ctx.project.settings.metronome = argBool(a, "enabled", !ctx.project.settings.metronome);
                ctx.project.settings.countInBars = static_cast<int>(argNum(a, "countInBars", ctx.project.settings.countInBars));
