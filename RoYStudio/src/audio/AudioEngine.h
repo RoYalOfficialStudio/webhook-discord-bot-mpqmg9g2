@@ -108,7 +108,14 @@ public:
     bool startInputCapture(double seconds);
     bool inputCaptureRunning() const { return capturing_.load(std::memory_order_acquire); }
     bool takeInputCapture(std::vector<float>& left, std::vector<float>& right);
-    void cancelInputCapture() { capturing_.store(false, std::memory_order_release); }
+    void cancelInputCapture() {
+        capturing_.store(false, std::memory_order_release);
+        probeOn_.store(false, std::memory_order_release);
+    }
+    // GMB 13.6 ROUND-TRIP LATENCY PROBE (message thread): plays `probe` on all outputs and records the
+    // input from the same callback on, for `seconds`. Collect with takeInputCapture(); input sample i
+    // and probe sample i belong to the same callback position. False while a capture is running.
+    bool startLatencyProbe(const std::vector<float>& probe, double seconds);
     EngineStats stats() const;
     void resetStats();
     // OUTPUT PROTECTION (live playback only, never in renders/exports): samples above -1 dBFS are
@@ -192,6 +199,8 @@ private:
     std::atomic<int> capPos_{0};
     int capLen_ = 0;
     std::atomic<bool> capturing_{false};
+    std::vector<float> probe_;
+    std::atomic<bool> probeOn_{false};
     // live MIDI
     void collectLiveMidi(bool rolling, int64_t timeline, int outOffset, int frames) noexcept;
     ClockFn clock_ = &AudioEngine::steadyNowNs;

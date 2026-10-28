@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,8 @@ struct AppSettings {
     AudioDeviceConfig audio;
     std::vector<std::string> midiInputsOff; // ids the user switched off (not reopened by hot-plug)
     bool firstRunDone = false;
+    // GMB 13.6: measured round-trip latency (samples) per device setup "backend|output|input|rate|buffer"
+    std::map<std::string, int> measuredLatency;
     nlohmann::json unknown = nlohmann::json::object();
 };
 

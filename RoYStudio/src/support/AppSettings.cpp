@@ -32,6 +32,7 @@ json settingsToJson(const AppSettings& s) {
                   {"exclusive", s.audio.exclusive}};
     j["midi"] = {{"inputsOff", s.midiInputsOff}};
     j["firstRunDone"] = s.firstRunDone;
+    j["measuredLatency"] = s.measuredLatency;
     return j;
 }
 
@@ -39,7 +40,10 @@ AppSettings settingsFromJson(const json& j) {
     AppSettings s;
     if (!j.is_object()) return s;
     for (auto& [k, v] : j.items())
-        if (k != "version" && k != "audio" && k != "midi" && k != "firstRunDone") s.unknown[k] = v;
+        if (k != "version" && k != "audio" && k != "midi" && k != "firstRunDone" && k != "measuredLatency") s.unknown[k] = v;
+    if (j.contains("measuredLatency") && j["measuredLatency"].is_object())
+        for (auto& [k, v] : j["measuredLatency"].items())
+            if (v.is_number_integer() && v.get<int>() >= 0 && v.get<int>() < 192000) s.measuredLatency[k] = v.get<int>();
     const json a = j.value("audio", json::object());
     if (a.is_object()) {
         static const char* backends[] = {"auto", "wasapi", "dsound", "winmm", "alsa", "pulseaudio", "jack", "coreaudio", "null"};

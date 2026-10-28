@@ -124,6 +124,13 @@ public:
     int setupStep = 0;
     // Microphone test: 3 s from the input, then played back. 0 idle, 1 recording, 2 played back
     void testMicrophone();
+    // GMB 13.6: round-trip latency measurement (loopback cable or headphones at the mic) + recording offset
+    void measureLatency();
+    int latencyTestState() const { return latState_; } // 0 idle, 1 running, 2 done
+    const std::string& latencyTestMessage() const { return latMessage_; }
+    int recordOffsetSamples() const { return recordOffset_; }
+    bool recordOffsetMeasured() const { return recordOffsetMeasured_; }
+    void setRecordOffset(int samples); // manual value (saved like a measured one)
     int micTestState() const { return micState_; }
     float micTestPeak() const { return micPeak_; }
     // callbacks over budget since the last audio change (dropout warning for small buffers)
@@ -280,6 +287,14 @@ private:
     std::vector<support::CheckItem> lastCheck_;
     support::DiagnosticsInput diagnosticsInput();
     void pollMicTest();
+    void pollLatencyTest();
+    void applyRecordOffset();
+    std::string latencyKey() const;
+    int latState_ = 0, recordOffset_ = 0;
+    bool recordOffsetMeasured_ = false;
+    double latStart_ = 0;
+    std::vector<float> latProbe_;
+    std::string latMessage_;
     std::vector<std::string> midiUserOff_;
     std::set<std::string> midiFailReported_;
     double nextMidiRescan_ = 0;

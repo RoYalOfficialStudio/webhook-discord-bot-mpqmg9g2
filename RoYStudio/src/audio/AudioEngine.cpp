@@ -259,6 +259,18 @@ bool AudioEngine::startInputCapture(double seconds) {
     return true;
 }
 
+bool AudioEngine::startLatencyProbe(const std::vector<float>& probe, double seconds) {
+    if (capturing_.load(std::memory_order_acquire)) return false;
+    probe_ = probe; // copied before the audio thread is told (release below)
+    capLen_ = std::max(1, static_cast<int>(seconds * sampleRate_));
+    capL_.assign(static_cast<size_t>(capLen_), 0.0f);
+    capR_.assign(static_cast<size_t>(capLen_), 0.0f);
+    capPos_.store(0, std::memory_order_relaxed);
+    probeOn_.store(true, std::memory_order_release);
+    capturing_.store(true, std::memory_order_release);
+    return true;
+}
+
 bool AudioEngine::takeInputCapture(std::vector<float>& left, std::vector<float>& right) {
     if (capturing_.load(std::memory_order_acquire) || capLen_ == 0 || capPos_.load(std::memory_order_relaxed) < capLen_) return false;
     left = capL_;
@@ -284,8 +296,10 @@ void AudioEngine::process(const float* const* inputs, int numInputs, float* cons
         for (int i = 0; i < numFrames; ++i) m = std::max(m, std::fabs(inputs[c][i]));
         if (m > inputPeak_[c].load(std::memory_order_relaxed)) inputPeak_[c].store(m, std::memory_order_relaxed);
     }
+    int probeFrom = -1; // capture position of this callback's first frame while a latency probe runs
     if (capturing_.load(std::memory_order_acquire)) { // microphone test capture
         int pos = capPos_.load(std::memory_order_relaxed);
+        if (probeOn_.load(std::memory_order_acquire)) probeFrom = pos;
         const int n = std::min(numFrames, capLen_ - pos);
         for (int i = 0; i < n; ++i) {
             capL_[static_cast<size_t>(pos + i)] = numInputs > 0 && inputs && inputs[0] ? inputs[0][i] : 0.0f;
@@ -306,6 +320,13 @@ void AudioEngine::process(const float* const* inputs, int numInputs, float* cons
         done += n;
     }
 
+    if (probeFrom >= 0) { // latency probe on every output, sample-aligned with the capture above
+        const int plen = static_cast<int>(probe_.size());
+        for (int c = 0; c < numOutputs; ++c)
+            if (outputs && outputs[c])
+                for (int i = 0; i < numFrames && probeFrom + i < plen; ++i) outputs[c][i] += probe_[static_cast<size_t>(probeFrom + i)];
+        if (!capturing_.load(std::memory_order_acquire)) probeOn_.store(false, std::memory_order_release);
+    }
     const double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     const double budget = numFrames / sampleRate_;
     const double load = budget > 0 ? elapsed / budget : 0.0;

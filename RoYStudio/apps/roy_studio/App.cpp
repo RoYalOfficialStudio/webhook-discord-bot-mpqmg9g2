@@ -1,4 +1,5 @@
 #include "App.h"
+#include "diag/LatencyProbe.h"
 #include "PlatformDialogs.h"
 #include "midi/MidiLearn.h"
 
@@ -99,6 +100,7 @@ bool App::init(const AppOptions& o) {
     showMusicSession = o.openMusicSession;
     engine_.setInputListener(&recorder_);
     recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
+    applyRecordOffset();
     // live MIDI: open every connected input (keyboards just work)
     midiIn_ = std::make_unique<midi::MidiInputManager>(engine_);
     for (auto& d : midiIn_->devices()) {
@@ -127,6 +129,7 @@ bool App::restartAudio(const AudioDeviceConfig& cfg) {
     if (!device_.openNote().empty()) message(1, "audio: " + device_.openNote());
     overloadBase_ = engine_.stats().overloads;
     recorder_.prepare(engine_.sampleRate(), engine_.maxBlockSize());
+    applyRecordOffset();
     if (project_) runtime_->rebuild(*project_);
     return true;
 }
@@ -736,6 +739,66 @@ void App::pollMicTest() {
     }
 }
 
+std::string App::latencyKey() const {
+    return std::format("{}|{}|{}|{:.0f}|{}", audioCfg_.backend, audioCfg_.outputDevice, audioCfg_.inputDevice, device_.actualSampleRate(),
+                       device_.actualBufferSize());
+}
+
+void App::applyRecordOffset() {
+    const auto it = settings_.measuredLatency.find(latencyKey());
+    recordOffsetMeasured_ = it != settings_.measuredLatency.end();
+    recordOffset_ = recordOffsetMeasured_ ? it->second : 0; // never a guessed value: 0 until measured or set
+    recorder_.setLatencyCompensation(recordOffset_);
+}
+
+void App::setRecordOffset(int samples) {
+    settings_.measuredLatency[latencyKey()] = std::clamp(samples, 0, 96000);
+    saveSettingsNow();
+    applyRecordOffset();
+}
+
+void App::measureLatency() {
+    if (!device_.isRunning() || device_.actualInputChannels() == 0) {
+        message(2, "latency test: no audio input is open - choose an input device first");
+        return;
+    }
+    latProbe_ = diag::makeLatencyProbe(engine_.sampleRate());
+    if (!engine_.startLatencyProbe(latProbe_, diag::latencyProbeSeconds())) return;
+    latState_ = 1;
+    latStart_ = nowSeconds();
+    latMessage_ = "measuring...";
+    message(0, "latency test: three short noise bursts are played and recorded (connect output to input, or hold the headphones at the mic)");
+}
+
+void App::pollLatencyTest() {
+    if (latState_ != 1) return;
+    std::vector<float> l, r;
+    if (engine_.takeInputCapture(l, r)) {
+        // use the input channel with the stronger signal
+        double el = 0, er = 0;
+        for (size_t i = 0; i < l.size(); ++i) {
+            el += static_cast<double>(l[i]) * l[i];
+            er += static_cast<double>(r[i]) * r[i];
+        }
+        const auto res = diag::analyseLatencyProbe(latProbe_, er > el ? r : l, engine_.sampleRate());
+        latState_ = 2;
+        latMessage_ = res.message;
+        log::info("latency", "round-trip test: {} (lags {} {} {})", res.message, res.lags.size() > 0 ? res.lags[0] : -1,
+                  res.lags.size() > 1 ? res.lags[1] : -1, res.lags.size() > 2 ? res.lags[2] : -1);
+        if (res.ok) {
+            setRecordOffset(res.samples);
+            message(0, "latency test: " + res.message + " - recordings are now moved back by this amount");
+        } else {
+            message(1, "latency test: " + res.message + " (recording offset unchanged)");
+        }
+    } else if (nowSeconds() - latStart_ > 8.0) {
+        engine_.cancelInputCapture();
+        latState_ = 0;
+        latMessage_ = "no audio arrived from the device";
+        message(2, "latency test: no audio arrived from the device (is the audio device running?)");
+    }
+}
+
 support::DiagnosticsInput App::diagnosticsInput() {
     support::DiagnosticsInput in;
     in.userDataDir = files::userDataDirectory();
@@ -752,6 +815,8 @@ support::DiagnosticsInput App::diagnosticsInput() {
                                             "longest interval {:.1f} ms, buffer {}..{} frames, {} size changes, {} callbacks without input",
                                             tm.callbacks, tm.timingGaps, tm.maxGapMs, tm.maxIntervalMs, tm.minFrames, tm.maxFrames, tm.sizeChanges,
                                             tm.inputMissing));
+        in.audioLines.push_back(std::format("recording offset: {} samples ({})", recordOffset_,
+                                            recordOffsetMeasured_ ? "measured / set for this device setup" : "not measured - 0"));
         in.audioLines.push_back("note: 'overloads' = RoY processing over the buffer time (CPU); 'timing gaps' = measured from callback timing, "
                                 "the driver does not report underruns through miniaudio - an indicator, not a driver confirmation; "
                                 "clicks inside the audio (DSP artefacts) are neither and need the click detector");
@@ -989,6 +1054,7 @@ void App::tick() {
     autoFixDropouts();
     pollMidiDevices();
     pollMicTest();
+    pollLatencyTest();
     pollDialogs();
     if (!project_) return;
     pollAudition();

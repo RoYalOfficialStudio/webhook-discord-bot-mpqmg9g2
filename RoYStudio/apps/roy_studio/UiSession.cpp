@@ -154,6 +154,22 @@ void drawSetupWizard(App& app) {
                                static_cast<unsigned long long>(drop), cfg.bufferSize);
         else
             ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(col::Green), "no dropouts measured with this buffer");
+        ImGui::Separator();
+        ImGui::TextWrapped("RECORDING OFFSET: your voice reaches RoY a little later than you hear the beat (sound card buffers). "
+                           "Measure it once per device/buffer and RoY moves every new recording back in time:");
+        ImGui::TextDisabled("Connect output to input with a cable (or hold the headphones at the microphone), then:");
+        if (goldButton(app.latencyTestState() == 1 ? "MEASURING...##lat" : "MEASURE LATENCY##lat") && app.latencyTestState() != 1) app.measureLatency();
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", app.latencyTestMessage().c_str());
+        ImGui::Text("recording offset: %d samples (%.1f ms) %s", app.recordOffsetSamples(), app.recordOffsetSamples() * 1000.0 / std::max(1.0, cfg.sampleRate),
+                    app.recordOffsetMeasured() ? "" : "- not measured");
+        {
+            static int manual = 0;
+            ImGui::SetNextItemWidth(120 * dpi);
+            ImGui::InputInt("##recoff", &manual);
+            ImGui::SameLine();
+            if (ImGui::Button("set manually (samples)")) app.setRecordOffset(manual);
+        }
         break;
     }
     case 4: {

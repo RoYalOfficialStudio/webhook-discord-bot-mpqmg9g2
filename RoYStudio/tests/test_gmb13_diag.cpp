@@ -10,6 +10,7 @@
 #include "commands/Commands.h"
 #include "diag/CallbackTiming.h"
 #include "diag/ClickDetector.h"
+#include "diag/LatencyProbe.h"
 #include "effects/Special.h"
 
 #include <chrono>
@@ -357,4 +358,56 @@ TEST_CASE("gmb13", "MEASUREMENT: existing RoyVocalTune at 44.1 kHz and 48 kHz, s
         }
         CHECK(c.count() == 0);
     }
+}
+
+// ---------------------------------------------------------------------------------- 13.6 round-trip latency
+TEST_CASE("gmb13", "round-trip latency: probe analysis finds the exact delay, rejects missing loopback") {
+    for (double sr : {44100.0, 48000.0}) {
+        const auto probe = diag::makeLatencyProbe(sr);
+        for (int delay : {0, 137, 1234, 9000}) {
+            std::vector<float> rec(static_cast<size_t>(diag::latencyProbeSeconds() * sr), 0.0f);
+            Rng rng(11);
+            for (size_t i = 0; i < probe.size() && i + static_cast<size_t>(delay) < rec.size(); ++i) rec[i + static_cast<size_t>(delay)] = -0.3f * probe[i]; // inverted, quieter
+            for (auto& v : rec) v += static_cast<float>(rng.uniform(-0.01, 0.01));                                                                     // noise
+            const auto r = diag::analyseLatencyProbe(probe, rec, sr);
+            CHECK_MSG(r.ok && r.samples == delay, std::format("{} Hz delay {}: {} ({})", sr, delay, r.samples, r.message));
+        }
+        std::vector<float> silence(static_cast<size_t>(diag::latencyProbeSeconds() * sr), 0.0f);
+        CHECK(!diag::analyseLatencyProbe(probe, silence, sr).ok);
+        std::vector<float> noise = silence;
+        Rng rng(4);
+        for (auto& v : noise) v = static_cast<float>(rng.uniform(-0.3, 0.3));
+        const auto rn = diag::analyseLatencyProbe(probe, noise, sr);
+        std::printf("    %.0f Hz no loopback (noise only): ok=%d, %s\n", sr, rn.ok, rn.message.c_str());
+        CHECK(!rn.ok);
+    }
+}
+
+TEST_CASE("gmb13", "round-trip latency through the engine with a simulated loopback cable; no probe left in the output afterwards") {
+    AudioEngine engine;
+    engine.prepare(SR, 256);
+    const int D = 777; // simulated converter + driver delay
+    const auto probe = diag::makeLatencyProbe(SR);
+    REQUIRE(engine.startLatencyProbe(probe, diag::latencyProbeSeconds()));
+    std::vector<float> history(static_cast<size_t>(4 * SR), 0.0f); // everything the "sound card" played
+    size_t t = 0;
+    std::vector<float> l(256), r(256), in(256);
+    while (engine.inputCaptureRunning() && t + 256 < history.size()) {
+        for (int i = 0; i < 256; ++i) in[static_cast<size_t>(i)] = t + i >= static_cast<size_t>(D) ? history[t + i - D] : 0.0f;
+        const float* ins[1] = {in.data()};
+        float* outs[2] = {l.data(), r.data()};
+        engine.process(ins, 1, outs, 2, 256);
+        std::copy(l.begin(), l.end(), history.begin() + static_cast<long>(t));
+        t += 256;
+    }
+    std::vector<float> cl, cr;
+    REQUIRE(engine.takeInputCapture(cl, cr));
+    const auto res = diag::analyseLatencyProbe(probe, cl, SR);
+    std::printf("    engine loopback %d samples: %s\n", D, res.message.c_str());
+    CHECK(res.ok);
+    CHECK(res.samples == D);
+    // after the probe the outputs are silent again (no probe leaking into the music)
+    float* outs[2] = {l.data(), r.data()};
+    engine.process(nullptr, 0, outs, 2, 256);
+    CHECK(peak(l) == 0.0f);
 }
