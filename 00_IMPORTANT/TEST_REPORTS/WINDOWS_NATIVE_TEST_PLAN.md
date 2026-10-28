@@ -123,3 +123,19 @@ PASS / FAIL / BLOCKED with notes, and put the filled copy into `00_IMPORTANT/TES
 |---|---|---|
 | 9.1 | `roy_soak.exe --cycles 240 --plugin <folder>\test_plugins\roy_test_gain.clap --out C:\RoYSoak` (≈ 4 simulated hours, ~20 min) | `C:\RoYSoak\soak.md` says **Result: PASS** (RSS trend < 20 MB/simulated hour, handles and threads flat, 0 failed operations) |
 | 9.2 | Real use: work 2–3 h in RoY Studio (record, comp, plugins, export), watch Task Manager | memory levels off, no growing handle count, no slowdown |
+
+## GMB 13-16 additions (2026-10-28) - to be done on the real PC (GMB 17)
+Record PASS / FAIL / BLOCKED. Nothing of this was possible in the build environment (no real device).
+| # | Test | How | Expected |
+|---|---|---|---|
+| H1 | Device timing gaps | play a song 10 min with your normal buffer; status bar `gaps`, Help > diagnostics report | `gaps 0`; if gaps > 0 together with audible clicks -> driver/system dropout, not RoY's DSP |
+| H2 | CPU over vs. gaps | same, with many plugins | `CPU over` counts RoY being too slow, `gaps` the device calling late - note both |
+| H3 | Clicks while singing with LIVE | LIVE VOCAL 5 min, VocalTune and VocalTune 2 | note when a click is heard + the two counters at that moment |
+| H4 | Round-trip latency | Setup check > buffer page > MEASURE LATENCY with a cable output->input (or headphones at the mic) | "round-trip latency N samples" (3 bursts agree); repeat 3x: same value +-2 samples |
+| H5 | Recording offset | after H4: record a click/clap on the beat | the recorded clap sits on the beat (before H4 it was late by about N samples) |
+| H6 | VocalTune 2 listening test | LIVE -> right-click -> "Switch to VocalTune 2"; modes Natural / Modern / Hard; formant shift -3 / +3 | subjective: voice colour kept, no robotic warble in Natural; latency ~30 ms audible while monitoring |
+| H7 | VocalTune 2 bypass timing | play vocal + beat, bypass VocalTune 2 on/off | vocal stays in time with the beat |
+| H8 | Note editor | Vocals > Preview > drag a note up 2 semitones, right-click another > keep as sung, APPLY PITCH GUARDIAN, A/B | dragged note moved, kept note untouched; undo restores |
+| H9 | Punch in/out | PUNCH (right-click: bar 5..6, pre-roll 1), arm, REC from bar 1 | only bar 5..6 is recorded; playback starts 1 bar before |
+| H10 | Sidechain | compressor on the BEAT, sidechain = vocal channel | beat ducks while singing |
+| H11 | Region tools | Vocals > SHIFT-drag a word > Apply gain -6 dB / pitch +1 st / Microscope | only the region changes; undo restores |
