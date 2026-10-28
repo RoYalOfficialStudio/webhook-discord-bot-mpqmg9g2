@@ -3,6 +3,7 @@
 #include "effects/Dynamics.h"
 #include "effects/Effects.h"
 #include "effects/Special.h"
+#include "effects/VocalTune2.h"
 #include "instruments/Bass808.h"
 #include "instruments/Drums.h"
 #include "instruments/Sampler.h"
@@ -37,6 +38,7 @@ void registerBuiltinProcessors() {
     f.add("roy.clipper", "RoY Clipper", false, [] { return std::make_unique<RoyClipper>(); });
     f.add("roy.pitch", "RoY Pitch", false, [] { return std::make_unique<RoyPitch>(); });
     f.add("roy.vocaltune", "RoY VocalTune", false, [] { return std::make_unique<RoyVocalTune>(); });
+    f.add("roy.vocaltune2", "RoY VocalTune 2 (formant, HQ)", false, [] { return std::make_unique<RoyVocalTune2>(); });
     f.add("roy.noisecleaner", "RoY NoiseCleaner", false, [] { return std::make_unique<RoyNoiseCleaner>(); });
     f.add("roy.analyzer", "RoY Analyzer", false, [] { return std::make_unique<RoyAnalyzer>(); });
     f.add("roy.dynamicspace", "RoY Dynamic Space", false, [] { return std::make_unique<RoyDynamicSpace>(); });
