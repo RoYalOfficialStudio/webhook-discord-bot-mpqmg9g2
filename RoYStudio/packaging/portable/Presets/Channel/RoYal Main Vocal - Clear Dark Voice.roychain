@@ -4,7 +4,7 @@
   "name": "RoYal Main Vocal - Clear Dark Voice",
   "created": "2026-10-31T00:00:00Z",
   "app": "0.2.0",
-  "description": "Clear, punchy, close rap main vocal with a slightly dark character. Gentle gate (breaths only lowered), light natural autotune (VocalTune 2 Natural, formants kept) on the dry voice, EQ (cut <80 Hz, -mud 300 Hz, +presence 4 kHz, +air 11 kHz), soft de-esser, quiet dark demon layer (-7 st, slightly detuned), 3:1 compressor, light warmth, short plate, limiter with headroom (-1.5 dB). The main voice always stays in front.",
+  "description": "Clear, punchy, close rap main vocal with a slightly dark character - CLEARER + MORE REVERB version: more presence (3.5 kHz) and air (12 kHz), less mud, softer warmth, quieter demon layer, a longer hall (1.8 s) with 45 ms pre-delay and a low cut so the words stay in front. Gentle gate, light natural VocalTune 2, soft de-esser, 3:1 compressor, limiter -1.5 dB.",
   "inserts": [
     {
       "typeId": "roy.gate",
@@ -48,19 +48,19 @@
       "bypass": false,
       "state": {
         "params": {
-          "lowCut": 80,
+          "lowCut": 90,
           "lowCutSlope": 24.0,
           "band1Freq": 160.0,
           "band1Gain": 0.5,
-          "band2Freq": 300.0,
-          "band2Gain": -2.5,
-          "band2Q": 0.9,
-          "band3Freq": 4000,
-          "band3Gain": 2.0,
-          "band3Q": 0.7,
-          "band4Freq": 11000.0,
-          "band4Gain": 2.5,
-          "highCut": 19000.0
+          "band2Freq": 320.0,
+          "band2Gain": -3.5,
+          "band2Q": 0.8,
+          "band3Freq": 3500,
+          "band3Gain": 3.0,
+          "band3Q": 0.6,
+          "band4Freq": 12000.0,
+          "band4Gain": 3.5,
+          "highCut": 20000.0
         }
       }
     },
@@ -71,8 +71,8 @@
       "state": {
         "params": {
           "frequency": 6500.0,
-          "threshold": -28.0,
-          "range": 6.0,
+          "threshold": -30.0,
+          "range": 7.0,
           "listen": 0.0
         }
       }
@@ -85,7 +85,7 @@
         "params": {
           "semitones": -7.0,
           "cents": -8.0,
-          "mix": 0.12,
+          "mix": 0.08,
           "window": 40.0
         }
       }
@@ -101,7 +101,7 @@
           "attack": 8.0,
           "release": 110.0,
           "knee": 6.0,
-          "makeup": 6.0,
+          "makeup": 7.0,
           "mix": 1.0
         }
       }
@@ -112,27 +112,27 @@
       "bypass": false,
       "state": {
         "params": {
-          "drive": 4.0,
+          "drive": 3.0,
           "mode": 1.0,
-          "tone": 12000.0,
-          "mix": 0.2,
+          "tone": 14000.0,
+          "mix": 0.12,
           "output": -1.0
         }
       }
     },
     {
       "typeId": "roy.reverb",
-      "name": "Short Plate",
+      "name": "Clear Hall",
       "bypass": false,
       "state": {
         "params": {
-          "decay": 0.9,
-          "preDelay": 20.0,
-          "size": 0.7,
-          "damping": 0.5,
-          "width": 0.9,
-          "mix": 0.08,
-          "lowCut": 450.0
+          "decay": 1.8,
+          "preDelay": 45.0,
+          "size": 1.3,
+          "damping": 0.35,
+          "width": 1.0,
+          "mix": 0.16,
+          "lowCut": 500.0
         }
       }
     },
