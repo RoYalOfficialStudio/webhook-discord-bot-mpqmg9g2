@@ -208,7 +208,7 @@ TEST_CASE("livevocal", "shipped vocal chains (UserData presets of the portable b
         CHECK(L.p.findChannel(L.channel)->inserts.size() == (*pr)["inserts"].size());
         // LIVE keeps the chain: no second tune; a chain without tune (e.g. the beat preset) gets exactly one
         bool hasTune = false;
-        for (auto& i : (*pr)["inserts"]) hasTune |= i["typeId"] == "roy.vocaltune";
+        for (auto& i : (*pr)["inserts"]) hasTune |= i["typeId"] == "roy.vocaltune" || i["typeId"] == "roy.vocaltune2"; // LIVE reuses either version
         REQUIRE(L.run("SetupLiveVocal", {{"trackId", L.track}}));
         CHECK(L.p.findChannel(L.channel)->inserts.size() == (*pr)["inserts"].size() + (hasTune ? 0 : 1));
         // a loud "voice" (200 Hz + harmonics, sharp) through the whole chain while monitoring
