@@ -1,0 +1,135 @@
+{
+  "format": "roy.channelPreset",
+  "version": 1,
+  "name": "Yess sir",
+  "created": "2026-11-06T00:00:00Z",
+  "app": "0.2.0",
+  "description": "Talk or rap at NORMAL volume - no shouting needed: noise cleaner first (so lifting a quiet voice does not lift the room), gentle gate (breaths only lowered), clear EQ, a slow leveler compressor that brings quiet words up (about +20 dB for quiet speech), a fast compressor that catches loud words, de-esser after the boost, a small dry room and a limiter at -1 dB. No autotune - the voice stays natural.",
+  "inserts": [
+    {
+      "typeId": "roy.noisecleaner",
+      "name": "Noise Cleaner",
+      "bypass": false,
+      "state": {
+        "params": {
+          "reduction": 10.0,
+          "sensitivity": 2.0,
+          "learn": 1.0,
+          "smoothing": 0.7
+        }
+      }
+    },
+    {
+      "typeId": "roy.gate",
+      "name": "Soft Gate",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -60.0,
+          "range": -15.0,
+          "attack": 1.0,
+          "hold": 60.0,
+          "release": 180.0,
+          "sidechain": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.eq",
+      "name": "Clear Speech EQ",
+      "bypass": false,
+      "state": {
+        "params": {
+          "lowCut": 85,
+          "lowCutSlope": 24.0,
+          "band1Freq": 150.0,
+          "band1Gain": 1.0,
+          "band2Freq": 260.0,
+          "band2Gain": -2.0,
+          "band2Q": 0.9,
+          "band3Freq": 3000,
+          "band3Gain": 3.0,
+          "band3Q": 0.7,
+          "band4Freq": 10000.0,
+          "band4Gain": 2.5,
+          "highCut": 18000.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Leveler (lifts quiet words)",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -46.0,
+          "ratio": 3.5,
+          "attack": 10.0,
+          "release": 150.0,
+          "knee": 10.0,
+          "makeup": 19.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.compressor",
+      "name": "Peak Catcher",
+      "bypass": false,
+      "state": {
+        "params": {
+          "threshold": -14.0,
+          "ratio": 4.0,
+          "attack": 2.0,
+          "release": 60.0,
+          "knee": 4.0,
+          "makeup": 2.0,
+          "mix": 1.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.deesser",
+      "name": "De-Esser",
+      "bypass": false,
+      "state": {
+        "params": {
+          "frequency": 6500.0,
+          "threshold": -30.0,
+          "range": 8.0,
+          "listen": 0.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.reverb",
+      "name": "Small Room",
+      "bypass": false,
+      "state": {
+        "params": {
+          "decay": 0.6,
+          "preDelay": 10.0,
+          "size": 0.5,
+          "damping": 0.5,
+          "width": 0.8,
+          "mix": 0.05,
+          "lowCut": 500.0
+        }
+      }
+    },
+    {
+      "typeId": "roy.limiter",
+      "name": "Limiter",
+      "bypass": false,
+      "state": {
+        "params": {
+          "ceiling": -1.0,
+          "release": 60.0,
+          "lookahead": 1.5,
+          "truePeak": 1.0,
+          "inputGain": 3.0
+        }
+      }
+    }
+  ]
+}
